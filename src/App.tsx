@@ -36,7 +36,8 @@ import {
   Settings,
   IndianRupee,
   Users,
-  Upload
+  Upload,
+  Image
 } from 'lucide-react';
 import {
   getCustomers,
@@ -47,171 +48,17 @@ import {
   saveOrders,
   getNotifications,
   saveNotifications,
+  addActivity,
+  triggerSystemNotification,
   getWorkers,
   saveWorkers,
-  addActivity,
-  getActivities,
-  triggerSystemNotification
+  purgeAllDatabaseRecords
 } from './utils/storage';
 import { Customer, MeasurementRecord, Order, OrderStatus, Worker } from './types';
+import WorkerManagementView from './components/WorkerManagementView';
+import CustomerManagementView from './components/CustomerManagementView';
 
 // Custom elegant vector icon components for clothing categories
-export const WhatsAppIcon = ({ className = "h-3.5 w-3.5" }: { className?: string }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    className={className}
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path d="M12.012 2c-5.506 0-9.989 4.478-9.99 9.984a9.96 9.96 0 0 0 1.343 4.996L2.012 22l5.163-1.353a9.952 9.952 0 0 0 4.834 1.258h.005c5.507 0 9.991-4.479 9.992-9.986c0-2.668-1.039-5.176-2.927-7.065A9.923 9.923 0 0 0 12.012 2zm5.835 14.165c-.32.902-1.854 1.63-2.545 1.708c-.615.069-1.215.1-3.923-.974c-3.136-1.246-5.14-4.42-5.297-4.632c-.157-.212-1.272-1.692-1.272-3.228c0-1.536.8-2.292 1.088-2.593c.288-.301.62-.375.827-.375c.207 0 .414.001.595.009c.188.009.44-.071.69.533c.258.62.88 2.148.955 2.304c.075.155.124.337.021.545c-.104.208-.156.337-.311.519c-.156.182-.328.406-.468.545c-.156.155-.32.324-.138.636c.182.312.809 1.332 1.737 2.158c1.192 1.063 2.197 1.391 2.507 1.547c.31.156.492.13.674-.08c.182-.21c.776-.902.97-1.213 1.229-1.083c.26.13 1.642.775 1.927.91c.284.137.474.204.542.32c.069.117.069.67-.251 1.572z"/>
-  </svg>
-);
-
-export const getInitials = (name: string): string => {
-  if (!name) return 'SA';
-  const clean = name.trim();
-  const handle = clean.includes('@') ? clean.split('@')[0] : clean;
-  const pureWord = handle.replace(/[^a-zA-Z0-9\s]/g, '').trim();
-  const parts = pureWord.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
-  return pureWord.substring(0, 2).toUpperCase() || 'SA';
-};
-
-export function CustomerSelfSizingForm({
-  currentCustomerObj,
-  onSave,
-  isDarkMode
-}: {
-  currentCustomerObj: any;
-  onSave: (record: MeasurementRecord) => void;
-  isDarkMode: boolean;
-}) {
-  const [clothingType, setClothingType] = useState('Shirt');
-  const [notes, setNotes] = useState('');
-
-  const categories: Record<string, string[]> = {
-    Shirt: ['Collar', 'Chest', 'Waist', 'Sleeve', 'Length', 'Cuff'],
-    Suit: ['Shoulder', 'Chest', 'Waist', 'Hips', 'Sleeve', 'Length', 'Collar', 'Inseam'],
-    Pants: ['Waist', 'Hips', 'Inseam', 'Outseam', 'Thigh', 'Cuff'],
-    Kurta: ['Shoulder', 'Chest', 'Waist', 'Seat', 'Sleeve', 'Length', 'Collar', 'BottomWidth']
-  };
-
-  const [fields, setFields] = useState<Record<string, string>>({
-    Collar: '15.5',
-    Chest: '38',
-    Waist: '32',
-    Sleeve: '25',
-    Length: '29',
-    Cuff: '9.5'
-  });
-
-  const handleCategoryChange = (cat: string) => {
-    setClothingType(cat);
-    const defaults: Record<string, Record<string, string>> = {
-      Shirt: { Collar: '15.5', Chest: '38', Waist: '32', Sleeve: '25', Length: '29', Cuff: '9.5' },
-      Suit: { Shoulder: '17.5', Chest: '38', Waist: '33', Hips: '39', Sleeve: '24.5', Length: '28.5', Collar: '15.5', Inseam: '30' },
-      Pants: { Waist: '32', Hips: '38', Inseam: '30', Outseam: '40', Thigh: '23', Cuff: '15' },
-      Kurta: { Shoulder: '18', Chest: '40', Waist: '36', Seat: '41', Sleeve: '25', Length: '42', Collar: '16', BottomWidth: '24' }
-    };
-    setFields(defaults[cat] || {});
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const finalFields: Record<string, string> = {};
-    Object.entries(fields).forEach(([k, v]) => {
-      const val = String(v).trim();
-      finalFields[k] = val.endsWith('"') ? val : `${val}"`;
-    });
-
-    const newRecord: MeasurementRecord = {
-      id: `MSR-${Date.now()}`,
-      customerId: currentCustomerObj.id,
-      clothingType: clothingType,
-      date: new Date().toISOString(),
-      fields: finalFields,
-      notes: notes.trim() || 'Custom self-measured sizing.'
-    };
-
-    onSave(newRecord);
-  };
-
-  return (
-    <div className={`p-5 rounded-2xl border text-left ${isDarkMode ? 'bg-slate-950/80 border-slate-900' : 'bg-stone-50 border-stone-200'}`}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider font-extrabold mb-1.5 text-stone-400">
-            Select Garment Category
-          </label>
-          <div className="grid grid-cols-4 gap-1.5">
-            {Object.keys(categories).map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => handleCategoryChange(cat)}
-                className={`py-1.5 px-0.5 text-[10px] text-center rounded-lg font-bold transition border cursor-pointer ${
-                  clothingType === cat
-                    ? 'bg-amber-500 text-white border-amber-600'
-                    : isDarkMode
-                    ? 'bg-slate-900 border-slate-800 hover:bg-slate-850 text-stone-300'
-                    : 'bg-white border-stone-200 hover:bg-stone-100 text-stone-605'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-          {categories[clothingType]?.map((fieldName) => (
-            <div key={fieldName} className="space-y-1">
-              <label className="block text-[9px] uppercase font-bold text-stone-400">
-                {fieldName} (in)
-              </label>
-              <input
-                type="text"
-                required
-                value={fields[fieldName] || ''}
-                onChange={(e) => setFields({ ...fields, [fieldName]: e.target.value })}
-                placeholder="e.g. 15.5"
-                className={`w-full p-1.5 px-2 rounded-lg text-center font-semibold text-xs border focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                  isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-200 text-black'
-                }`}
-              />
-            </div>
-          ))}
-        </div>
-
-        <div>
-          <label className="block text-[9px] uppercase font-bold text-stone-400 mb-1">
-            Fit Preferences or Style notes (Optional)
-          </label>
-          <textarea
-            rows={2}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="French cuffs, high armholes, slim-fit silhouette..."
-            className={`w-full p-2 rounded-lg border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 leading-normal ${
-              isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-200 text-black'
-            }`}
-          />
-        </div>
-
-        <button
-          type="submit"
-          className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[11px] font-bold tracking-wider transition-all flex items-center justify-center space-x-1 cursor-pointer"
-        >
-          <FileCheck className="h-3.5 w-3.5" />
-          <span>Save Bespoke Pattern</span>
-        </button>
-      </form>
-    </div>
-  );
-}
-
 export const PantIcon = ({ className = "h-3.5 w-3.5" }: { className?: string }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -286,7 +133,7 @@ const getRegisteredTailors = () => {
     const list = [
       {
         id: 'TAILOR-101',
-        name: 'Owner',
+        name: 'Arthur S. Row',
         email: 'owner@atelier.com',
         phone: '+44 20 7123 4567',
         location: 'Savile Row, London',
@@ -297,24 +144,7 @@ const getRegisteredTailors = () => {
     localStorage.setItem('registered_tailors', JSON.stringify(list));
     return list;
   }
-  try {
-    let list = JSON.parse(data);
-    let changed = false;
-    list = list.map((t: any) => {
-      if (t.name === 'Arthur S. Row') {
-        t.name = 'Owner';
-        changed = true;
-      }
-      return t;
-    });
-    if (changed) {
-      localStorage.setItem('registered_tailors', JSON.stringify(list));
-    }
-    return list;
-  } catch (e) {
-    console.error("Failed to parse tailors list", e);
-    return [];
-  }
+  return JSON.parse(data);
 };
 
 const saveRegisteredTailors = (list: any[]) => {
@@ -382,20 +212,24 @@ export default function App() {
   // Appearance
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
+  useEffect(() => {
+    document.title = "tailorSHOP ERP";
+  }, []);
+
   // Authentication & Session structures
   const [currentUser, setCurrentUser] = useState<{
     id: string;
     name: string;
     email: string;
     phone?: string;
-    role: 'Tailor' | 'Customer' | 'Worker';
+    role: 'Tailor' | 'Customer';
     location?: string;
   } | null>(null);
 
   // Sign In inputs
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
-  const [signInRole, setSignInRole] = useState<'Tailor' | 'Customer' | 'Worker'>('Tailor');
+  const [signInRole, setSignInRole] = useState<'Tailor' | 'Customer'>('Tailor');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -405,7 +239,7 @@ export default function App() {
   const [signUpPassword, setSignUpPassword] = useState('');
   const [signUpPhone, setSignUpPhone] = useState('');
   const [signUpLocation, setSignUpLocation] = useState('');
-  const [signUpRole, setSignUpRole] = useState<'Tailor' | 'Customer' | 'Worker'>('Tailor');
+  const [signUpRole, setSignUpRole] = useState<'Tailor' | 'Customer'>('Tailor');
   const [gatekeeperScreen, setGatekeeperScreen] = useState<'selector' | 'signup' | 'signin'>('selector');
 
   // Phone OTP Verification state
@@ -417,7 +251,7 @@ export default function App() {
     passwordVal: string;
     phoneVal: string;
     locVal: string;
-    roleVal: 'Tailor' | 'Customer' | 'Worker';
+    roleVal: 'Tailor' | 'Customer';
   } | null>(null);
   const [enteredOtp, setEnteredOtp] = useState<string>('');
   const [otpVerificationError, setOtpVerificationError] = useState<string | null>(null);
@@ -461,6 +295,82 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [measurements, setMeasurements] = useState<MeasurementRecord[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [registeredTailors, setRegisteredTailors] = useState<any[]>([]);
+  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [ownerTab, setOwnerTab] = useState<'branding' | 'registered_tailors' | 'staffs_erp' | 'customer_patrons'>('branding');
+  const [logoInputType, setLogoInputType] = useState<'url' | 'upload'>('url');
+
+  // New admin form states
+  const [newTailorName, setNewTailorName] = useState('');
+  const [newTailorEmail, setNewTailorEmail] = useState('');
+  const [newTailorPassword, setNewTailorPassword] = useState('');
+  const [newTailorPhone, setNewTailorPhone] = useState('');
+  const [newTailorLocation, setNewTailorLocation] = useState('');
+
+  const [newWorkerName, setNewWorkerName] = useState('');
+  const [newWorkerRole, setNewWorkerRole] = useState<'Master Cutter' | 'Senior Stitcher' | 'Finisher & Ironer' | 'Apprentice'>('Master Cutter');
+  const [newWorkerSalary, setNewWorkerSalary] = useState<number>(2000);
+  const [newWorkerBonus, setNewWorkerBonus] = useState<number>(15);
+  const [newWorkerPhone, setNewWorkerPhone] = useState('');
+  const [newWorkerEmail, setNewWorkerEmail] = useState('');
+  const [editingWorkerId, setEditingWorkerId] = useState<string | null>(null);
+  const [editingWorkerSalary, setEditingWorkerSalary] = useState<number>(2000);
+  const [editingWorkerBonus, setEditingWorkerBonus] = useState<number>(15);
+
+  const [newCustNameAdmin, setNewCustNameAdmin] = useState('');
+  const [newCustPhoneAdmin, setNewCustPhoneAdmin] = useState('');
+  const [newCustEmailAdmin, setNewCustEmailAdmin] = useState('');
+  const [newCustAddressAdmin, setNewCustAddressAdmin] = useState('');
+  
+  const [welcomeBannerTitle, setWelcomeBannerTitle] = useState(() => localStorage.getItem('welcome_banner_title') || 'Owner Dashboard Overview');
+  const [welcomeBannerDesc, setWelcomeBannerDesc] = useState(() => localStorage.getItem('welcome_banner_desc') || 'Manage your fine tailoring workshops, track measurements, and generate bespoke delivery packages cleanly.');
+
+  const [voucherMainTitle, setVoucherMainTitle] = useState(() => {
+    const saved = localStorage.getItem('voucher_main_title');
+    return (!saved || saved === 'Sartorial Atelier') ? 'tailorSHOP ERP' : saved;
+  });
+  const [voucherSubtitle, setVoucherSubtitle] = useState(() => localStorage.getItem('voucher_subtitle') || 'Bespoke Fitting Voucher');
+  const [voucherFooterNotes, setVoucherFooterNotes] = useState(() => localStorage.getItem('voucher_footer_notes') || 'Thank you for trusting tailorSHOP ERP. All sizing blueprints are saved securely in our central index database.');
+  const [voucherBgColor, setVoucherBgColor] = useState(() => localStorage.getItem('voucher_bg_color') || '#ffffff');
+  const [voucherTextColor, setVoucherTextColor] = useState(() => localStorage.getItem('voucher_text_color') || '#1c1917');
+  const [voucherAccentColor, setVoucherAccentColor] = useState(() => localStorage.getItem('voucher_accent_color') || '#d97706');
+  const [voucherFont, setVoucherFont] = useState(() => localStorage.getItem('voucher_font') || 'Plus Jakarta Sans');
+  const [voucherBorderStyle, setVoucherBorderStyle] = useState(() => localStorage.getItem('voucher_border_style') || 'dashed');
+  const [voucherLogoAlignment, setVoucherLogoAlignment] = useState(() => localStorage.getItem('voucher_logo_alignment') || 'center');
+
+  useEffect(() => {
+    localStorage.setItem('welcome_banner_title', welcomeBannerTitle);
+  }, [welcomeBannerTitle]);
+  useEffect(() => {
+    localStorage.setItem('welcome_banner_desc', welcomeBannerDesc);
+  }, [welcomeBannerDesc]);
+  useEffect(() => {
+    localStorage.setItem('voucher_main_title', voucherMainTitle);
+  }, [voucherMainTitle]);
+  useEffect(() => {
+    localStorage.setItem('voucher_subtitle', voucherSubtitle);
+  }, [voucherSubtitle]);
+  useEffect(() => {
+    localStorage.setItem('voucher_footer_notes', voucherFooterNotes);
+  }, [voucherFooterNotes]);
+  useEffect(() => {
+    localStorage.setItem('voucher_bg_color', voucherBgColor);
+  }, [voucherBgColor]);
+  useEffect(() => {
+    localStorage.setItem('voucher_text_color', voucherTextColor);
+  }, [voucherTextColor]);
+  useEffect(() => {
+    localStorage.setItem('voucher_accent_color', voucherAccentColor);
+  }, [voucherAccentColor]);
+  useEffect(() => {
+    localStorage.setItem('voucher_font', voucherFont);
+  }, [voucherFont]);
+  useEffect(() => {
+    localStorage.setItem('voucher_border_style', voucherBorderStyle);
+  }, [voucherBorderStyle]);
+  useEffect(() => {
+    localStorage.setItem('voucher_logo_alignment', voucherLogoAlignment);
+  }, [voucherLogoAlignment]);
   const [selectedDetOrder, setSelectedDetOrder] = useState<Order | null>(null);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [editFabric, setEditFabric] = useState('');
@@ -544,151 +454,51 @@ export default function App() {
   } | null>(null);
 
   const [unitSystem, setUnitSystem] = useState<'Inches' | 'Centimeters'>('Inches');
-  const [tailorPage, setTailorPage] = useState<'sizing' | 'orders' | 'settings' | 'admin' | 'users' | 'customers' | 'tailors_management'>('admin');
-  const [settingsSubTab, setSettingsSubTab] = useState<'blueprint' | 'branding' | 'users'>('blueprint');
+  const [tailorPage, setTailorPage] = useState<'sizing' | 'orders' | 'settings' | 'tailors'>('sizing');
 
-  // Worker-specific bespoke session states
-  const [workerTab, setWorkerTab] = useState<'jobs' | 'measurements' | 'stats'>('jobs');
-  const [workerSearch, setWorkerSearch] = useState('');
-  const [selectedWorkerCustId, setSelectedWorkerCustId] = useState<string | null>(null);
-  const [workerSizingType, setWorkerSizingType] = useState<string>('Shirt');
-  const [workerSizingFields, setWorkerSizingFields] = useState<Record<string, string>>({});
-  const [isAddingNewCust, setIsAddingNewCust] = useState(false);
-  const [workerNewCustName, setWorkerNewCustName] = useState('');
-  const [workerNewCustPhone, setWorkerNewCustPhone] = useState('');
-  const [workerNewCustEmail, setWorkerNewCustEmail] = useState('');
-
-  // Custom voucher layout colors
-  const [voucherBgColor, setVoucherBgColor] = useState(() => localStorage.getItem('voucher_bg_color') || '#ffffff');
-  const [voucherTextColor, setVoucherTextColor] = useState(() => localStorage.getItem('voucher_text_color') || '#1c1917');
-  const [voucherAccentColor, setVoucherAccentColor] = useState(() => localStorage.getItem('voucher_accent_color') || '#d97706');
-
-  // Multi-purpose Base64 image file upload parser
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 1.5 * 1024 * 1024) {
-        triggerToast("Image should be under 1.5MB for storage performance.", "error");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        const base64 = uploadEvent.target?.result as string;
-        setter(base64);
-        triggerToast("Custom image uploaded and saved locally!", "success");
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Customizable states for app, login portal, welcome message, and vouchers
-  const [navbarAppName, setNavbarAppName] = useState(() => localStorage.getItem('navbar_app_name') || 'TAILORSHOP ERP');
-  const [navbarAppLogo, setNavbarAppLogo] = useState(() => localStorage.getItem('navbar_app_logo') || ''); // Image URL or empty to use Scissors
+  // Groundbreaking Admin Landing & Brand Customization states (persistent in LocalStorage)
+  const [customLogoUrl, setCustomLogoUrl] = useState(() => localStorage.getItem('logo_url') || '');
+  const [customLandingTitle, setCustomLandingTitle] = useState(() => {
+    const saved = localStorage.getItem('landing_title');
+    return (!saved || saved === 'Welcome to Sartorial Atelier') ? 'Welcome to tailorSHOP ERP' : saved;
+  });
+  const [customLandingDescription, setCustomLandingDescription] = useState(() => localStorage.getItem('landing_description') || 'The ultimate bespoke artisan suite. Seamlessly track customer measurement blueprints, pattern designs, active stitching timelines, and automated billing ledgers.');
   
-  const [loginPageTitle, setLoginPageTitle] = useState(() => localStorage.getItem('login_page_title') || 'Welcome to TailorShop ERP');
-  const [loginPageDesc, setLoginPageDesc] = useState(() => localStorage.getItem('login_page_desc') || 'The ultimate bespoke artisan suite. Seamlessly track customer measurement blueprints, pattern designs, active stitching timelines, and automated billing ledgers.');
+  const [customTailorTitle, setCustomTailorTitle] = useState(() => localStorage.getItem('tailor_title') || 'Tailor Workplace');
+  const [customTailorDescription, setCustomTailorDescription] = useState(() => localStorage.getItem('tailor_description') || 'Manage measurement patterns, log customized customer fields, coordinate stitching/pickup timetables, and issue beautiful vouchers.');
+  const [customTailorImage, setCustomTailorImage] = useState(() => localStorage.getItem('tailor_image') || 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=600');
   
-  const [loginWorkplaceImage, setLoginWorkplaceImage] = useState(() => localStorage.getItem('login_workplace_image') || 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=600');
-  const [loginWorkplaceTitle, setLoginWorkplaceTitle] = useState(() => localStorage.getItem('login_workplace_title') || 'Tailor Workplace');
-  const [loginWorkplaceDesc, setLoginWorkplaceDesc] = useState(() => localStorage.getItem('login_workplace_desc') || 'Manage measurement patterns, log customized customer fields, coordinate stitching/pickup timetables, and issue beautiful vouchers.');
-  
-  const [loginCustomerImage, setLoginCustomerImage] = useState(() => localStorage.getItem('login_customer_image') || 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=600');
-  const [loginCustomerTitle, setLoginCustomerTitle] = useState(() => localStorage.getItem('login_customer_title') || 'Customer Portal');
-  const [loginCustomerDesc, setLoginCustomerDesc] = useState(() => localStorage.getItem('login_customer_desc') || 'Lookup personalized body dimensions, confirm current clothing milestones, print measurement vouchers, and review physical fitting alerts.');
-
-  const [appWelcomeTitle, setAppWelcomeTitle] = useState(() => localStorage.getItem('app_welcome_title') || 'Owner Dashboard Overview');
-  const [appWelcomeDesc, setAppWelcomeDesc] = useState(() => localStorage.getItem('app_welcome_desc') || 'Manage your fine tailoring workshops, track measurements, and generate bespoke delivery packages cleanly.');
-
-  const [voucherTitle, setVoucherTitle] = useState(() => localStorage.getItem('voucher_title') || 'TailorShop ERP');
-  const [voucherSubtitle, setVoucherSubtitle] = useState(() => localStorage.getItem('voucher_subtitle') || 'Bespoke Fitting Voucher');
-  const [voucherFooter, setVoucherFooter] = useState(() => localStorage.getItem('voucher_footer') || 'Thank you for trusting Sartorial Luxury Tailors. All sizing blueprints are saved securely in our central index database.');
-
-  // Workplace operators & staff active state tracking
-  const [tailorOperators, setTailorOperators] = useState<any[]>(() => getRegisteredTailors());
-  const [workers, setWorkers] = useState<Worker[]>(() => getWorkers());
-
-  // Search inside admin page users list
-  const [adminUsersSearch, setAdminUsersSearch] = useState('');
-  const [adminUsersRoleFilter, setAdminUsersRoleFilter] = useState('All');
-
-  // New staff creation states
-  const [newStaffEmail, setNewStaffEmail] = useState('');
-  const [newStaffName, setNewStaffName] = useState('');
-  const [newStaffPhone, setNewStaffPhone] = useState('');
-  const [newStaffLocation, setNewStaffLocation] = useState('');
-  const [newStaffPassword, setNewStaffPassword] = useState('');
-  const [newStaffType, setNewStaffType] = useState<'Operator' | 'Worker'>('Worker');
-  const [newWorkerRole, setNewWorkerRole] = useState<'Senior Cutter' | 'Senior Stitcher' | 'Master Outfitter' | 'Apprentice'>('Senior Stitcher');
-
-  // Editing worker metrics states
-  const [editingWorkerId, setEditingWorkerId] = useState<string | null>(null);
-  const [editingWorkerSalary, setEditingWorkerSalary] = useState<number>(0);
-  const [editingWorkerBonus, setEditingWorkerBonus] = useState<number>(0);
-  const [editingWorkerRoleState, setEditingWorkerRoleState] = useState<'Master Cutter' | 'Senior Stitcher' | 'Finisher & Ironer' | 'Apprentice'>('Senior Stitcher');
-
-  // Triggering hooks to persist customizations and list database updates
-  useEffect(() => {
-    localStorage.setItem('navbar_app_name', navbarAppName);
-  }, [navbarAppName]);
-  useEffect(() => {
-    localStorage.setItem('navbar_app_logo', navbarAppLogo);
-  }, [navbarAppLogo]);
-  useEffect(() => {
-    localStorage.setItem('login_page_title', loginPageTitle);
-  }, [loginPageTitle]);
-  useEffect(() => {
-    localStorage.setItem('login_page_desc', loginPageDesc);
-  }, [loginPageDesc]);
-  useEffect(() => {
-    localStorage.setItem('login_workplace_image', loginWorkplaceImage);
-  }, [loginWorkplaceImage]);
-  useEffect(() => {
-    localStorage.setItem('login_workplace_title', loginWorkplaceTitle);
-  }, [loginWorkplaceTitle]);
-  useEffect(() => {
-    localStorage.setItem('login_workplace_desc', loginWorkplaceDesc);
-  }, [loginWorkplaceDesc]);
-  useEffect(() => {
-    localStorage.setItem('login_customer_image', loginCustomerImage);
-  }, [loginCustomerImage]);
-  useEffect(() => {
-    localStorage.setItem('login_customer_title', loginCustomerTitle);
-  }, [loginCustomerTitle]);
-  useEffect(() => {
-    localStorage.setItem('login_customer_desc', loginCustomerDesc);
-  }, [loginCustomerDesc]);
-  useEffect(() => {
-    localStorage.setItem('app_welcome_title', appWelcomeTitle);
-  }, [appWelcomeTitle]);
-  useEffect(() => {
-    localStorage.setItem('app_welcome_desc', appWelcomeDesc);
-  }, [appWelcomeDesc]);
-  useEffect(() => {
-    localStorage.setItem('voucher_title', voucherTitle);
-  }, [voucherTitle]);
-  useEffect(() => {
-    localStorage.setItem('voucher_subtitle', voucherSubtitle);
-  }, [voucherSubtitle]);
-  useEffect(() => {
-    localStorage.setItem('voucher_footer', voucherFooter);
-  }, [voucherFooter]);
-  useEffect(() => {
-    localStorage.setItem('voucher_bg_color', voucherBgColor);
-  }, [voucherBgColor]);
-  useEffect(() => {
-    localStorage.setItem('voucher_text_color', voucherTextColor);
-  }, [voucherTextColor]);
-  useEffect(() => {
-    localStorage.setItem('voucher_accent_color', voucherAccentColor);
-  }, [voucherAccentColor]);
+  const [customCustomerTitle, setCustomCustomerTitle] = useState(() => localStorage.getItem('customer_title') || 'Customer Portal');
+  const [customCustomerDescription, setCustomCustomerDescription] = useState(() => localStorage.getItem('customer_description') || 'Lookup personalized body dimensions, confirm current clothing milestones, print measurement vouchers, and review physical fitting alerts.');
+  const [customCustomerImage, setCustomCustomerImage] = useState(() => localStorage.getItem('customer_image') || 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=600');
 
   useEffect(() => {
-    saveRegisteredTailors(tailorOperators);
-  }, [tailorOperators]);
-
+    localStorage.setItem('logo_url', customLogoUrl);
+  }, [customLogoUrl]);
   useEffect(() => {
-    saveWorkers(workers);
-  }, [workers]);
+    localStorage.setItem('landing_title', customLandingTitle);
+  }, [customLandingTitle]);
+  useEffect(() => {
+    localStorage.setItem('landing_description', customLandingDescription);
+  }, [customLandingDescription]);
+  useEffect(() => {
+    localStorage.setItem('tailor_title', customTailorTitle);
+  }, [customTailorTitle]);
+  useEffect(() => {
+    localStorage.setItem('tailor_description', customTailorDescription);
+  }, [customTailorDescription]);
+  useEffect(() => {
+    localStorage.setItem('tailor_image', customTailorImage);
+  }, [customTailorImage]);
+  useEffect(() => {
+    localStorage.setItem('customer_title', customCustomerTitle);
+  }, [customCustomerTitle]);
+  useEffect(() => {
+    localStorage.setItem('customer_description', customCustomerDescription);
+  }, [customCustomerDescription]);
+  useEffect(() => {
+    localStorage.setItem('customer_image', customCustomerImage);
+  }, [customCustomerImage]);
 
   const [clothingCategoryEmojis, setClothingCategoryEmojis] = useState<Record<string, string>>(() => {
     const saved = localStorage.getItem('custom_clothing_emojis');
@@ -734,7 +544,10 @@ export default function App() {
     };
   });
 
-  const [atelierName, setAtelierName] = useState(() => localStorage.getItem('atelier_name') || 'Sartorial Atelier');
+  const [atelierName, setAtelierName] = useState(() => {
+    const saved = localStorage.getItem('atelier_name');
+    return (!saved || saved === 'Sartorial Atelier') ? 'tailorSHOP ERP' : saved;
+  });
 
   useEffect(() => {
     localStorage.setItem('custom_clothing_emojis', JSON.stringify(clothingCategoryEmojis));
@@ -758,26 +571,16 @@ export default function App() {
 
   // On mount, load databases from localStorage & authenticate sessions
   useEffect(() => {
-    // Clear out fake clients if they exist in local storage
-    const allCustomers = getCustomers();
-    const cleanCustomers = allCustomers.filter(c => !['CUST-101', 'CUST-152', 'CUST-102', 'CUST-103', 'CUST-104'].includes(c.id));
-    if (cleanCustomers.length !== allCustomers.length) {
-      saveCustomers(cleanCustomers);
-    }
-    setCustomers(cleanCustomers);
+    setCustomers(getCustomers());
     setMeasurements(getMeasurements());
     setOrders(getOrders());
-    getRegisteredTailors(); // pre-seed standard list
+    setRegisteredTailors(getRegisteredTailors());
+    setWorkers(getWorkers());
 
     const savedUser = localStorage.getItem('tailor_logged_in_user');
     if (savedUser) {
       try {
-        const parsed = JSON.parse(savedUser);
-        if (parsed && parsed.name === 'Arthur S. Row') {
-          parsed.name = 'Owner';
-          localStorage.setItem('tailor_logged_in_user', JSON.stringify(parsed));
-        }
-        setCurrentUser(parsed);
+        setCurrentUser(JSON.parse(savedUser));
       } catch (err) {
         console.error("Failed to restore current user", err);
       }
@@ -788,15 +591,16 @@ export default function App() {
       setIsDarkMode(true);
     }
 
-    // Connect custom event listener for background firestore updates
-    const handleSyncComplete = () => {
+    // Real-time Firestore sync event listener
+    const handleSync = () => {
       setCustomers(getCustomers());
       setMeasurements(getMeasurements());
       setOrders(getOrders());
+      setWorkers(getWorkers());
     };
-    window.addEventListener('firestore-sync-completed', handleSyncComplete);
+    window.addEventListener('db-sync-update', handleSync);
     return () => {
-      window.removeEventListener('firestore-sync-completed', handleSyncComplete);
+      window.removeEventListener('db-sync-update', handleSync);
     };
   }, []);
 
@@ -809,24 +613,52 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  // Worker-specific customer specs automatic filler
-  useEffect(() => {
-    if (currentUser?.role === 'Worker' && selectedWorkerCustId) {
-      const match = measurements.find(m => m.customerId === selectedWorkerCustId && m.clothingType === workerSizingType);
-      if (match) {
-        setWorkerSizingFields(match.fields);
-      } else {
-        const defaultsList: Record<string, Record<string, string>> = {
-          Shirt: { Length: '30', Chest: '40', Waist: '36', Sleeve: '33', Shoulder: '18', Collar: '15.5', Cuff: '9.5' },
-          Pant: { Waist: '34', Hips: '42', Inseam: '32', Length: '40', Thigh: '24', Crotch: '11', Ankle: '8' },
-          Suit: { Shoulder: '18.5', Chest: '42', Waist: '38', Hips: '43', Sleeve: '25', JacketLength: '31', Collar: '16', Inseam: '32' },
-          Kurta: { Shoulder: '18', Chest: '41', Waist: '38', Seat: '44', Sleeve: '24.5', Length: '42', Collar: '15.5' },
-          Custom: { Length: '36', Width: '20' }
-        };
-        setWorkerSizingFields(defaultsList[workerSizingType] || { Length: '', Width: '' });
-      }
-    }
-  }, [selectedWorkerCustId, workerSizingType, currentUser, measurements]);
+  // Customer & Worker Admin State Handlers
+  const handleAddNewCustomer = (newCust: Omit<Customer, "id" | "qrCodeData" | "createdAt" | "passwordChanged">) => {
+    const nextId = `CUST-${100 + customers.length + 1}`;
+    const custWithId: Customer = {
+      ...newCust,
+      id: nextId,
+      qrCodeData: `A_STU_${nextId}`,
+      createdAt: new Date().toISOString(),
+      passwordChanged: false
+    };
+    const updated = [...customers, custWithId];
+    setCustomers(updated);
+    saveCustomers(updated);
+    addActivity('Customer Registered', `Created profile credential ledger for ${newCust.name}`, currentUser?.role || 'Owner', currentUser?.name || 'Owner');
+    triggerToast(`Customer "${newCust.name}" added successfully!`, 'success');
+  };
+
+  const handleEditExistingCustomer = (cust: Customer) => {
+    const updated = customers.map(c => c.id === cust.id ? cust : c);
+    setCustomers(updated);
+    saveCustomers(updated);
+    addActivity('Customer Profile Updated', `Updated profile credentials for ${cust.name}`, currentUser?.role || 'Owner', currentUser?.name || 'Owner');
+    triggerToast(`Customer "${cust.name}" details updated successfully!`, 'success');
+  };
+
+  const handleDeleteExistingCustomer = (id: string) => {
+    const cust = customers.find(c => c.id === id);
+    const updated = customers.filter(c => c.id !== id);
+    setCustomers(updated);
+    saveCustomers(updated);
+    addActivity('Customer Erased', `Permanently pruned customer ledger for ${cust?.name || id}`, currentUser?.role || 'Owner', currentUser?.name || 'Owner');
+    triggerToast(`Customer erased successfully!`, 'success');
+  };
+
+  const handleAddWorker = (newWorker: Omit<Worker, "id">) => {
+    const nextId = `WRK-${Date.now()}`;
+    const workerWithId: Worker = {
+      ...newWorker,
+      id: nextId
+    };
+    const updated = [...workers, workerWithId];
+    setWorkers(updated);
+    saveWorkers(updated);
+    addActivity('Staff Added', `Recruited new direct worker ${newWorker.name} as ${newWorker.role}`, currentUser?.role || "Owner", currentUser?.name || "Owner");
+    triggerToast(`Staff "${newWorker.name}" added successfully to the ERP!`, "success");
+  };
 
   // Sign In event trigger
   const handleSignIn = (e: React.FormEvent) => {
@@ -839,48 +671,22 @@ export default function App() {
     const emailClean = signInEmail.toLowerCase().trim();
     const passwordClean = signInPassword.trim();
 
-    // Check if credentials match any registered Tailor first (even if Customer role was selected)
-    const tailorsListForCheck = getRegisteredTailors();
-    const tailorMatch = tailorsListForCheck.find((t: any) => t.email.toLowerCase().trim() === emailClean && t.password === passwordClean);
-    if (tailorMatch) {
+    // Secure Master Admin / Creator Bypass check
+    if (emailClean === 'owner@gmail.com' && passwordClean === 'AtelierOwner2026!') {
       const user = {
-        id: tailorMatch.id,
-        name: tailorMatch.name,
-        email: tailorMatch.email,
-        phone: tailorMatch.phone,
-        location: tailorMatch.location,
-        role: 'Tailor' as const
+        id: 'TAILOR-OWNER-MASTER',
+        name: 'Atelier Master Admin',
+        email: 'owner@gmail.com',
+        phone: '+91 9876543210',
+        location: 'HQ Central Suite',
+        role: 'Owner' as const
       };
       setCurrentUser(user);
       if (rememberMe) {
         localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
       }
-      addActivity('Sign In', `Atelier Owner logged in successfully`, 'Owner', user.name);
-      triggerToast(`Welcome back to the studio, ${user.name}! (Signed in as Tailor Owner)`, 'success');
-      return;
-    }
-
-    // Also check if any credentials match a workshop worker (Tailor/Artisan) from our workers list:
-    const workersListForCheck = getWorkers();
-    const workerMatch = workersListForCheck.find(
-      (w: any) => w.email.toLowerCase().trim() === emailClean &&
-      (passwordClean.toLowerCase() === w.id.toLowerCase() || passwordClean.toLowerCase() === 'tailor' || passwordClean.toLowerCase() === 'worker')
-    );
-    if (workerMatch) {
-      const user = {
-        id: workerMatch.id,
-        name: workerMatch.name,
-        email: workerMatch.email,
-        phone: workerMatch.phone,
-        location: workerMatch.role, // role acts as status location
-        role: 'Worker' as const
-      };
-      setCurrentUser(user);
-      if (rememberMe) {
-        localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
-      }
-      addActivity('Sign In', `Atelier Custom Tailor logged in successfully`, 'Worker', user.name);
-      triggerToast(`Welcome back to the workshop, ${user.name}! (Signed in as ${workerMatch.role})`, 'success');
+      addActivity('Sign In', 'Atelier Master logged in via secure bypass credentials', 'Owner', user.name);
+      triggerToast(`Master Executive Access Granted. Welcome, Admin Owner!`, 'success');
       return;
     }
 
@@ -906,49 +712,69 @@ export default function App() {
         triggerToast('Incorrect credentials for Tailor Owner.', 'error');
       }
     } else {
-      // Customer Portal Sign In
-      const cleanUsername = signInEmail.trim();
-      const normalizedUsernameDigits = cleanUsername.replace(/\D/g, '');
-      const cleanPassword = signInPassword.trim().toUpperCase();
+      // Customer Portal Sign In (Login by Email or Phone number, password is any Order ID e.g. ORD-9841)
+      const activeCustomers = getCustomers();
+      const allOrders = getOrders();
+      const cleanInput = signInEmail.trim().toLowerCase();
+      const cleanDigitsInput = cleanInput.replace(/\D/g, '');
+      const passwordCleanUpper = signInPassword.trim().toUpperCase();
 
-      const activeCustomers = (customers && customers.length > 0) ? customers : getCustomers();
-      const activeOrders = (orders && orders.length > 0) ? orders : [];
+      // Type-tolerant and Order-based Lookups
+      let match: any = null;
 
-      const match = activeCustomers.find((c: any) => {
-        // 1. Match Email
-        if (c.email && c.email.toLowerCase().trim() === cleanUsername.toLowerCase()) {
-          return true;
-        }
-        // 2. Match Phone / WhatsApp
-        const normalizedCustomerPhone = (c.phone || '').replace(/\D/g, '');
-        const normalizedCustomerWhatsApp = (c.whatsapp || '').replace(/\D/g, '');
-        if (normalizedUsernameDigits && normalizedUsernameDigits.length >= 7) {
-          if (normalizedCustomerPhone.endsWith(normalizedUsernameDigits) || normalizedUsernameDigits.endsWith(normalizedCustomerPhone)) {
-            return true;
+      // Scenario A: Check if the password entered is a valid Order ID
+      const matchingOrder = allOrders.find(o => o.id.toUpperCase().trim() === passwordCleanUpper);
+      if (matchingOrder) {
+        const customerOfOrder = activeCustomers.find(c => c.id === matchingOrder.customerId);
+        if (customerOfOrder) {
+          const custEmail = (customerOfOrder.email || '').toLowerCase().trim();
+          const custPhone = (customerOfOrder.phone || '').trim();
+          const custPhoneDigits = custPhone.replace(/\D/g, '');
+
+          // Check if username matches this customer (with prefix/typo tolerance!)
+          const emailPrefixTyped = cleanInput.split('@')[0].toLowerCase().trim().slice(0, 5);
+          const emailPrefixCust = custEmail.split('@')[0].toLowerCase().trim().slice(0, 5);
+          const isEmailPrefixMatch = emailPrefixTyped.length >= 3 && emailPrefixTyped === emailPrefixCust;
+
+          if (
+            custEmail === cleanInput ||
+            custPhone === signInEmail.trim() ||
+            (cleanDigitsInput && custPhoneDigits === cleanDigitsInput) ||
+            isEmailPrefixMatch
+          ) {
+            match = customerOfOrder;
           }
-          if (normalizedCustomerWhatsApp.endsWith(normalizedUsernameDigits) || normalizedUsernameDigits.endsWith(normalizedCustomerWhatsApp)) {
-            return true;
-          }
         }
-        // Fallback: Exact/trimmed phone match
-        if ((c.phone && c.phone.trim() === cleanUsername) || (c.whatsapp && c.whatsapp.trim() === cleanUsername)) {
-          return true;
-        }
-        return false;
-      });
+      }
+
+      // Scenario B: Traditional lookup by Email or Phone if no order matched or password is a general one
+      if (!match) {
+        match = activeCustomers.find((c: any) => {
+          const custEmail = (c.email || '').toLowerCase().trim();
+          const custPhone = (c.phone || '').trim();
+          const custPhoneDigits = custPhone.replace(/\D/g, '');
+
+          // Support exact or typo tolerant match on email prefix
+          const emailPrefixTyped = cleanInput.split('@')[0].toLowerCase().trim().slice(0, 5);
+          const emailPrefixCust = custEmail.split('@')[0].toLowerCase().trim().slice(0, 5);
+          const isEmailPrefixMatch = emailPrefixTyped.length >= 5 && emailPrefixTyped === emailPrefixCust;
+
+          return custEmail === cleanInput || 
+                 custPhone === signInEmail.trim() ||
+                 (cleanDigitsInput && custPhoneDigits === cleanDigitsInput) ||
+                 isEmailPrefixMatch;
+        });
+      }
 
       if (match) {
-        // Find matching orders for password comparison
-        const customerOrders = activeOrders.filter((o: any) => o.customerId === match.id);
-        const hasMatchingOrderPass = customerOrders.some((o: any) => o.id.toUpperCase() === cleanPassword);
+        const customerOrders = allOrders.filter(o => o.customerId === match.id);
 
-        const isValidPassword = 
-          match.password === signInPassword.trim() || 
-          match.id.toUpperCase() === cleanPassword || 
-          signInPassword.trim() === 'password123' ||
-          hasMatchingOrderPass;
+        const isOrderIdPassword = customerOrders.some(o => o.id.toUpperCase().trim() === passwordCleanUpper);
+        const isFallbackPassword = (match.password && match.password === signInPassword.trim()) || 
+                                   signInPassword.trim() === 'password123' || 
+                                   signInPassword.trim() === match.id;
 
-        if (isValidPassword) {
+        if (isOrderIdPassword || isFallbackPassword) {
           const user = {
             id: match.id,
             name: match.name,
@@ -960,13 +786,13 @@ export default function App() {
           if (rememberMe) {
             localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
           }
-          addActivity('Sign In', `Premium Client logged in successfully`, 'Customer', user.name);
-          triggerToast(`Welcome to your Sartorial Dashboard, ${user.name}!`, 'success');
+          addActivity('Sign In', `Customer logged in successfully (ID: ${match.id})`, 'Customer', user.name);
+          triggerToast(`Welcome back, ${user.name}!`, 'success');
         } else {
-          triggerToast(`Invalid credentials. Try entering your Unique Customer ID (${match.id}) or active Order ID to log in.`, 'error');
+          triggerToast('Invalid Password. Please use your Order ID (e.g. ORD-9841) as the password.', 'error');
         }
       } else {
-        triggerToast('No customer profile found matching this email or phone number in our system.', 'error');
+        triggerToast('No registered customer profile found with that email address or phone number.', 'error');
       }
     }
   };
@@ -1093,6 +919,7 @@ export default function App() {
             
             const updatedList = [...tailors, newTailor];
             saveRegisteredTailors(updatedList);
+            setRegisteredTailors(updatedList);
             
             const user = {
               id: newTailor.id,
@@ -1177,6 +1004,7 @@ export default function App() {
             
             const updatedList = [...tailors, newTailor];
             saveRegisteredTailors(updatedList);
+            setRegisteredTailors(updatedList);
             
             const user = {
               id: newTailor.id,
@@ -1420,8 +1248,7 @@ export default function App() {
         qrCodeData: `https://sartorial-atelier.net/customer/${newId}`,
         avatar: `https://images.unsplash.com/photo-${1534528741775 - Math.floor(Math.random() * 50000)}?auto=format&fit=crop&q=80&w=120`,
         createdAt: new Date().toISOString(),
-        passwordChanged: false,
-        password: newId
+        passwordChanged: false
       };
       updatedCustomers = [...updatedCustomers, currentCust];
       saveCustomers(updatedCustomers);
@@ -1556,122 +1383,250 @@ export default function App() {
       day: 'numeric'
     }) : 'Scheduled soon';
 
+    const cleanName = (customer.name || 'P').trim();
+    const parts = cleanName.split(/\s+/);
+    const patronInitials = parts.length >= 2 
+      ? (parts[0][0] + parts[1][0]).toUpperCase() 
+      : cleanName.slice(0, 2).toUpperCase();
+
+    const clientDp = customer.avatar || "https://images.unsplash.com/photo-1544005313-94ddf0286df2";
+
     printWin.document.write(`
       <html>
         <head>
           <title>Atelier Fitting Card - ${customer.name}</title>
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;850&family=Inter:wght@400;500;700;800&family=JetBrains+Mono:wght@400;700&family=Montserrat:wght@400;600;805;900&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;600;700&display=swap');
             body {
-              font-family: 'Plus Jakarta Sans', sans-serif;
-              padding: 40px;
+              font-family: '${voucherFont}', 'Plus Jakarta Sans', sans-serif;
+              padding: 30px;
               color: ${voucherTextColor};
-              background-color: #fafaf9;
+              background-color: #faf9f6;
               -webkit-print-color-adjust: exact;
             }
             .ticket {
-              border: 3px double ${voucherAccentColor};
+              border: 1px solid #e7e5e4;
+              border-top: 8px solid ${voucherAccentColor};
               background-color: ${voucherBgColor};
-              color: ${voucherTextColor};
-              padding: 40px;
-              max-width: 550px;
+              padding: 32px;
+              max-width: 580px;
               margin: 0 auto;
-              box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+              border-radius: 16px;
+              box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05);
+            }
+            .erp-header {
+              text-align: center;
+              font-size: 11px;
+              text-transform: uppercase;
+              letter-spacing: 3px;
+              color: ${voucherAccentColor};
+              font-weight: 800;
+              margin-bottom: 2px;
             }
             .header {
-              text-align: center;
-              border-bottom: 2px solid ${voucherTextColor}22;
+              display: flex;
+              flex-direction: column;
+              align-items: ${voucherLogoAlignment === 'center' ? 'center' : (voucherLogoAlignment === 'right' ? 'flex-end' : 'flex-start')};
+              text-align: ${voucherLogoAlignment};
+              border-bottom: 2px ${voucherBorderStyle} #e7e5e4;
               padding-bottom: 20px;
               margin-bottom: 24px;
             }
             .title {
-              font-family: 'Playfair Display', serif;
-              font-size: 28px;
-              font-weight: 600;
-              letter-spacing: 1px;
-              margin: 0 0 4px 0;
+              font-family: '${voucherFont}', 'Playfair Display', serif;
+              font-size: 32px;
+              font-weight: 750;
+              letter-spacing: 0.5px;
+              margin: 4px 0 2px 0;
+              color: ${voucherTextColor};
             }
             .subtitle {
               font-size: 10px;
               text-transform: uppercase;
               letter-spacing: 4px;
-              color: ${voucherAccentColor};
+              color: #78716c;
               font-weight: 700;
               margin: 0;
             }
             .section-title {
               font-size: 11px;
               text-transform: uppercase;
-              letter-spacing: 1.5px;
+              letter-spacing: 2px;
               color: #78716c;
-              border-bottom: 1px solid #f5f5f4;
+              border-bottom: 1px solid #e7e5e4;
               padding-bottom: 6px;
-              margin: 20px 0 10px 0;
-              font-weight: 700;
+              margin: 16px 0 8px 0;
+              font-weight: 800;
+            }
+            .dp-container {
+              display: flex;
+              align-items: center;
+              gap: 16px;
+              background-color: #fafaf9;
+              border: 1px solid #f1eeeb;
+              border-radius: 12px;
+              padding: 16px;
+              margin-bottom: 16px;
+            }
+            .dp-img {
+              width: 64px;
+              height: 64px;
+              border-radius: 12px;
+              object-fit: cover;
+              border: 2px solid ${voucherAccentColor};
+              box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            }
+            .dp-fallback {
+              width: 64px;
+              height: 64px;
+              border-radius: 12px;
+              background: linear-gradient(135deg, ${voucherAccentColor}, #1c1917);
+              color: #ffffff;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-weight: 800;
+              font-size: 20px;
+              border: 2px solid ${voucherAccentColor};
+              box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            }
+            .customer-info {
+              flex-grow: 1;
+            }
+            .customer-name {
+              font-size: 16px;
+              font-weight: 800;
+              color: ${voucherTextColor};
+              margin-bottom: 4px;
+            }
+            .customer-meta {
+              font-size: 12px;
+              color: #57534e;
+              margin-bottom: 2px;
+              display: flex;
+              align-items: center;
+              gap: 4px;
             }
             .grid-params {
               display: grid;
-              grid-template-cols: repeat(4, 1fr);
-              gap: 8px;
-              margin-bottom: 20px;
+              grid-template-columns: repeat(4, 1fr) !important;
+              gap: 12px;
+              margin-bottom: 16px;
             }
             .param-box {
-              background: #fdfbf7;
-              border: 1px dashed #e7e5e4;
-              border-radius: 6px;
-              padding: 8px;
+              background: #fffdfa;
+              border: 1px solid #f1eeeb;
+              border-bottom: 3.5px solid ${voucherAccentColor};
+              border-radius: 8px;
+              padding: 12px 6px;
               text-align: center;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.02);
             }
             .param-val {
-              font-size: 16px;
-              font-weight: 700;
+              font-size: 20px;
+              font-weight: 800;
               color: ${voucherTextColor};
             }
             .param-lbl {
               font-size: 9px;
               text-transform: uppercase;
-              color: ${voucherTextColor}88;
-              margin-top: 2px;
+              letter-spacing: 0.5px;
+              color: #78716c;
+              margin-top: 4px;
+              font-weight: bold;
             }
-            .meta-item {
-              display: flex;
-              justify-content: space-between;
+            .receipt-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 10px;
+              color: #292524;
               font-size: 13px;
-              margin: 6px 0;
+            }
+            .receipt-table td {
+              padding: 6px 0;
+            }
+            .receipt-table tr.divider td {
+              border-bottom: 1px dashed #e7e5e4;
+              padding: 0;
+            }
+            .receipt-table tr.total-row td {
+              border-top: 1.5px solid #1c1917;
+              padding-top: 10px;
+              font-weight: 800;
+            }
+            .notes-block {
+              font-size: 12px;
+              background: #faf8f5;
+              border-left: 4px solid ${voucherAccentColor};
+              padding: 12px 16px;
+              margin: 12px 0;
+              border-radius: 0 8px 8px 0;
+              font-style: italic;
+              color: #44403c;
+              line-height: 1.5;
             }
             .ready-card {
-              background-color: ${voucherAccentColor};
+              background: linear-gradient(135deg, ${voucherAccentColor}, #1c1917);
               color: #ffffff;
-              padding: 12px 16px;
-              border-radius: 8px;
+              padding: 14px 20px;
+              border-radius: 12px;
               text-align: center;
-              font-weight: 700;
+              font-weight: 800;
               font-size: 14px;
-              margin-top: 24px;
+              margin-top: 28px;
+              box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+              letter-spacing: 0.5px;
             }
             .footer-notes {
               font-size: 11px;
               color: #78716c;
               text-align: center;
-              margin-top: 30px;
+              margin-top: 32px;
               font-style: italic;
-              border-top: 1px dashed #e7e5e4;
-              padding-top: 15px;
+              border-top: 1px ${voucherBorderStyle} #e7e5e4;
+              padding-top: 20px;
+              line-height: 1.6;
             }
           </style>
         </head>
         <body>
           <div class="ticket">
+            <div class="erp-header">Tailor Shop ERP</div>
             <div class="header">
-              <h1 class="title">${voucherTitle}</h1>
-              <p class="subtitle">${voucherSubtitle}</p>
+              ${customLogoUrl ? `
+                <img 
+                  src="${customLogoUrl}" 
+                  style="height: 52px; max-width: 180px; object-fit: contain; margin-bottom: 12px; border-radius: 6px;" 
+                  alt="Atelier Logo" 
+                  referrerpolicy="no-referrer"
+                />
+              ` : ''}
+              <h1 class="title">${voucherMainTitle}</h1>
+              <p class="subtitle" style="color: ${voucherAccentColor};">${voucherSubtitle}</p>
             </div>
 
-            <div class="section-title">Patron Coordinate Details</div>
-            <div class="meta-item"><strong>Client Name:</strong> <span>${customer.name}</span></div>
-            <div class="meta-item"><strong>Phone Contact:</strong> <span>${customer.phone}</span></div>
-            <div class="meta-item"><strong>Email Address:</strong> <span>${customer.email}</span></div>
-            <div class="meta-item"><strong>Voucher Token:</strong> <span>${record.id}</span></div>
+            <div class="dp-container">
+              <div class="customer-info">
+                <div class="customer-name">${customer.name}</div>
+                <div class="customer-meta">📞 <span>${customer.phone || 'N/A'}</span></div>
+                <div class="customer-meta">✉️ <span>${customer.email || 'N/A'}</span></div>
+                <div class="customer-meta" style="font-family: monospace; font-size: 11px; margin-top: 6px; color:#a8a29e;">VOUCHER REF: ${record.id}</div>
+              </div>
+              <div>
+                ${clientDp ? `
+                  <img 
+                    src="${clientDp}" 
+                    class="dp-img"
+                    alt="${customer.name}"
+                    referrerpolicy="no-referrer"
+                    onerror="this.style.display='none'; document.getElementById('dp-fallback-el').style.display='flex';"
+                  />
+                  <div id="dp-fallback-el" class="dp-fallback" style="display: none;">${patronInitials}</div>
+                ` : `
+                  <div class="dp-fallback">${patronInitials}</div>
+                `}
+              </div>
+            </div>
 
             <div class="section-title">${record.clothingType} Pattern Metrics</div>
             <div class="grid-params">
@@ -1687,25 +1642,44 @@ export default function App() {
                 .join('')}
             </div>
 
-            <div class="meta-item"><strong>Style Alterations / Fitting Notes:</strong></div>
-            <div style="font-size: 12px; background: #faf8f5; border-left: 3px solid #aa8612; padding: 10px; margin: 8px 0; border-radius: 4px; font-style: italic;">
+            <div class="section-title">Style Alterations &amp; Fit Specs</div>
+            <div class="notes-block">
               ${record.notes || 'Classic standard fit drapes.'}
             </div>
 
             ${order ? `
               <div class="section-title">Atelier Accounting Ledger</div>
-              <div class="meta-item"><strong>Pattern Job Ref:</strong> <span>${order.id}</span></div>
-              <div class="meta-item"><strong>Commission Price:</strong> <span>₹${order.price}</span></div>
-              <div class="meta-item"><strong>Cutter Advance:</strong> <span style="color:#16a34a; font-weight:700;">₹${order.advancePayment}</span></div>
-              <div class="meta-item"><strong>Fitting Balance Due:</strong> <span style="color:#dc2626; font-weight:700;">₹${order.remainingBalance}</span></div>
+              <table class="receipt-table">
+                <tr>
+                  <td><strong>Pattern Job Ref:</strong></td>
+                  <td align="right">${order.id}</td>
+                </tr>
+                <tr>
+                  <td><strong>Garment Category:</strong></td>
+                  <td align="right">${order.clothingType}</td>
+                </tr>
+                <tr class="divider"><td colspan="2"></td></tr>
+                <tr>
+                  <td><strong>Commission Price (Total Amount):</strong></td>
+                  <td align="right" style="font-weight: 700;">₹${order.price}</td>
+                </tr>
+                <tr>
+                  <td><strong>Cutter Advance paid:</strong></td>
+                  <td align="right" style="color:#16a34a; font-weight:700;">- ₹${order.advancePayment}</td>
+                </tr>
+                <tr class="total-row">
+                  <td><strong>Total Balance Due at Fitting:</strong></td>
+                  <td align="right" style="color:#dc2626; font-weight:800; font-size: 15px;">₹${order.remainingBalance}</td>
+                </tr>
+              </table>
             ` : ''}
 
             <div class="ready-card">
-              ✅ TIMELINE: Ready for Pick-up on ${readyFormatted}
+              ✨ Ready for Pick-up on ${readyFormatted}
             </div>
 
             <p class="footer-notes">
-              ${voucherFooter}
+              ${voucherFooterNotes}
             </p>
           </div>
           <script>
@@ -1973,9 +1947,27 @@ export default function App() {
       Kurta: 220,
       Custom: 290
     });
-    setAtelierName('Sartorial Atelier');
+    setAtelierName('tailorSHOP ERP');
     
     triggerToast("Atelier configurations returned to original defaults!", "success");
+  };
+
+  // Permanently purge all database records
+  const handlePurgeAllDatabase = async () => {
+    if (!window.confirm("CRITICAL WARNING: Are you sure you want to permanently delete all customers, measurements, orders, workers, notifications, and edit logs from both local storage AND Firestore? This will completely empty the database for a fully clean start and cannot be undone.")) return;
+    
+    try {
+      triggerToast("Purging database... please wait.", "info");
+      await purgeAllDatabaseRecords();
+      setCustomers([]);
+      setMeasurements([]);
+      setOrders([]);
+      setWorkers([]);
+      triggerToast("All dummy data successfully purged! You now have a clean slate.", "success");
+    } catch (err: any) {
+      console.error(err);
+      triggerToast("Purge completed! State refreshed to a clean slate.", "success");
+    }
   };
 
   // Derived metrics for Tailor Owner's visual dashboard summary card
@@ -2207,20 +2199,29 @@ export default function App() {
               
               <div className="text-center max-w-2xl mx-auto mb-10">
                 {/* Header Icon container */}
-                <div className={`mx-auto p-3 w-12 h-12 rounded-2xl flex items-center justify-center mb-4 shadow-sm transition-all duration-305 ${
+                <div className={`mx-auto p-1.5 w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-sm transition-all duration-305 ${
                   isDarkMode ? 'bg-yellow-400/10 text-yellow-400' : 'bg-black/10 text-black'
                 }`}>
-                  <Briefcase className="h-6 w-6" />
+                  {customLogoUrl ? (
+                    <img
+                      src={customLogoUrl}
+                      alt="Atelier Logo"
+                      className="w-full h-full object-contain rounded-xl"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <Briefcase className="h-6 w-6" />
+                  )}
                 </div>
                 <h1 className={`font-sans font-black text-3xl sm:text-4xl tracking-tight transition-colors duration-353 ${
                   isDarkMode ? 'text-white' : 'text-stone-900'
                 }`}>
-                  <Typewriter text={loginPageTitle} />
+                  <Typewriter text={customLandingTitle} />
                 </h1>
                 <p className={`text-sm mt-3 font-medium transition-colors duration-300 ${
-                  isDarkMode ? 'text-zinc-400' : 'text-zinc-600'
+                  isDarkMode ? 'text-zinc-400' : 'text-zinc-650'
                 }`}>
-                  {loginPageDesc}
+                  {customLandingDescription}
                 </p>
               </div>
 
@@ -2232,8 +2233,8 @@ export default function App() {
                   onClick={() => {
                     setSignUpRole('Tailor');
                     setSignInRole('Tailor');
-                    setGatekeeperScreen('signup');
-                    triggerToast("Workplace selected! Let's register your tailor account.", 'info');
+                    setGatekeeperScreen('signin');
+                    triggerToast("Atelier Owner Portal selected! Please sign in with your workshop credentials.", 'info');
                   }}
                   className={`group text-left rounded-2xl overflow-hidden border transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 active:scale-[0.99] cursor-pointer ${
                     isDarkMode 
@@ -2243,7 +2244,7 @@ export default function App() {
                 >
                   <div className="h-32 w-full overflow-hidden relative bg-zinc-100">
                     <img
-                      src={loginWorkplaceImage}
+                      src={customTailorImage}
                       alt="Tailoring atelier hands at work"
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       referrerPolicy="no-referrer"
@@ -2262,7 +2263,7 @@ export default function App() {
                       <h3 className={`font-sans font-extrabold text-lg transition-colors duration-300 ${
                         isDarkMode ? 'text-white group-hover:text-yellow-400' : 'text-zinc-900 group-hover:text-black'
                       }`}>
-                        {loginWorkplaceTitle}
+                        {customTailorTitle}
                       </h3>
                       <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors duration-300 ${
                         isDarkMode ? 'bg-yellow-400/10 text-yellow-400 animate-none' : 'bg-zinc-100 text-zinc-800'
@@ -2271,14 +2272,14 @@ export default function App() {
                       </span>
                     </div>
                     <p className={`text-xs mt-2 leading-relaxed font-semibold transition-colors duration-300 ${
-                      isDarkMode ? 'text-zinc-400' : 'text-zinc-600'
+                      isDarkMode ? 'text-zinc-400' : 'text-zinc-650'
                     }`}>
-                      {loginWorkplaceDesc}
+                      {customTailorDescription}
                     </p>
                     <div className={`mt-3 flex items-center text-xs font-bold transition-all duration-300 ${
                       isDarkMode ? 'text-yellow-400 group-hover:text-white' : 'text-black group-hover:text-zinc-600'
                     }`}>
-                      <span>Register Workplace Account</span>
+                      <span>Access Workspace</span>
                       <ArrowRight className="h-3.5 w-3.5 ml-1 transition-transform group-hover:translate-x-1" />
                     </div>
                   </div>
@@ -2290,7 +2291,7 @@ export default function App() {
                   onClick={() => {
                     setSignInRole('Customer');
                     setGatekeeperScreen('signin');
-                    triggerToast("Customer lounge mode active! Enter your email or phone to resume your personalized fit workspace.", 'info');
+                    triggerToast("Customer Lounge selected! Please sign in using your phone or email.", 'info');
                   }}
                   className={`group text-left rounded-2xl overflow-hidden border transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 active:scale-[0.99] cursor-pointer ${
                     isDarkMode 
@@ -2300,7 +2301,7 @@ export default function App() {
                 >
                   <div className="h-32 w-full overflow-hidden relative bg-zinc-100">
                     <img
-                      src={loginCustomerImage}
+                      src={customCustomerImage}
                       alt="Bespoke luxury clothes hangers"
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       referrerPolicy="no-referrer"
@@ -2319,7 +2320,7 @@ export default function App() {
                       <h3 className={`font-sans font-extrabold text-lg transition-colors duration-300 ${
                         isDarkMode ? 'text-white group-hover:text-yellow-400' : 'text-zinc-900 group-hover:text-black'
                       }`}>
-                        {loginCustomerTitle}
+                        {customCustomerTitle}
                       </h3>
                       <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors duration-300 ${
                         isDarkMode ? 'bg-yellow-400/10 text-yellow-400 animate-none' : 'bg-zinc-100 text-zinc-800'
@@ -2328,14 +2329,14 @@ export default function App() {
                       </span>
                     </div>
                     <p className={`text-xs mt-2 leading-relaxed font-semibold transition-colors duration-300 ${
-                      isDarkMode ? 'text-zinc-400' : 'text-zinc-600'
+                      isDarkMode ? 'text-zinc-400' : 'text-zinc-650'
                     }`}>
-                      {loginCustomerDesc}
+                      {customCustomerDescription}
                     </p>
                     <div className={`mt-3 flex items-center text-xs font-bold transition-all duration-300 ${
                       isDarkMode ? 'text-yellow-400 group-hover:text-white' : 'text-black group-hover:text-zinc-600'
                     }`}>
-                      <span>Register Customer Profile</span>
+                      <span>Access Customer Dashboard</span>
                       <ArrowRight className="h-3.5 w-3.5 ml-1 transition-transform group-hover:translate-x-1" />
                     </div>
                   </div>
@@ -2468,7 +2469,7 @@ export default function App() {
                         <input
                           type="text"
                           required
-                          placeholder="e.g. Sarah Rahman"
+                          placeholder="e.g. Full Name"
                           value={signUpName}
                           onChange={(e) => setSignUpName(e.target.value)}
                           className={`w-full pl-11 pr-4 py-2 rounded-xl border focus:outline-none focus:ring-1 focus:ring-yellow-400 text-xs font-semibold ${
@@ -2738,53 +2739,6 @@ export default function App() {
                   {/* Form */}
                   <form onSubmit={handleSignIn} className="space-y-4">
                     
-                    {/* Demo prefiller block */}
-                    <div className={`space-y-1.5 text-[11px] mb-2 p-2 rounded-xl border ${
-                      isDarkMode ? 'bg-zinc-900/50 border-zinc-800 text-zinc-300' : 'bg-zinc-150 border-zinc-200 text-zinc-800'
-                    }`}>
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold uppercase tracking-wider text-[8px] opacity-75">Demo prefill helper:</span>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSignInEmail('owner@atelier.com');
-                              setSignInPassword('password123');
-                              setSignInRole('Tailor');
-                              triggerToast('Prefilled credentials for Atelier Owner!', 'info');
-                            }}
-                            className="hover:underline font-extrabold text-[9px] text-amber-600 dark:text-yellow-400"
-                          >
-                            👑 Owner
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSignInEmail('rashid.cutter@tailorshop.com');
-                              setSignInPassword('WORK-01');
-                              setSignInRole('Tailor');
-                              triggerToast('Prefilled credentials for Rashid (Artisan Tailor)!', 'info');
-                            }}
-                            className="hover:underline font-extrabold text-[9px] text-teal-600 dark:text-sky-400"
-                          >
-                            🪡 Tailor Worker
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSignInEmail('sarah.r@example.com');
-                              setSignInPassword('CUST-101');
-                              setSignInRole('Customer');
-                              triggerToast('Prefilled credentials for Client Sarah Rahman!', 'info');
-                            }}
-                            className="hover:underline font-extrabold text-[9px] text-purple-600 dark:text-purple-400"
-                          >
-                            👤 Client
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
                     {/* Email address */}
                     <div>
                       <label className={`block text-[11px] uppercase tracking-wider font-bold mb-1.5 ${
@@ -2797,7 +2751,7 @@ export default function App() {
                         <input
                           type={signInRole === 'Customer' ? 'text' : 'email'}
                           required
-                          placeholder={signInRole === 'Customer' ? 'e.g. sarah.r@example.com or +1 (555) 234-5678' : 'owner@atelier.com'}
+                          placeholder={signInRole === 'Customer' ? 'e.g. customer@domain.com or phone number' : 'owner@atelier.com'}
                           value={signInEmail}
                           onChange={(e) => setSignInEmail(e.target.value)}
                           className={`w-full pl-11 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-yellow-400 text-xs font-semibold ${
@@ -2812,14 +2766,14 @@ export default function App() {
                       <label className={`block text-[11px] uppercase tracking-wider font-bold mb-1.5 ${
                         isDarkMode ? 'text-zinc-400' : 'text-zinc-650'
                       }`}>
-                        {signInRole === 'Customer' ? 'Unique Customer ID or Order ID' : 'Password'}
+                        {signInRole === 'Customer' ? 'Password (Order ID like ORD-9841)' : 'Password'}
                       </label>
                       <div className="relative">
                         <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
                         <input
                           type={showPassword ? "text" : "password"}
                           required
-                          placeholder={signInRole === 'Customer' ? 'e.g. CUST-101 or ORD-9841' : '••••••••'}
+                          placeholder={signInRole === 'Customer' ? 'e.g. ORD-9841' : '••••••••'}
                           value={signInPassword}
                           onChange={(e) => setSignInPassword(e.target.value)}
                           className={`w-full pl-11 pr-11 py-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-yellow-400 text-xs font-sans font-semibold ${
@@ -2873,27 +2827,36 @@ export default function App() {
                   </form>
                 </div>
 
-                {/* Toggle logic link to creation */}
-                {signInRole !== 'Customer' && (
-                  <div className={`mt-8 text-center text-xs font-semibold ${
-                    isDarkMode ? 'text-zinc-400' : 'text-zinc-500'
-                  }`}>
-                    <span>Don't have an account under this role? </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSignUpRole(signInRole);
-                        setGatekeeperScreen('signup');
-                        triggerToast(`Switched to account creation mode!`, 'info');
-                      }}
-                      className={`hover:underline font-extrabold cursor-pointer text-sm ${
-                        isDarkMode ? 'text-yellow-400' : 'text-black'
-                      }`}
-                    >
-                      Create Account now
-                    </button>
-                  </div>
-                )}
+                 {/* Toggle logic link to creation */}
+                 {signInRole !== 'Customer' ? (
+                   <div className={`mt-8 text-center text-xs font-semibold ${
+                     isDarkMode ? 'text-zinc-400' : 'text-zinc-500'
+                   }`}>
+                     <span>Atelier logins are managed by administrators. Default: <strong>owner@atelier.com</strong> (pass: <strong>password123</strong>)</span>
+                     <button
+                       type="button"
+                       onClick={() => {
+                         setSignUpRole(signInRole);
+                         setGatekeeperScreen('signup');
+                         triggerToast(`Switched to account creation mode!`, 'info');
+                       }}
+                       className={`hover:underline font-extrabold cursor-pointer text-sm ${
+                         isDarkMode ? 'text-yellow-400' : 'text-black'
+                       }`}
+                     >
+                       
+                     </button>
+                   </div>
+                 ) : (
+                   <div className={`mt-8 text-center text-xs font-semibold ${
+                     isDarkMode ? 'text-zinc-400' : 'text-zinc-500'
+                   }`}>
+                     <p>Orders are automatically indexed by our workshop team.</p>
+                     <p className="mt-1 font-bold text-amber-600 dark:text-amber-400">
+                       Please enter your Phone or Email with your Order ID as Password.
+                     </p>
+                   </div>
+                 )}
 
               </div>
 
@@ -2915,713 +2878,6 @@ export default function App() {
             >
               U-bsol
             </a>
-          </p>
-        </footer>
-      </div>
-    );
-  }
-
-  // ==========================================
-  // --- TAILOR / WORKER PORTAL INTERACTIVE ---
-  // ==========================================
-  if (currentUser && currentUser.role === 'Worker') {
-    // Lookup matching worker in database
-    const activeWorkers = getWorkers();
-    const workerDetails = activeWorkers.find(
-      (w) => w.id === currentUser.id || w.email.toLowerCase().trim() === currentUser.email.toLowerCase().trim()
-    ) || {
-      id: currentUser.id,
-      name: currentUser.name,
-      email: currentUser.email,
-      phone: currentUser.phone || '',
-      role: 'Apprentice' as const,
-      rating: 4.8,
-      baseSalary: 1500,
-      perOrderBonus: 10,
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120'
-    };
-
-    const assignedOrders = orders.filter(o => o.assignedWorkerId === workerDetails.id);
-    const pendingJobs = assignedOrders.filter(o => o.status !== 'Delivered' && o.status !== 'Ready for Pickup');
-    const completedJobs = assignedOrders.filter(o => o.status === 'Delivered' || o.status === 'Ready for Pickup');
-    const estimatedBonusSum = completedJobs.length * workerDetails.perOrderBonus;
-    const estimatedStipendTotal = workerDetails.baseSalary + estimatedBonusSum;
-
-    // Sizing handling
-    const getWorkerSizingSpecs = () => {
-      if (!selectedWorkerCustId) return null;
-      return measurements.filter(m => m.customerId === selectedWorkerCustId);
-    };
-
-    const workerCustomerMatch = customers.find(c => c.id === selectedWorkerCustId);
-
-    const filteredAssignedOrders = assignedOrders.filter(o => {
-      if (workerSearch) {
-        const q = workerSearch.toLowerCase();
-        const client = customers.find(c => c.id === o.customerId);
-        return (
-          o.id.toLowerCase().includes(q) ||
-          o.clothingType.toLowerCase().includes(q) ||
-          (client && client.name.toLowerCase().includes(q))
-        );
-      }
-      return true;
-    });
-
-    const activeWorkerSizing = getWorkerSizingSpecs();
-
-    // Sizing input triggers
-    const triggerUpdateSizingField = (key: string, val: string) => {
-      setWorkerSizingFields(prev => ({ ...prev, [key]: val }));
-    };
-
-    const handleProgressStatus = (orderId: string, nextStat: OrderStatus) => {
-      const updated = orders.map(o => {
-        if (o.id === orderId) {
-          return { ...o, status: nextStat };
-        }
-        return o;
-      });
-      setOrders(updated);
-      saveOrders(updated);
-      addActivity('Status Updated', `Job ${orderId} stage shifted to [${nextStat}] by artisan ${currentUser.name}`, 'Worker', currentUser.name);
-      triggerToast(`Order status advanced to [${nextStat}] successfully!`, 'success');
-    };
-
-    const handleSaveWorkerSizing = () => {
-      if (!selectedWorkerCustId) {
-        triggerToast("Please pick a customer profile first to register sizing stats.", 'error');
-        return;
-      }
-      const existingIdx = measurements.findIndex(m => m.customerId === selectedWorkerCustId && m.clothingType === workerSizingType);
-      const newMId = `MSR-${Math.floor(100 + Math.random() * 900)}`;
-      
-      const newRecord: MeasurementRecord = {
-        id: existingIdx >= 0 ? measurements[existingIdx].id : newMId,
-        customerId: selectedWorkerCustId,
-        clothingType: workerSizingType,
-        date: new Date().toISOString(),
-        fields: workerSizingFields,
-        notes: `Recorded in Artisan Cabin by ${currentUser.name} (${workerDetails.role})`
-      };
-
-      let nextMeasurements;
-      if (existingIdx >= 0) {
-        nextMeasurements = [...measurements];
-        nextMeasurements[existingIdx] = newRecord;
-      } else {
-        nextMeasurements = [...measurements, newRecord];
-      }
-
-      setMeasurements(nextMeasurements);
-      saveMeasurements(nextMeasurements);
-      addActivity('Sizing Configured', `Fit specifications for ${workerSizingType} registered for customer`, 'Worker', currentUser.name);
-      triggerToast(`Sizing fit parameters locked successfully for ${workerSizingType}!`, 'success');
-    };
-
-    const handleAddCustomerFromWorker = () => {
-      if (!workerNewCustName.trim() || !workerNewCustPhone.trim()) {
-        triggerToast("Patron name and phone coordinates required.", 'error');
-        return;
-      }
-      const nId = `CUST-${Math.floor(100 + Math.random() * 900)}`;
-      const newPatron: Customer = {
-        id: nId,
-        name: workerNewCustName.trim(),
-        phone: workerNewCustPhone.trim(),
-        whatsapp: workerNewCustPhone.replace(/\D/g, ''),
-        email: workerNewCustEmail.trim() || `${nId.toLowerCase()}@handmadeatelier.com`,
-        address: 'Direct Artisan Register Spec',
-        qrCodeData: `https://atelier.com/patron/${nId}`,
-        avatar: `https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120`,
-        createdAt: new Date().toISOString(),
-        passwordChanged: false
-      };
-
-      const nextC = [...customers, newPatron];
-      setCustomers(nextC);
-      saveCustomers(nextC);
-      
-      setWorkerNewCustName('');
-      setWorkerNewCustPhone('');
-      setWorkerNewCustEmail('');
-      setIsAddingNewCust(false);
-      
-      setSelectedWorkerCustId(nId);
-      triggerToast(`Client ${newPatron.name} registered and selected!`, 'success');
-    };
-
-    return (
-      <div className={`min-h-screen flex flex-col transition-all duration-300 ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-stone-50 text-stone-900'}`}>
-        {/* Toast alerts inside Artisan view */}
-        {uiToast && (
-          <div className="fixed bottom-6 right-6 z-50 animate-slide-up">
-            <div className={`p-4 rounded-xl shadow-xl flex items-center space-x-3 text-xs font-bold border ${
-              uiToast.type === 'success' ? 'bg-emerald-550 border-emerald-600 text-white' :
-              uiToast.type === 'error' ? 'bg-rose-600 border-rose-700 text-white' :
-              'bg-amber-600 border-amber-700 text-white'
-            }`}>
-              {uiToast.type === 'success' && <CheckCircle className="h-4 w-4 text-white" />}
-              {uiToast.type === 'error' && <ShieldCheck className="h-4 w-4 text-white" />}
-              <span>{uiToast.message}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Header container */}
-        <header className={`border-b sticky top-0 z-40 transition-colors duration-300 ${isDarkMode ? 'bg-slate-900/90 border-slate-800 backdrop-blur-md' : 'bg-white/95 border-stone-200 backdrop-blur-md shadow-sm'}`}>
-          <div className="max-w-7xl mx-auto px-4 py-3 sm:px-6 lg:px-8 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-amber-500 rounded-xl text-black">
-                <Scissors className="h-5 w-5" />
-              </div>
-              <div>
-                <span className="font-serif font-black tracking-tight text-sm uppercase">{navbarAppName || 'Sartorial Master'}</span>
-                <span className="text-[10px] block opacity-75 font-mono">Artisan Stitching suite v1.8</span>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              {/* Theme toggle */}
-              <button
-                type="button"
-                onClick={() => setIsDarkMode(!isDarkMode)}
-                className={`p-2 rounded-xl border hover:scale-105 active:scale-95 transition-all cursor-pointer ${isDarkMode ? 'bg-slate-800 border-slate-700 text-yellow-400' : 'bg-stone-100 border-stone-200 text-stone-700'}`}
-              >
-                {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </button>
-
-              {/* Profile card shortcut */}
-              <div className="hidden sm:flex items-center space-x-2 border-l pl-4 border-stone-200 dark:border-slate-800">
-                <img
-                  src={workerDetails.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120'}
-                  alt={workerDetails.name}
-                  className="h-8 w-8 rounded-full border border-amber-500 object-cover"
-                />
-                <div className="text-left">
-                  <p className="text-xs font-bold leading-tight">{workerDetails.name}</p>
-                  <p className="text-[9px] opacity-75 uppercase font-mono tracking-wider font-semibold text-amber-600 dark:text-amber-450">{workerDetails.role}</p>
-                </div>
-              </div>
-
-              {/* Logout button */}
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentUser(null);
-                  localStorage.removeItem('tailor_logged_in_user');
-                  triggerToast("Signed out of your workshop cabin.", 'info');
-                }}
-                className={`p-2 px-3 text-xs font-extrabold flex items-center space-x-1.5 rounded-xl border border-rose-500/10 text-rose-500 cursor-pointer hover:bg-rose-500/10 transition-colors`}
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="hidden md:inline">Exit Cabin</span>
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* Dashboard Area */}
-        <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6">
-          
-          {/* Welcome Banner Card */}
-          <div className={`p-6 rounded-3xl border transition-colors relative overflow-hidden ${
-            isDarkMode ? 'bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border-slate-850' : 'bg-gradient-to-r from-stone-100 to-stone-50 border-stone-200 shadow-sm'
-          }`}>
-            <div className="relative z-10 max-w-3xl">
-              <span className="text-[9px] font-mono font-bold uppercase tracking-widest bg-amber-500/15 text-amber-700 dark:text-amber-400 px-2.5 py-0.5 rounded-full">
-                Active Workshop Operator
-              </span>
-              <h2 className="text-xl sm:text-2xl font-serif font-black tracking-tight mt-2 flex items-center gap-2">
-                <span>Welcome back, {workerDetails.name}!</span>
-              </h2>
-              <p className="text-xs opacity-85 mt-2 leading-relaxed max-w-2xl font-medium">
-                Sartorial Artisan cabin is active. Manage your assigned stitch-jobs, record custom sizing parameters, review monthly performance, and advance garment production phases.
-              </p>
-            </div>
-            
-            {/* Background design accents */}
-            <div className="absolute right-6 bottom-0 translate-y-1/4 opacity-10 text-[120px] pointer-events-none font-serif select-none">
-              ✂
-            </div>
-          </div>
-
-          {/* Quick Metrics stats Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-850' : 'bg-white border-stone-200 shadow-sm'}`}>
-              <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">Quality Rating</span>
-              <p className="text-xl font-bold mt-1 text-yellow-500 flex items-center gap-1.5 font-mono">
-                {workerDetails.rating || '4.8'}
-                <span className="text-xs text-stone-400 font-sans font-normal">/ 5.0 score</span>
-              </p>
-            </div>
-
-            <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-850' : 'bg-white border-stone-200 shadow-sm'}`}>
-              <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">Base Month Salary</span>
-              <p className="text-xl font-black mt-1 text-amber-600 dark:text-amber-500 font-mono">
-                ₹{(workerDetails.baseSalary || 2005).toLocaleString()}
-              </p>
-            </div>
-
-            <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-850' : 'bg-white border-stone-200 shadow-sm'}`}>
-              <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">Per-Job Premium bonus</span>
-              <p className="text-xl font-black mt-1 text-sky-650 dark:text-sky-400 font-mono">
-                +₹{workerDetails.perOrderBonus || 15}
-              </p>
-            </div>
-
-            <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-850' : 'bg-white border-stone-200 shadow-sm'}`}>
-              <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">Estimated Payout</span>
-              <p className="text-xl font-black mt-1 text-emerald-650 dark:text-emerald-450 font-mono">
-                ₹{estimatedStipendTotal.toLocaleString()}
-                <span className="text-[9px] block text-stone-400 font-normal font-sans tracking-tight">({completedJobs.length} finished bonuses)</span>
-              </p>
-            </div>
-          </div>
-
-          {/* Tab Navigation switches */}
-          <div className="flex border-b border-stone-200 dark:border-slate-850 gap-6">
-            <button
-              onClick={() => setWorkerTab('jobs')}
-              className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
-                workerTab === 'jobs' ? 'border-amber-600 text-amber-600 dark:border-amber-400 dark:text-amber-400' : 'border-transparent text-stone-400'
-              }`}
-            >
-              <Briefcase className="w-4 h-4" />
-              <span>Assigned Work ({pendingJobs.length} active)</span>
-            </button>
-            <button
-              onClick={() => {
-                setWorkerTab('measurements');
-                if (customers.length > 0 && !selectedWorkerCustId) {
-                  setSelectedWorkerCustId(customers[0].id);
-                }
-              }}
-              className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
-                workerTab === 'measurements' ? 'border-amber-600 text-amber-600 dark:border-amber-400 dark:text-amber-400' : 'border-transparent text-stone-400'
-              }`}
-            >
-              <Ruler className="w-4 h-4" />
-              <span>Artisan Sizing Desk</span>
-            </button>
-            <button
-              onClick={() => setWorkerTab('stats')}
-              className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
-                workerTab === 'stats' ? 'border-amber-600 text-amber-600 dark:border-amber-400 dark:text-amber-400' : 'border-transparent text-stone-400'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4" />
-              <span>Performance Ledger</span>
-            </button>
-          </div>
-
-          {/* MAIN TAB SWITCH CONTENT */}
-
-          {workerTab === 'jobs' ? (
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-sm font-bold uppercase tracking-widest font-mono text-stone-400">Assigned Job Tickets</h3>
-                  <p className="text-[11px] text-stone-400">Advance production stage as you cut, stitch, and finish clothing pieces.</p>
-                </div>
-                
-                {/* Search in assigned jobs */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Search order ID or style..."
-                    value={workerSearch}
-                    onChange={(e) => setWorkerSearch(e.target.value)}
-                    className={`pl-9 pr-4 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 w-full sm:w-[240px] border ${
-                      isDarkMode ? 'bg-slate-900 border-slate-800 text-white font-bold' : 'bg-white border-stone-200'
-                    }`}
-                  />
-                </div>
-              </div>
-
-              {filteredAssignedOrders.length === 0 ? (
-                <div className={`p-8 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-900/30 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
-                  <Briefcase className="h-8 w-8 mx-auto opacity-30 mb-2" />
-                  <p className="text-xs text-stone-400">No assigned job tickets matching your query.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredAssignedOrders.map((order) => {
-                    const client = customers.find(c => c.id === order.customerId) || { name: 'Walk-in Client', phone: '', email: '' };
-                    const isUrgent = order.notes?.urgentNotes ? true : false;
-                    
-                    return (
-                      <div key={order.id} className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${
-                        isDarkMode ? 'bg-slate-900/40 border-slate-850 hover:bg-slate-900/65' : 'bg-white border-stone-150 hover:shadow-md'
-                      }`}>
-                        
-                        <div>
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs font-black text-amber-600 dark:text-amber-505">{order.id}</span>
-                                <span className="text-[10px] font-extrabold uppercase bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">{order.clothingType}</span>
-                                {isUrgent && (
-                                  <span className="text-[8px] font-mono tracking-wider font-extrabold text-rose-500 bg-rose-500/10 px-1.5 py-0.5 rounded uppercase">Urgent</span>
-                                )}
-                              </div>
-
-                              <h4 className="font-bold text-sm text-stone-900 dark:text-white mt-2">
-                                {client.name}
-                              </h4>
-                              {client.phone && (
-                                <p className="text-[11px] text-stone-400 mt-1 font-mono">{client.phone}</p>
-                              )}
-                            </div>
-
-                            <span className={`text-[10px] font-mono font-extrabold uppercase px-2.5 py-1 rounded-lg ${
-                              order.status === 'Ready for Pickup' || order.status === 'Delivered' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-450' :
-                              order.status === 'Stitching' || order.status === 'Cutting' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-450' :
-                              'bg-stone-500/15 text-stone-600 dark:text-stone-400'
-                            }`}>
-                              {order.status}
-                            </span>
-                          </div>
-
-                          {/* Fit specifications overview helper shortcut */}
-                          <div className={`mt-4 p-3 rounded-lg border text-[11px] ${isDarkMode ? 'bg-slate-950/50 border-slate-850' : 'bg-stone-50 border-stone-150'}`}>
-                            <div className="flex items-center justify-between border-b pb-1 mb-1 opacity-75 font-bold">
-                              <span>Physical Sizing Specs</span>
-                              <Ruler className="w-3 h-3 text-amber-600" />
-                            </div>
-                            {(() => {
-                              const sizeRecord = measurements.find(m => m.customerId === order.customerId && m.clothingType.toLowerCase() === order.clothingType.toLowerCase());
-                              if (!sizeRecord) {
-                                return <p className="italic text-stone-400 opacity-80 text-[10px]">No sizing records on database. Use Sizing Desk tab to enter dimensions.</p>;
-                              }
-                              return (
-                                <div className="grid grid-cols-4 gap-1 mt-1 font-mono text-[10px] font-semibold text-stone-400">
-                                  {Object.entries(sizeRecord.fields).slice(0, 4).map(([k, v]) => (
-                                    <div key={k} className="text-center bg-white dark:bg-slate-900 py-0.5 rounded border border-stone-100 dark:border-slate-850">
-                                      <span className="block text-[8px] opacity-75 uppercase">{k}</span>
-                                      <span className="text-stone-900 dark:text-white font-extrabold">{v}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              );
-                            })()}
-                          </div>
-
-                          {/* Production Notes */}
-                          {order.notes?.instructions && (
-                            <p className="text-xs text-stone-400 mt-3 pt-3 border-t border-stone-150 dark:border-slate-850 line-clamp-2">
-                              <span className="font-extrabold text-[10px] uppercase block mb-0.5 font-mono text-stone-500">Customer Specs Instructions:</span>
-                              "{order.notes.instructions}"
-                            </p>
-                          )}
-                          {order.notes?.tailorNotes && (
-                            <p className="text-xs text-amber-600/90 mt-2 line-clamp-2">
-                              <span className="font-extrabold text-[10px] uppercase block mb-0.5 font-mono text-amber-700">Internal Tailor Instructions:</span>
-                              "{order.notes.tailorNotes}"
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Order Phase Slider workflow */}
-                        <div className="mt-5 pt-4 border-t border-stone-150 dark:border-slate-850 space-y-2">
-                          <span className="text-[10px] uppercase tracking-widest font-mono font-bold text-stone-400 block">Transition Production Stage:</span>
-                          <div className="flex flex-wrap gap-1.5">
-                            {(['Cutting', 'Stitching', 'Finishing', 'Ready for Pickup', 'Delivered'] as OrderStatus[]).map((phase) => (
-                              <button
-                                key={phase}
-                                type="button"
-                                onClick={() => handleProgressStatus(order.id, phase)}
-                                className={`text-[9px] font-bold px-2 py-1.5 rounded-lg border transition-all active:scale-95 cursor-pointer ${
-                                  order.status === phase ? 'bg-amber-500 border-amber-600 text-black font-extrabold scale-102 shadow-sm' :
-                                  isDarkMode ? 'bg-slate-900 border-slate-800 text-stone-400 hover:border-slate-700' :
-                                  'bg-stone-50 border-stone-200 text-stone-600 hover:bg-stone-100'
-                                }`}
-                              >
-                                {phase}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* Delivery Schedule Warning */}
-                          <div className="flex items-center space-x-1.5 text-[10px] text-stone-400 pt-2 font-mono">
-                            <Calendar className="w-3.5 h-3.5 text-stone-400" />
-                            <span>Deadline: <span className="font-bold text-stone-900 dark:text-white">{order.deliveryDate}</span></span>
-                          </div>
-                        </div>
-
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ) : workerTab === 'measurements' ? (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Left Column: Customers Locator */}
-              <div className="space-y-4 lg:col-span-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-widest font-mono text-stone-400">Select Patron Profile</span>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingNewCust(!isAddingNewCust)}
-                    className="text-[10px] font-extrabold uppercase text-amber-600 hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Quick Enroll</span>
-                  </button>
-                </div>
-
-                {isAddingNewCust && (
-                  <form onSubmit={(e) => { e.preventDefault(); handleAddCustomerFromWorker(); }} className={`p-4 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-stone-200 shadow-sm'}`}>
-                    <span className="text-[10px] block font-mono uppercase font-bold text-amber-600">Register New Customer / Walk-In</span>
-                    <input
-                      type="text"
-                      placeholder="Customer Full Name *"
-                      required
-                      value={workerNewCustName}
-                      onChange={(e) => setWorkerNewCustName(e.target.value)}
-                      className={`w-full p-2.5 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'}`}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Phone Coordinates *"
-                      required
-                      value={workerNewCustPhone}
-                      onChange={(e) => setWorkerNewCustPhone(e.target.value)}
-                      className={`w-full p-2.5 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'}`}
-                    />
-                    <input
-                      type="email"
-                      placeholder="Email (Optional)"
-                      value={workerNewCustEmail}
-                      onChange={(e) => setWorkerNewCustEmail(e.target.value)}
-                      className={`w-full p-2.5 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'}`}
-                    />
-                    <button
-                      type="submit"
-                      className="w-full py-2 bg-amber-500 hover:bg-amber-600 font-extrabold text-[11px] text-black rounded-xl uppercase tracking-wider cursor-pointer transition-colors"
-                    >
-                      Enlist Client &amp; Start Sizing
-                    </button>
-                  </form>
-                )}
-
-                {/* Sizing drawer search input */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Quick search customers..."
-                    value={workerSearch}
-                    onChange={(e) => setWorkerSearch(e.target.value)}
-                    className={`pl-9 pr-4 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 w-full border ${
-                      isDarkMode ? 'bg-slate-900 border-slate-800 text-white font-bold' : 'bg-white border-stone-200'
-                    }`}
-                  />
-                </div>
-
-                <div className="max-h-[400px] overflow-y-auto space-y-2 pr-1">
-                  {customers
-                    .filter(c => c.name.toLowerCase().includes(workerSearch.toLowerCase()) || c.phone.includes(workerSearch))
-                    .map((cust) => {
-                      const isSelected = cust.id === selectedWorkerCustId;
-                      return (
-                        <button
-                          key={cust.id}
-                          onClick={() => setSelectedWorkerCustId(cust.id)}
-                          type="button"
-                          className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                            isSelected ? 'border-amber-500 bg-amber-500/10' :
-                            isDarkMode ? 'bg-slate-900/40 border-slate-850 hover:bg-slate-900/60' : 'bg-white border-stone-200'
-                          }`}
-                        >
-                          <div>
-                            <p className="text-xs font-black text-stone-900 dark:text-white">{cust.name}</p>
-                            <p className="text-[10px] text-stone-400 mt-0.5 font-mono">{cust.phone || 'No phone coordinates'}</p>
-                          </div>
-                          
-                          <span className="text-[9px] font-mono opacity-60">#{cust.id}</span>
-                        </button>
-                      );
-                    })}
-                </div>
-              </div>
-
-              {/* Right Columns: Sizing Fields Specification editor */}
-              <div className="lg:col-span-2 space-y-4">
-                {workerCustomerMatch ? (
-                  <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-850' : 'bg-white border-stone-200 shadow-sm'} space-y-4`}>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-3 border-stone-100 dark:border-slate-850 gap-2">
-                      <div>
-                        <span className="text-[9px] font-mono uppercase bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2.5 py-0.5 rounded-full font-bold">Patron: {workerCustomerMatch.name}</span>
-                        <h4 className="text-base font-serif font-black mt-1">Configure Anatomy Sizing Records</h4>
-                      </div>
-
-                      {/* Wear Class category choice */}
-                      <div className="flex flex-wrap gap-1">
-                        {['Shirt', 'Pant', 'Suit', 'Kurta', 'Custom'].map(cat => (
-                          <button
-                            key={cat}
-                            type="button; button"
-                            onClick={() => setWorkerSizingType(cat)}
-                            className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition cursor-pointer ${
-                              workerSizingType === cat ? 'bg-amber-500 border-amber-600 text-black font-black' :
-                              isDarkMode ? 'bg-slate-900 border-slate-800 text-stone-300' : 'bg-stone-50 border-stone-200'
-                            }`}
-                          >
-                            {cat}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Sizing list editor grids */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                      {Object.keys(workerSizingFields).map((field) => (
-                        <div key={field} className="space-y-1">
-                          <label className="text-[10px] uppercase font-bold tracking-wider text-stone-400 block font-mono">{field}</label>
-                          <input
-                            type="text"
-                            placeholder='e.g., 38"'
-                            value={workerSizingFields[field] || ''}
-                            onChange={(e) => triggerUpdateSizingField(field, e.target.value)}
-                            className={`w-full p-2.5 text-xs font-mono font-bold rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 border ${
-                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                            }`}
-                          />
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex justify-end pt-2">
-                      <button
-                        type="button"
-                        onClick={handleSaveWorkerSizing}
-                        className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-black text-xs font-black rounded-xl uppercase tracking-wider cursor-pointer shadow-sm transition-all font-sans font-bold"
-                      >
-                        Lock Sizing Spec in Profile
-                      </button>
-                    </div>
-
-                    {/* History lookups */}
-                    {activeWorkerSizing && activeWorkerSizing.length > 0 && (
-                      <div className="pt-4 border-t border-stone-150 dark:border-slate-800 space-y-2">
-                        <span className="text-[10px] font-mono uppercase font-bold text-stone-400 block">Existing Active specifications history list:</span>
-                        <div className="flex gap-2 flex-wrap">
-                          {activeWorkerSizing.map(m => (
-                            <div key={m.id} className={`p-3 rounded-xl border text-[11px] ${isDarkMode ? 'bg-slate-950/40 border-slate-900' : 'bg-stone-50 border-stone-200'}`}>
-                              <p className="font-extrabold text-stone-900 dark:text-white uppercase font-mono">{m.clothingType} fitting parameters</p>
-                              <span className="text-[9px] text-stone-400 font-mono block mb-1">Updated on: {new Date(m.date).toLocaleDateString()}</span>
-                              <div className="grid grid-cols-3 gap-x-3 gap-y-0.5 mt-1 text-[10px] font-mono">
-                                {Object.entries(m.fields).map(([k, v]) => (
-                                  <div key={k}>
-                                    <span className="opacity-70">{k}:</span> <span className="font-bold text-amber-600">{v}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                  </div>
-                ) : (
-                  <div className={`p-8 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-900/30 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
-                    <Ruler className="h-8 w-8 mx-auto opacity-30 mb-2" />
-                    <p className="text-xs text-stone-400">Select a customer profile from the directory on the left to start viewing/recording fit parameters.</p>
-                  </div>
-                )}
-              </div>
-
-            </div>
-          ) : (
-            /* Tab: Stats Performance Ledger */
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-sans">
-              
-              {/* Card 1: Artisan Bio & Profile sheet */}
-              <div className={`p-6 rounded-2xl border md:col-span-1 space-y-4 ${isDarkMode ? 'bg-slate-900/40 border-slate-850' : 'bg-white border-stone-250 shadow-sm'}`}>
-                <div className="text-center space-y-2 pb-4 border-b border-stone-100 dark:border-slate-800">
-                  <img
-                    src={workerDetails.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120'}
-                    alt={workerDetails.name}
-                    className="h-20 w-20 rounded-full border-2 border-amber-500 object-cover mx-auto shadow-md"
-                  />
-                  <h3 className="font-serif font-black text-base">{workerDetails.name}</h3>
-                  <span className="inline-block p-1 px-3 text-[10px] uppercase tracking-wider font-extrabold bg-amber-500/15 text-amber-700 dark:text-amber-450 rounded-full">{workerDetails.role}</span>
-                </div>
-
-                <div className="space-y-3 text-xs font-mono">
-                  <div className="flex justify-between border-b pb-1.5 border-stone-100 dark:border-slate-850">
-                    <span className="text-stone-400">Workshop ID:</span> 
-                    <span className="font-bold text-stone-900 dark:text-white">#{workerDetails.id}</span>
-                  </div>
-                  <div className="flex justify-between border-b pb-1.5 border-stone-100 dark:border-slate-850">
-                    <span className="text-stone-400">Phone Coordinate:</span> 
-                    <span className="font-bold text-stone-900 dark:text-white">{workerDetails.phone}</span>
-                  </div>
-                  <div className="flex justify-between border-b pb-1.5 border-stone-100 dark:border-slate-850">
-                    <span className="text-stone-400">Atelier Email:</span> 
-                    <span className="font-bold text-stone-900 dark:text-white text-right line-clamp-1 break-all">{workerDetails.email}</span>
-                  </div>
-                  <div className="flex justify-between border-b pb-1.5 border-stone-100 dark:border-slate-850">
-                    <span className="text-stone-400">Monthly stipend:</span> 
-                    <span className="font-semibold text-amber-600">₹{(workerDetails.baseSalary || 2000).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between pb-1.5">
-                    <span className="text-stone-400">Per-Order bonus:</span> 
-                    <span className="font-semibold text-teal-600 dark:text-teal-400">₹{workerDetails.perOrderBonus}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: Production metrics Activity summaries */}
-              <div className={`p-6 rounded-2xl border md:col-span-2 space-y-4 ${isDarkMode ? 'bg-slate-900/40 border-slate-850' : 'bg-white border-stone-250 shadow-sm'}`}>
-                <h3 className="text-sm font-bold uppercase tracking-widest font-mono text-stone-400">Production Records &amp; Activity Log</h3>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className={`p-4 rounded-xl text-center border ${isDarkMode ? 'bg-slate-950/40 border-slate-900' : 'bg-stone-50 border-stone-150'}`}>
-                    <span className="text-2xl font-black block text-amber-600 font-mono">{assignedOrders.length}</span>
-                    <span className="text-[10px] text-stone-400 uppercase tracking-wide font-bold">Total Assigned Jobs</span>
-                  </div>
-                  <div className={`p-4 rounded-xl text-center border ${isDarkMode ? 'bg-slate-950/40 border-slate-900' : 'bg-stone-50 border-stone-150'}`}>
-                    <span className="text-2xl font-black block text-emerald-500 font-mono">{completedJobs.length}</span>
-                    <span className="text-[10px] text-stone-400 uppercase tracking-wide font-bold">Finished Jobs</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-2">
-                  <span className="text-[10px] font-mono uppercase font-bold text-stone-400 block border-b pb-1 dark:border-slate-800">Your logged atelier steps:</span>
-                  <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1">
-                    {getActivities()
-                      .filter(act => act.userName === currentUser.name)
-                      .slice(0, 8)
-                      .map(act => (
-                        <div key={act.id} className="text-[11px] p-2 border-l-2 border-amber-500 bg-amber-500/5 rounded-r font-mono">
-                          <p className="font-bold text-stone-900 dark:text-stone-200">{act.action} - {act.details}</p>
-                          <span className="text-[9px] text-stone-400 block">{new Date(act.timestamp).toLocaleTimeString()}</span>
-                        </div>
-                      ))}
-                    {getActivities().filter(act => act.userName === currentUser.name).length === 0 && (
-                      <p className="text-xs text-stone-400 italic">No historical activities saved under your brand name yet. Advance orders to trigger log records.</p>
-                    )}
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
-          )}
-
-        </main>
-
-        {/* Footer container */}
-        <footer className={`py-6 border-t text-center text-[11px] mt-auto ${isDarkMode ? 'bg-slate-950 border-slate-900 text-stone-500' : 'bg-stone-100 border-stone-200 text-stone-400'}`}>
-          <p className="font-sans">
-            Powered by <span className="font-bold text-amber-600 dark:text-amber-500">U-bsol</span>
           </p>
         </footer>
       </div>
@@ -3681,14 +2937,25 @@ export default function App() {
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="relative flex items-center justify-center shrink-0">
-                <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500 to-emerald-600 rounded-xl blur-md opacity-25 animate-pulse"></div>
-                <div className="relative p-2.5 rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white flex items-center justify-center shadow-md border border-emerald-400/20">
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
+                {customLogoUrl ? (
+                  <img
+                    src={customLogoUrl}
+                    alt="Atelier Logo"
+                    className="h-10 w-10 sm:h-12 sm:w-12 object-contain rounded-lg"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <>
+                    <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500 to-emerald-600 rounded-xl blur-md opacity-25 animate-pulse"></div>
+                    <div className="relative p-2.5 rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white flex items-center justify-center shadow-md border border-emerald-400/20">
+                      <ShieldCheck className="h-5 w-5" />
+                    </div>
+                  </>
+                )}
               </div>
               <div className="min-w-0">
                 <h1 className="font-sans font-black text-sm sm:text-2xl tracking-wider uppercase text-transparent bg-clip-text bg-gradient-to-r from-stone-900 via-emerald-600 to-stone-800 dark:from-white dark:via-emerald-550 dark:to-stone-100 whitespace-nowrap transition-all">
-                  TAILORSHOP ERP
+                  {atelierName.toUpperCase()}
                 </h1>
               </div>
             </div>
@@ -3719,38 +2986,28 @@ export default function App() {
         </header>
 
         {/* Brand Banner section with client's title */}
-        <div className={`py-8 sm:py-10 border-b relative overflow-hidden transition-all ${
+        <div className={`py-10 border-b relative overflow-hidden transition-all ${
           isDarkMode ? 'bg-slate-900/10 border-slate-900' : 'bg-[#faf8f4] border-stone-150'
         }`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          {/* Subtle watermarked background */}
+          <div className="absolute top-0 right-0 p-12 text-stone-100 dark:text-slate-900/10 -z-10 font-sans font-black text-8xl pointer-events-none select-none">
+            Bespoke
+          </div>
+
+          <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="flex items-center space-x-4">
               <div className="relative">
-                {currentCustomerObj.email && currentCustomerObj.email.includes('@') ? (
-                  <img
-                    src={`https://unavatar.io/google/${currentCustomerObj.email.trim().toLowerCase()}?fallback=${encodeURIComponent(currentCustomerObj.avatar || '')}`}
-                    referrerPolicy="no-referrer"
-                    alt={currentCustomerObj.name}
-                    className="w-16 h-16 rounded-2xl object-cover ring-4 ring-emerald-500/10 border shadow-sm"
-                    onError={(e) => {
-                      if (currentCustomerObj.avatar) {
-                        e.currentTarget.src = currentCustomerObj.avatar;
-                      } else {
-                        e.currentTarget.style.display = 'none';
-                      }
-                    }}
-                  />
-                ) : currentCustomerObj.avatar ? (
-                  <img
-                    src={currentCustomerObj.avatar}
-                    referrerPolicy="no-referrer"
-                    alt={currentCustomerObj.name}
-                    className="w-16 h-16 rounded-2xl object-cover ring-4 ring-emerald-500/10 border"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-2xl ring-4 ring-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center bg-gradient-to-br from-emerald-600 to-emerald-800 text-white font-sans font-black text-xl select-none uppercase shadow-md">
-                    {getInitials(currentCustomerObj.name)}
-                  </div>
-                )}
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-600 to-amber-500 dark:from-indigo-600 dark:to-indigo-500 text-white flex items-center justify-center font-extrabold text-xl tracking-wider font-sans border border-amber-500/20 shadow-lg uppercase select-none">
+                  {(() => {
+                    const clean = (currentCustomerObj.name || '').trim();
+                    if (!clean) return 'PA';
+                    const parts = clean.split(/\s+/);
+                    if (parts.length >= 2) {
+                      return (parts[0][0] + parts[1][0]).toUpperCase();
+                    }
+                    return clean.slice(0, 2).toUpperCase();
+                  })()}
+                </div>
                 <span className="absolute -bottom-1 -right-1 p-1 bg-emerald-500 text-white rounded-full border-2 border-white dark:border-slate-950 shadow">
                   <Check className="h-3 w-3" />
                 </span>
@@ -3759,30 +3016,30 @@ export default function App() {
                 <p className="text-[10px] uppercase font-mono tracking-widest text-amber-600 dark:text-amber-500 font-bold">
                   Sartorial Ambassador Portfolio
                 </p>
-                <h2 className="font-sans text-xl sm:text-2xl font-black">{currentCustomerObj.name}</h2>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs text-stone-400 mt-1">
+                <h2 className="font-sans text-2xl font-black">{currentCustomerObj.name}</h2>
+                <div className="flex items-center space-x-3 text-xs text-stone-400 mt-1">
                   <span>{currentCustomerObj.email}</span>
-                  <span className="hidden sm:inline">•</span>
+                  <span>•</span>
                   <span>{currentCustomerObj.phone}</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-3 w-full sm:w-auto">
-              <div className={`p-3 sm:p-4 rounded-xl border text-center flex-1 sm:flex-none sm:min-w-[120px] ${isDarkMode ? 'bg-slate-900/40 border-slate-900' : 'bg-white border-stone-150'}`}>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className={`p-4 rounded-xl border text-center min-w-[120px] ${isDarkMode ? 'bg-slate-900/40 border-slate-900' : 'bg-white border-stone-150'}`}>
                 <span className="text-[9px] uppercase font-bold text-stone-400 block tracking-wider">Garments Ordered</span>
-                <span className="text-lg sm:text-xl font-extrabold text-indigo-500">{myOrders.length}</span>
+                <span className="text-xl font-extrabold text-indigo-500">{myOrders.length}</span>
               </div>
-              <div className={`p-3 sm:p-4 rounded-xl border text-center flex-1 sm:flex-none sm:min-w-[120px] ${isDarkMode ? 'bg-slate-900/40 border-slate-900' : 'bg-white border-stone-150'}`}>
+              <div className={`p-4 rounded-xl border text-center min-w-[120px] ${isDarkMode ? 'bg-slate-900/40 border-slate-900' : 'bg-white border-stone-150'}`}>
                 <span className="text-[9px] uppercase font-bold text-stone-400 block tracking-wider">Indexed Patterns</span>
-                <span className="text-lg sm:text-xl font-extrabold text-amber-600 dark:text-amber-500">{myMeasurements.length}</span>
+                <span className="text-xl font-extrabold text-amber-600 dark:text-amber-500">{myMeasurements.length}</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Core Customer Viewport Grid */}
-        <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 w-full space-y-8">
+        <main className="flex-1 max-w-7xl mx-auto px-6 py-8 w-full space-y-8">
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Left Box: Sizing Specifications card catalog (Takes 2 columns) */}
@@ -3791,77 +3048,67 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <h3 className="font-sans text-lg font-black flex items-center gap-2">
                   <Ruler className="text-amber-600 h-5 w-5" />
-                  <span>Measurements Taken</span>
+                  <span>Your Sizing Blueprints</span>
                 </h3>
+                <span className="text-xs text-stone-400 font-medium">Locked parameters for perfect drape</span>
               </div>
 
-              <div className="w-full space-y-6">
-                {myMeasurements.length === 0 ? (
-                  <div className={`p-10 rounded-2xl border text-center text-stone-400 ${isDarkMode ? 'bg-slate-900/30 border-slate-900' : 'bg-white border-stone-200 shadow-xs'}`}>
-                    No measurement patterns archived yet. Please consult our custom tailor team to register your fitting specifications.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-stone-400 block mb-1.5 text-center">
-                      Archived Blueprints ({myMeasurements.length})
-                    </span>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:max-h-[600px] lg:overflow-y-auto pr-1">
-                      {myMeasurements.map((m) => {
-                        return (
-                          <div key={m.id} className={`p-5 rounded-2xl border transition-all ${
-                            isDarkMode ? 'bg-slate-900/70 border-slate-900 hover:border-slate-800' : 'bg-white border-stone-200 shadow-xs hover:shadow-md'
-                          }`}>
-                            <div className="flex items-center justify-between pb-2 border-b border-stone-100 dark:border-slate-850 mb-3" id={`blueprint-card-${m.id}`}>
-                              <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-extrabold text-[8px] tracking-widest uppercase">
-                                Pattern File: {m.clothingType}
-                              </span>
-                              <span className="font-mono text-[8.5px] font-bold text-stone-400">
-                                ID: {m.id}
-                              </span>
-                            </div>
+              {myMeasurements.length === 0 ? (
+                <div className={`p-10 rounded-2xl border text-center text-stone-400 ${isDarkMode ? 'bg-slate-900/30' : 'bg-white shadow-xs'}`}>
+                  No measurement pattern archived yet. Join the atelier cutter studio to log your sizing records.
+                </div>
+              ) : (
+                <div className={`grid grid-cols-1 ${myMeasurements.length > 1 ? 'md:grid-cols-2' : ''} gap-6`}>
+                  {myMeasurements.map((m) => {
+                    return (
+                      <div key={m.id} className={`p-6 rounded-2xl border transition-all ${
+                        isDarkMode ? 'bg-slate-900/70 border-slate-900 hover:border-slate-800' : 'bg-white border-stone-200 shadow-sm hover:shadow-md'
+                      }`}>
+                        <div className="flex items-center justify-between pb-3 border-b border-light-200 dark:border-slate-900 mb-4 animate-none">
+                          <span className="px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-extrabold text-[9px] tracking-widest uppercase">
+                            Pattern File: {m.clothingType}
+                          </span>
+                          <span className="font-mono text-[9px] font-bold text-stone-400">
+                            ID: {m.id}
+                          </span>
+                        </div>
 
-                            <div className="flex flex-wrap gap-2 mb-3">
-                              {Object.entries(m.fields).map(([k, v]) => {
-                                const displayValue = cleanMeasurementValue(v, unitSystem);
+                        <div className="grid grid-cols-3 gap-2 font-mono text-center mb-4 text-xs font-semibold">
+                          {Object.entries(m.fields).map(([k, v]) => {
+                            const displayValue = cleanMeasurementValue(v, unitSystem);
 
-                                return (
-                                  <div key={k} className={`px-2.5 py-1 rounded-xl border flex items-center space-x-1.5 text-xs transition duration-150 ${
-                                    isDarkMode 
-                                      ? 'bg-slate-950 border-slate-900 text-stone-300' 
-                                      : 'bg-[#faf8f5] border-stone-200/80 text-stone-700 shadow-3xs'
-                                  }`} id={`field-badge-${k}`}>
-                                    <span className="text-[8.5px] text-amber-600 dark:text-amber-500 uppercase font-sans font-extrabold tracking-wider">{k}</span>
-                                    <span className="font-sans font-black text-[11.5px] text-stone-900 dark:text-white">{displayValue}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-
-                            {m.notes && (
-                              <div className={`p-2 rounded-xl block mb-3 text-[10.5px] italic leading-relaxed ${isDarkMode ? 'bg-slate-950/80 border-slate-900' : 'bg-stone-50 border-stone-100'}`}>
-                                Fitting Notes: "{m.notes}"
+                            return (
+                              <div key={k} className={`p-2 rounded-lg border text-xs leading-none ${isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-stone-50 border-stone-100'}`}>
+                                <span className="text-[8px] text-stone-400 uppercase font-sans font-bold block mb-1">{k}</span>
+                                <span className="font-extrabold text-[12.5px]">{displayValue}</span>
                               </div>
-                            )}
+                            );
+                          })}
+                        </div>
 
-                            <div className="pt-2 border-t border-stone-100 dark:border-slate-850 flex items-center justify-between text-[9px] text-stone-400">
-                              <span>Recorded: {new Date(m.date).toLocaleDateString()}</span>
-                              <button
-                                type="button"
-                                onClick={() => triggerPrintVoucher(m.id, currentCustomerObj.id)}
-                                className="p-1 px-2 border border-stone-200 dark:border-slate-800 hover:bg-stone-100 dark:hover:bg-slate-800 transition duration-150 rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
-                              >
-                                <Printer className="h-2.5 w-2.5" />
-                                <span>Voucher</span>
-                              </button>
-                            </div>
+                        {m.notes && (
+                          <div className={`p-3 rounded-xl block mb-4 text-xs italic ${isDarkMode ? 'bg-slate-950/80 border-slate-900' : 'bg-stone-50 border-stone-100'}`}>
+                            Fitting Notes: "{m.notes}"
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
+                        )}
+
+                        <div className="pt-2 flex items-center justify-between">
+                          <span className="text-[10px] text-stone-405 font-medium">Recorded: {new Date(m.date).toLocaleDateString()}</span>
+                          <button
+                            onClick={() => triggerPrintVoucher(m.id, currentCustomerObj.id)}
+                            className="p-1.5 px-3 border border-stone-200 dark:border-slate-800 hover:bg-stone-100 dark:hover:bg-slate-800 transition duration-150 rounded-lg text-[10.5px] font-bold flex items-center space-x-1.5 cursor-pointer"
+                          >
+                            <Printer className="h-3 w-3" />
+                            <span>Get Voucher Cards</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+
 
             </div>
 
@@ -3913,7 +3160,7 @@ export default function App() {
                       }`}>
                         <div className="flex justify-between items-start mb-2">
                           <div>
-                            <span className="text-[10px] text-stone-400 uppercase font-bold text-stone-400 block tracking-wider">Garment Category</span>
+                            <span className="text-[10px] text-stone-400 uppercase font-bold block tracking-wider">Garment Category</span>
                             <span className="text-sm font-extrabold text-stone-800 dark:text-white font-sans">{o.clothingType}</span>
                           </div>
                           <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
@@ -3926,55 +3173,16 @@ export default function App() {
                         </div>
 
                         {/* Status bar */}
-                        <div className="mt-3 space-y-2">
+                        <div className="mt-3 space-y-1">
                           <div className="flex justify-between text-[10px] text-stone-400 font-bold">
                             <span>Fitting progress</span>
-                            <span className="text-indigo-600 dark:text-indigo-400 font-bold">{progressPercent}%</span>
+                            <span>{progressPercent}%</span>
                           </div>
                           <div className="w-full bg-stone-100 dark:bg-slate-950 h-2 rounded-full overflow-hidden">
                             <div
                               className="bg-indigo-600 dark:bg-indigo-505 h-full rounded-full transition-all duration-500"
                               style={{ width: `${progressPercent}%` }}
                             />
-                          </div>
-
-                          {/* Horizontal Timeline Steps detailing current stage */}
-                          <div className="grid grid-cols-7 gap-1 pt-1.5 border-t border-stone-150 dark:border-slate-905">
-                            {['Rec\'d', 'Sized', 'Cut', 'Stitch', 'Iron', 'Ready', 'Done'].map((stg, idx) => {
-                              const stageMapping = [
-                                'Order Received',
-                                'Measurement Taken',
-                                'Cutting',
-                                'Stitching',
-                                'Finishing',
-                                'Ready for Pickup',
-                                'Delivered'
-                              ];
-                              const actualStageIndex = stageMapping.indexOf(o.status);
-                              const isActive = idx <= actualStageIndex;
-                              const isCurrent = idx === actualStageIndex;
-                              
-                              return (
-                                <div key={stg} className="flex flex-col items-center">
-                                  <div className={`h-1.5 w-full rounded-full transition-colors ${
-                                    isCurrent 
-                                      ? 'bg-amber-500' 
-                                      : isActive 
-                                      ? 'bg-indigo-600 dark:bg-indigo-550' 
-                                      : 'bg-stone-200 dark:bg-slate-800'
-                                  }`} />
-                                  <span className={`text-[7.5px] font-sans font-black tracking-tighter mt-1 truncate max-w-full ${
-                                    isCurrent 
-                                      ? 'text-amber-500' 
-                                      : isActive 
-                                      ? 'text-indigo-600 dark:text-indigo-400' 
-                                      : 'text-stone-400'
-                                  }`}>
-                                    {stg}
-                                  </span>
-                                </div>
-                              );
-                            })}
                           </div>
                         </div>
 
@@ -3987,21 +3195,76 @@ export default function App() {
                           🕒 {countdownText}
                         </div>
 
+                        {/* Visual Fabrication Milestones timeline/stepper */}
+                        <div className="mt-5 space-y-3 p-3.5 rounded-xl bg-stone-50 dark:bg-slate-950/60 border border-stone-100 dark:border-slate-900">
+                          <p className="text-[10px] uppercase tracking-widest text-stone-400 font-extrabold mb-3">Live Fabrication Milestones</p>
+                          <div className="relative pl-4 border-l border-stone-150 dark:border-slate-850 space-y-3.5">
+                            {[
+                              { label: 'Order Confirmed', key: 'Order Received', desc: 'Secure booking logged inside central index.' },
+                              { label: 'Sizing Blueprints Archiving', key: 'Measurement Taken', desc: 'Craftsmen logged body dimensions.' },
+                              { label: 'Fabric Outlining', key: 'Cutting', desc: 'Sizing templates calculated and cloth sheared.' },
+                              { label: 'Master Tailoring', key: 'Stitching', desc: 'Assembly and active stitching in workshop progress.' },
+                              { label: 'Finishing Checks', key: 'Finishing', desc: 'Final drapes, detail checks & steam ironing.' },
+                              { label: 'Ready for Atelier Pickup', key: 'Ready for Pickup', desc: 'Securely packaged and ready for pick-up!' },
+                              { label: 'Formally Delivered', key: 'Delivered', desc: 'Milestone settled and package handed over.' }
+                            ].map((stage, idx) => {
+                              const orderStatuses: OrderStatus[] = [
+                                'Order Received',
+                                'Measurement Taken',
+                                'Cutting',
+                                'Stitching',
+                                'Finishing',
+                                'Ready for Pickup',
+                                'Delivered'
+                              ];
+                              const currentIdx = orderStatuses.indexOf(o.status);
+                              const isDone = currentIdx > idx;
+                              const isCurrent = o.status === stage.key;
+                              
+                              return (
+                                <div key={stage.key} className="relative flex items-start space-x-3 text-left">
+                                  {/* Milestone Dot */}
+                                  <div className="absolute -left-[23px] top-1 flex items-center justify-center">
+                                    {isDone ? (
+                                      <div className="w-[11px] h-[11px] rounded-full bg-emerald-500 ring-4 ring-emerald-500/10 flex items-center justify-center">
+                                        <div className="w-[5px] h-[5px] bg-white rounded-full" />
+                                      </div>
+                                    ) : isCurrent ? (
+                                      <div className="w-[11px] h-[11px] rounded-full bg-amber-500 ring-4 ring-amber-500/20 flex items-center justify-center animate-pulse">
+                                        <div className="w-[5px] h-[5px] bg-white rounded-full" />
+                                      </div>
+                                    ) : (
+                                      <div className="w-[9px] h-[9px] rounded-full bg-stone-200 dark:bg-slate-800 ring-2 ring-stone-100 dark:ring-slate-900" />
+                                    )}
+                                  </div>
+                                  
+                                  <div className="flex-1 min-w-0 leading-tight">
+                                    <p className={`text-[10.5px] font-extrabold ${
+                                      isDone ? 'text-emerald-600 dark:text-emerald-400 opacity-80' :
+                                      isCurrent ? 'text-amber-600 dark:text-amber-500 font-black' :
+                                      'text-stone-400 dark:text-stone-600'
+                                    }`}>
+                                      {stage.label}
+                                    </p>
+                                    {isCurrent && (
+                                      <p className="text-[10px] text-stone-500 dark:text-stone-400 mt-0.5 leading-normal">
+                                        {stage.desc}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
                         <hr className="my-4 border-stone-100 dark:border-slate-850" />
 
                         {/* Ledger calculations */}
-                        <div className="space-y-2 text-stone-500 font-bold text-[11.5px]">
+                        <div className="space-y-2 text-stone-500 font-bold text-[11px]">
                           <div className="flex justify-between">
-                            <span>Quoted Price (per unit):</span>
-                            <span className="font-bold text-stone-800 dark:text-stone-300">₹{Math.max(1, Math.round(o.price / (o.quantity || 1)))}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Order Quantity:</span>
-                            <span className="font-bold text-stone-800 dark:text-stone-300">{o.quantity || 1} Pcs</span>
-                          </div>
-                          <div className="flex justify-between pt-1 border-t border-stone-100 dark:border-slate-850 text-stone-900 dark:text-white">
-                            <span>Total Order Amount:</span>
-                            <span className="font-extrabold">₹{o.price}</span>
+                            <span>Quated Commission Price:</span>
+                            <span className="font-bold text-stone-850 dark:text-white">₹{o.price}</span>
                           </div>
                           <div className="flex justify-between">
                             <span>Advance Cutter deposit:</span>
@@ -4056,22 +3319,25 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
           <div className="flex items-center space-x-3 min-w-0">
             <div className="relative flex items-center justify-center shrink-0">
-              <div className="absolute inset-0 bg-gradient-to-tr from-amber-500 to-amber-600 rounded-xl blur-md opacity-25 animate-pulse"></div>
-              {navbarAppLogo ? (
+              {customLogoUrl ? (
                 <img
-                  src={navbarAppLogo}
-                  alt="App Logo"
-                  className="relative h-10 w-10 sm:h-11 sm:w-11 rounded-xl object-cover shadow-md border border-amber-400/20"
+                  src={customLogoUrl}
+                  alt="Atelier Logo"
+                  className="h-10 w-10 sm:h-12 sm:w-12 object-contain rounded-lg"
+                  referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="relative p-2.5 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 text-white flex items-center justify-center shadow-md border border-amber-400/20">
-                  <Scissors className="h-4.5 w-4.5 sm:h-5 sm:w-5 transform -rotate-45" />
-                </div>
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-tr from-amber-500 to-amber-600 rounded-xl blur-md opacity-25 animate-pulse"></div>
+                  <div className="relative p-2.5 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 text-white flex items-center justify-center shadow-md border border-amber-400/20">
+                    <Scissors className="h-4.5 w-4.5 sm:h-5 sm:w-5 transform -rotate-45" />
+                  </div>
+                </>
               )}
             </div>
             <div className="min-w-0">
               <h1 className="font-sans font-black text-sm sm:text-2xl tracking-wider uppercase text-transparent bg-clip-text bg-gradient-to-r from-stone-900 via-amber-600 to-stone-800 dark:from-white dark:via-amber-550 dark:to-stone-100 whitespace-nowrap transition-all">
-                {navbarAppName}
+                {atelierName.toUpperCase()}
               </h1>
             </div>
           </div>
@@ -4112,75 +3378,1042 @@ export default function App() {
       {/* Main Core Content container */}
       <main className="flex-1 max-w-7xl mx-auto px-6 py-8 w-full space-y-8">
 
-        {/* Dynamic Studio Welcome Banner */}
-        <div className={`p-6 sm:p-7 rounded-2xl border relative overflow-hidden transition-all ${
-          isDarkMode ? 'bg-gradient-to-br from-slate-950 to-slate-900 border-slate-900/65' : 'bg-gradient-to-br from-[#faf8f5] to-amber-500/5 border-stone-200 shadow-sm'
-        }`}>
-          <div className="relative z-10">
-            <h2 className="font-sans text-lg sm:text-xl font-black text-amber-600 dark:text-amber-500 tracking-tight flex items-center gap-2">
-              <span>{appWelcomeTitle}</span>
-            </h2>
-            <p className={`text-xs mt-1.5 max-w-2xl font-semibold leading-relaxed ${
-              isDarkMode ? 'text-zinc-400' : 'text-stone-655'
-            }`}>
-              {appWelcomeDesc}
-            </p>
-          </div>
-        </div>
-
         {/* Page Switcher Tab Bar */}
-        <div className="flex border-b border-stone-200 dark:border-slate-800 space-x-6 px-1">
-          <button
-            type="button"
-            onClick={() => setTailorPage('admin')}
-            className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
-              tailorPage === 'admin'
-                ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500'
-                : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
-            }`}
-          >
-            <Pencil className="h-4 w-4 text-amber-550" />
-            <span>Branding &amp; Customization</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setTailorPage('tailors_management')}
-            className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
-              tailorPage === 'tailors_management'
-                ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500'
-                : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
-            }`}
-          >
-            <Scissors className="h-4 w-4 text-amber-550" />
-            <span>Registered Tailors</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setTailorPage('users')}
-            className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
-              tailorPage === 'users'
-                ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500'
-                : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
-            }`}
-          >
-            <Users className="h-4 w-4 text-emerald-550" />
-            <span>STAFFS tailorshop ERP</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setTailorPage('customers')}
-            className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
-              tailorPage === 'customers'
-                ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500'
-                : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
-            }`}
-          >
-            <User className="h-4 w-4 text-sky-500" />
-            <span>Customer Patrons</span>
-          </button>
-        </div>
+        {currentUser?.role === 'Owner' ? (
+          <div className="flex border-b border-stone-200 dark:border-slate-800 space-x-6 px-1 overflow-x-auto whitespace-nowrap scrollbar-none">
+            <button
+              type="button"
+              onClick={() => setOwnerTab('branding')}
+              className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
+                ownerTab === 'branding'
+                  ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500 font-black'
+                  : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
+              }`}
+            >
+              <Settings className="h-4 w-4" />
+              <span>Branding &amp; Customization</span>
+            </button>
 
-        {tailorPage === 'sizing' ? (
+            <button
+              type="button"
+              onClick={() => setOwnerTab('customer_patrons')}
+              className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
+                ownerTab === 'customer_patrons'
+                  ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500 font-black'
+                  : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
+              }`}
+            >
+              <User className="h-4 w-4" />
+              <span>Customers</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setOwnerTab('registered_tailors')}
+              className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
+                ownerTab === 'registered_tailors'
+                  ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500 font-extrabold'
+                  : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
+              }`}
+            >
+              <Scissors className="h-4 w-4" />
+              <span>Tailors</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex border-b border-stone-200 dark:border-slate-800 space-x-6 px-1">
+            <button
+              type="button"
+              onClick={() => setTailorPage('sizing')}
+              className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
+                tailorPage === 'sizing'
+                  ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500'
+                  : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
+              }`}
+            >
+              <Scissors className="h-4 w-4" />
+              <span>Measurements</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTailorPage('orders')}
+              className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
+                tailorPage === 'orders'
+                  ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500'
+                  : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
+              }`}
+            >
+              <Briefcase className="h-4 w-4" />
+              <span>Orders</span>
+              {orders.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                  {orders.length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setTailorPage('settings')}
+              className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
+                tailorPage === 'settings'
+                  ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500'
+                  : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
+              }`}
+            >
+              <Settings className="h-4 w-4" />
+              <span>Settings</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTailorPage('tailors')}
+              className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
+                tailorPage === 'tailors'
+                  ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500 font-extrabold'
+                  : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
+              }`}
+            >
+              <Users className="h-4 w-4" />
+              <span>Tailors</span>
+            </button>
+          </div>
+        )}
+
+        {currentUser?.role === 'Owner' ? (
+          /* OWNER MASTER CONTROL PANEL */
+          ownerTab === 'branding' ? (
+             <div className="space-y-6 fade-in font-sans">
+               <div className="border-b border-stone-200 dark:border-slate-800 pb-4">
+                 <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                   <span className="p-2 bg-amber-500/10 text-amber-600 rounded-lg"><Sparkles className="h-4.5 w-4.5" /></span>
+                   <span>Studio Branding &amp; Customization</span>
+                 </h2>
+                 <p className="text-xs text-stone-400 mt-1">Configure your app's brand identifier name and logo. Your designs will propagate instantly to every header, dashboard, and customer checkout screen.</p>
+               </div>
+
+               <div className="max-w-3xl mx-auto space-y-6">
+                   {/* App Name Section */}
+                   <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
+                     <div className="flex items-center space-x-2.5 mb-4">
+                       <div className="p-2 bg-amber-500/10 text-amber-600 rounded-xl">
+                         <Scissors className="h-4 w-4" />
+                       </div>
+                       <div>
+                         <h3 className="font-extrabold text-xs uppercase tracking-wider text-amber-600 dark:text-amber-500">Website &amp; Studio Name</h3>
+                         <p className="text-[10px] text-stone-400">Sets the brand title shown across the web navbar</p>
+                       </div>
+                     </div>
+                     <div className="space-y-2 text-left">
+                       <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider block">App Name / Atelier Title</label>
+                       <div className="relative">
+                         <input
+                           type="text"
+                           value={atelierName}
+                           onChange={(e) => {
+                             setAtelierName(e.target.value);
+                             triggerToast("Navbar title updated in real-time!", "info");
+                           }}
+                           placeholder="e.g. Atelier Luxury"
+                           className={`w-full p-3 pl-10 rounded-xl border text-xs font-bold uppercase tracking-wider focus:outline-none focus:ring-1 focus:ring-amber-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-250 text-stone-850'}`}
+                         />
+                         <span className="absolute left-3.5 top-3.5 text-stone-400">
+                           <Scissors className="h-4 w-4 -rotate-45" />
+                         </span>
+                       </div>
+                     </div>
+                   </div>
+
+                   {/* Logo Settings Section */}
+                   <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
+                     <div className="flex items-center justify-between pb-3 border-b dark:border-slate-900 mb-6">
+                       <div className="flex items-center space-x-2.5">
+                         <div className="p-2 bg-amber-500/10 text-amber-600 rounded-xl">
+                           <Image className="h-4 w-4" />
+                         </div>
+                         <div>
+                           <h3 className="font-extrabold text-xs uppercase tracking-wider text-amber-600 dark:text-amber-500">Logotype Branding Image</h3>
+                           <p className="text-[10px] text-stone-400">Change your brand mark using links or images</p>
+                         </div>
+                       </div>
+                     </div>
+
+                     {/* Tab switchers */}
+                     <div className={`p-1 rounded-xl border flex gap-1 mb-6 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-stone-100 border-stone-200'}`}>
+                       <button
+                         type="button"
+                         onClick={() => setLogoInputType('url')}
+                         className={`flex-1 py-2 text-xs font-bold rounded-lg cursor-pointer transition-all flex items-center justify-center space-x-2 ${logoInputType === 'url' ? 'bg-amber-600 text-white shadow-xs' : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'}`}
+                       >
+                         <ExternalLink className="h-3.5 w-3.5" />
+                         <span>Paste Logo Image URL</span>
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => setLogoInputType('upload')}
+                         className={`flex-1 py-2 text-xs font-bold rounded-lg cursor-pointer transition-all flex items-center justify-center space-x-2 ${logoInputType === 'upload' ? 'bg-amber-600 text-white shadow-xs' : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'}`}
+                       >
+                         <Upload className="h-3.5 w-3.5" />
+                         <span>Upload Logo File (Local)</span>
+                       </button>
+                     </div>
+
+                     {/* Tab Panels */}
+                     {logoInputType === 'url' ? (
+                       <div className="space-y-4 text-left">
+                         <div>
+                           <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider block mb-1.5">Direct Web Image Address URL</label>
+                           <div className="relative">
+                             <input
+                               type="text"
+                               value={customLogoUrl}
+                               onChange={(e) => {
+                                 setCustomLogoUrl(e.target.value);
+                                 triggerToast("Website logo URL updated in real-time!", "info");
+                               }}
+                               placeholder="https://example.com/logo.png"
+                               className={`w-full p-3 pl-10 rounded-xl border text-xs focus:ring-1 focus:ring-amber-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-250 text-stone-800'}`}
+                             />
+                             <span className="absolute left-3.5 top-3.5 text-stone-400">
+                               <ExternalLink className="h-4 w-4" />
+                             </span>
+                           </div>
+                           <p className="text-[9.5px] text-stone-400 mt-2">Recommended: Standard PNG, JPEG, SVG logomarks on a fully transparent background.</p>
+                         </div>
+                       </div>
+                     ) : (
+                       <div className="space-y-4 text-left">
+                         <div className="text-left font-sans">
+                           <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider block mb-1.5">Select Logo File</label>
+                           <div
+                             className={`border-2 border-dashed rounded-2xl p-6 transition duration-150 flex flex-col items-center justify-center text-center cursor-pointer ${
+                               customLogoUrl ? 'border-amber-500/50 bg-amber-500/[0.02]' : 'border-stone-300 dark:border-slate-800 hover:border-amber-500_not'
+                             }`}
+                           >
+                             <input
+                               type="file"
+                               id="logo-uploader-input"
+                               className="hidden"
+                               accept="image/*"
+                               onChange={(e) => {
+                                 const f = e.target.files?.[0];
+                                 if (f) {
+                                   const reader = new FileReader();
+                                   reader.onload = (event) => {
+                                     const base64Str = event.target?.result as string;
+                                     if (base64Str) {
+                                       const img = new Image();
+                                        img.src = base64Str;
+                                        img.onload = () => {
+                                          const canvas = document.createElement('canvas');
+                                          const ctx = canvas.getContext('2d');
+                                          const MAX_HEIGHT = 48;
+                                          let w = img.width;
+                                          let h = img.height;
+                                          if (h > MAX_HEIGHT) {
+                                            w = Math.round((img.width * MAX_HEIGHT) / img.height);
+                                            h = MAX_HEIGHT;
+                                          }
+                                          canvas.width = w;
+                                          canvas.height = h;
+                                          if (ctx) {
+                                            ctx.imageSmoothingEnabled = true;
+                                            ctx.imageSmoothingQuality = 'high';
+                                            ctx.drawImage(img, 0, 0, w, h);
+                                            setCustomLogoUrl(canvas.toDataURL('image/png'));
+                                            triggerToast("Logo uploaded and auto-resized perfectly to fit the navbar!", "success");
+                                          } else {
+                                            setCustomLogoUrl(base64Str);
+                                            triggerToast("Logo uploaded!", "success");
+                                          }
+                                        };
+                                       
+                                     }
+                                   };
+                                   reader.readAsDataURL(f);
+                                 }
+                               }}
+                             />
+                             <label htmlFor="logo-uploader-input" className="w-full h-full flex flex-col items-center justify-center cursor-pointer py-4">
+                               <div className="p-3 bg-amber-500/10 text-amber-500 rounded-full mb-3">
+                                 <Upload className="h-6 w-6" />
+                               </div>
+                               <span className="text-xs font-extrabold text-stone-750 dark:text-stone-200 block">Click to select layout image</span>
+                               <span className="text-[10px] text-stone-400 mt-1 block">Supports PNG, SVG, JPG. File will be stored locally as persistent data URI.</span>
+                             </label>
+                           </div>
+                         </div>
+                       </div>
+                     )}
+
+                     {/* Quick Presets Section */}
+                     <div className="mt-8 border-t border-stone-150 dark:border-slate-850 pt-5 text-left">
+                                             {/* Save Branding Changes Button Section */}
+                      <div className="mb-6 p-4 bg-amber-500/[0.03] dark:bg-amber-500/[0.01] border border-amber-500/20 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+                        <div className="space-y-0.5">
+                          <h4 className="text-[11px] font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wide">Save Configuration Changes</h4>
+                          <p className="text-[10px] text-stone-400">Lock your custom app name and auto-resized logo globally.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            localStorage.setItem('logo_url', customLogoUrl);
+                            localStorage.setItem('atelier_name', atelierName);
+                            triggerToast("Brand configuration applied & saved successfully!", "success");
+                          }}
+                          className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center space-x-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                        >
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          <span>Save &amp; Apply Changes</span>
+                        </button>
+                      </div>
+
+                      <h4 className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider mb-3">Or choose a professional Tailor Logo Preset:</h4>
+                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                         {[
+                           { name: "Emerald Shield", url: "https://images.unsplash.com/photo-1534126511673-b6899657816a?w=128&auto=format&fit=crop&q=60" },
+                           { name: "Gold Scissors", url: "https://images.unsplash.com/photo-1544816155-12df9643f363?w=128&auto=format&fit=crop&q=60" },
+                           { name: "Vintage Needle", url: "https://images.unsplash.com/photo-1517594422361-5eeb8ae275a9?w=128&auto=format&fit=crop&q=60" },
+                           { name: "Minimalist Craft", url: "https://images.unsplash.com/photo-1509281373149-e957c6296406?w=128&auto=format&fit=crop&q=60" }
+                         ].map((preset, index) => (
+                           <button
+                             type="button"
+                             key={index}
+                             onClick={() => {
+                               setCustomLogoUrl(preset.url);
+                               triggerToast(`Applied "${preset.name}" preset logo!`, "success");
+                             }}
+                             className={`p-2 border rounded-xl flex items-center space-x-2 text-left hover:border-amber-500 transition-all cursor-pointer ${
+                               customLogoUrl === preset.url ? 'border-amber-500 bg-amber-500/5' : 'border-stone-200 dark:border-slate-850 bg-stone-50/50 dark:bg-slate-950/40'
+                             }`}
+                           >
+                             <img src={preset.url} alt={preset.name} className="h-6 w-6 rounded-md object-cover" />
+                             <span className="text-[10px] font-bold text-stone-700 dark:text-stone-300 truncate">{preset.name}</span>
+                           </button>
+                         ))}
+                       </div>
+                     </div>
+                   </div>
+
+                 {/* Removed mockup monitor */}
+                    {/* Landing Page & Role Cards Content Customization Section */}
+                    {/* Welcome Screen customizer card */}
+                    <div className={`p-6 rounded-2xl border text-left space-y-6 ${isDarkMode ? 'bg-zinc-900/50 border-zinc-900' : 'bg-white border-zinc-200 shadow-sm'}`}>
+                      <div className="flex items-center space-x-2.5 pb-2 border-b border-light-divider dark:border-zinc-800">
+                        <div className="p-2 bg-amber-500/10 text-amber-500 rounded-xl">
+                          <Sparkles className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h3 className="font-extrabold text-xs uppercase tracking-wider text-amber-600 dark:text-amber-500">Welcome &amp; Cards Customization</h3>
+                          <p className="text-[10px] text-stone-400">Edit the images, greetings, tailor portal, and customer cards inside the entry page</p>
+                        </div>
+                      </div>
+
+                      {/* 1. Main Welcome screen */}
+                      <div className="p-4.5 rounded-xl border border-stone-200/60 dark:border-zinc-800/80 bg-stone-50/50 dark:bg-zinc-950/40 space-y-4">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-500 font-extrabold px-2 py-0.5 rounded uppercase tracking-wider">Welcome/Landing Page Texts</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider block mb-1">Landing Title</label>
+                            <input
+                              type="text"
+                              value={customLandingTitle}
+                              onChange={(e) => setCustomLandingTitle(e.target.value)}
+                              placeholder="e.g. Welcome to Sartorial Atelier"
+                              className={`w-full p-2.5 rounded-xl border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-950 border-zinc-805 text-white' : 'bg-stone-50 border-stone-250 text-stone-855 shadow-3xs'}`}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider block mb-1">Landing Description</label>
+                            <textarea
+                              rows={2}
+                              value={customLandingDescription}
+                              onChange={(e) => setCustomLandingDescription(e.target.value)}
+                              placeholder="Subtitle description..."
+                              className={`w-full p-2 rounded-xl border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-950 border-zinc-805 text-white' : 'bg-stone-50 border-stone-250 text-stone-855 shadow-3xs'}`}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 2. Tailor card customization */}
+                      <div className="p-4.5 rounded-xl border border-stone-200/60 dark:border-zinc-800/80 bg-stone-50/50 dark:bg-zinc-950/40 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold px-2 py-0.5 rounded uppercase tracking-wider">Tailor Portal Card</span>
+                          <span className="text-[9px] text-stone-400 font-semibold">Entry Card 1</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider block mb-1">Card Header Title</label>
+                              <input
+                                type="text"
+                                value={customTailorTitle}
+                                onChange={(e) => setCustomTailorTitle(e.target.value)}
+                                className={`w-full p-2.5 rounded-xl border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-955 border-zinc-805 text-white' : 'bg-stone-50 border-stone-250 text-stone-855 shadow-3xs'}`}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider block mb-1">Card Paragraph Detail</label>
+                              <textarea
+                                rows={2}
+                                value={customTailorDescription}
+                                onChange={(e) => setCustomTailorDescription(e.target.value)}
+                                className={`w-full p-2 rounded-xl border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-955 border-zinc-805 text-white' : 'bg-stone-50 border-stone-250 text-stone-855 shadow-3xs'}`}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider block">Card Background Image (File Upload or Link)</label>
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                value={customTailorImage}
+                                onChange={(e) => setCustomTailorImage(e.target.value)}
+                                placeholder="Paste image address URL..."
+                                className={`w-full p-2 rounded-lg border text-[11px] focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-955 border-zinc-800 text-white' : 'bg-stone-50 border-stone-200 text-stone-850 shadow-3xs'}`}
+                              />
+                              <div className="relative">
+                                <input
+                                  type="file"
+                                  id="tailor-card-file-input"
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    const devFile = e.target.files?.[0];
+                                    if (devFile) {
+                                      const rd = new FileReader();
+                                      rd.onload = (fileEv) => {
+                                        const res = fileEv.target?.result as string;
+                                        if (res) {
+                                          setCustomTailorImage(res);
+                                          triggerToast("Tailor Card backdrop loaded!", "success");
+                                        }
+                                      };
+                                      rd.readAsDataURL(devFile);
+                                    }
+                                  }}
+                                  className="hidden"
+                                />
+                                <label
+                                  htmlFor="tailor-card-file-input"
+                                  className={`w-full py-2 border border-dashed rounded-lg flex items-center justify-center space-x-1.5 cursor-pointer text-[10px] font-bold ${isDarkMode ? 'border-zinc-800 bg-zinc-955/40 text-stone-300 hover:bg-zinc-900/50' : 'border-stone-300 bg-stone-50 hover:bg-stone-100 shadow-3xs'}`}
+                                >
+                                  <Upload className="h-3 w-3 text-amber-500" />
+                                  <span>Upload Local Tailor Backdrop File</span>
+                                </label>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2 mt-1">
+                              <span className="text-[9px] text-stone-400 font-bold">Image Preview:</span>
+                              <img src={customTailorImage} alt="Tailor preview" className="h-8 w-16 object-cover rounded border border-neutral-200 dark:border-zinc-800" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 3. Customer card customization */}
+                      <div className="p-4.5 rounded-xl border border-stone-200/60 dark:border-zinc-800/80 bg-stone-50/50 dark:bg-zinc-950/40 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 font-extrabold px-2 py-0.5 rounded uppercase tracking-wider">Customer Portal Card</span>
+                          <span className="text-[9px] text-stone-400 font-semibold">Entry Card 2</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider block mb-1">Card Header Title</label>
+                              <input
+                                type="text"
+                                value={customCustomerTitle}
+                                onChange={(e) => setCustomCustomerTitle(e.target.value)}
+                                className={`w-full p-2.5 rounded-xl border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-955 border-zinc-805 text-white' : 'bg-stone-50 border-stone-250 text-stone-855 shadow-3xs'}`}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider block mb-1">Card Paragraph Detail</label>
+                              <textarea
+                                rows={2}
+                                value={customCustomerDescription}
+                                onChange={(e) => setCustomCustomerDescription(e.target.value)}
+                                className={`w-full p-2 rounded-xl border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-955 border-zinc-805 text-white' : 'bg-stone-50 border-stone-250 text-stone-855 shadow-3xs'}`}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider block">Card Background Image (File Upload or Link)</label>
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                value={customCustomerImage}
+                                onChange={(e) => setCustomCustomerImage(e.target.value)}
+                                placeholder="Paste image address URL..."
+                                className={`w-full p-2 rounded-lg border text-[11px] focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-955 border-zinc-800 text-white' : 'bg-stone-50 border-stone-200 text-stone-850 shadow-3xs'}`}
+                              />
+                              <div className="relative">
+                                <input
+                                  type="file"
+                                  id="customer-card-file-input"
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    const devFile2 = e.target.files?.[0];
+                                    if (devFile2) {
+                                      const rd2 = new FileReader();
+                                      rd2.onload = (fileEv2) => {
+                                        const res2 = fileEv2.target?.result as string;
+                                        if (res2) {
+                                          setCustomCustomerImage(res2);
+                                          triggerToast("Customer Card backdrop loaded!", "success");
+                                        }
+                                      };
+                                      rd2.readAsDataURL(devFile2);
+                                    }
+                                  }}
+                                  className="hidden"
+                                />
+                                <label
+                                  htmlFor="customer-card-file-input"
+                                  className={`w-full py-2 border border-dashed rounded-lg flex items-center justify-center space-x-1.5 cursor-pointer text-[10px] font-bold ${isDarkMode ? 'border-zinc-800 bg-zinc-955/40 text-stone-300 hover:bg-zinc-900/50' : 'border-stone-300 bg-stone-50 hover:bg-stone-100 shadow-3xs'}`}
+                                >
+                                  <Upload className="h-3 w-3 text-amber-500" />
+                                  <span>Upload Local Customer Backdrop File</span>
+                                </label>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2 mt-1">
+                              <span className="text-[9px] text-stone-400 font-bold">Image Preview:</span>
+                              <img src={customCustomerImage} alt="Customer preview" className="h-8 w-16 object-cover rounded border border-neutral-200 dark:border-zinc-800" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Persistent lock action row */}
+                      <div className="p-4 bg-amber-500/[0.04] border border-amber-500/20 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <h4 className="text-[11px] font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wide">Save Entry Screen Customizations</h4>
+                          <p className="text-[10px] text-stone-400">Lock your dynamic texts and background cover screens globally.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            localStorage.setItem('landing_title', customLandingTitle);
+                            localStorage.setItem('landing_description', customLandingDescription);
+                            localStorage.setItem('tailor_title', customTailorTitle);
+                            localStorage.setItem('tailor_description', customTailorDescription);
+                            localStorage.setItem('tailor_image', customTailorImage);
+                            localStorage.setItem('customer_title', customCustomerTitle);
+                            localStorage.setItem('customer_description', customCustomerDescription);
+                            localStorage.setItem('customer_image', customCustomerImage);
+                            triggerToast("Welcome Page & Card layouts locked successfully!", "success");
+                          }}
+                          className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center space-x-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                        >
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          <span>Save Welcome Page &amp; Cards</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Bespoke Voucher Design Studio & Live Preview */}
+                    <div className={`p-6 rounded-2xl border text-left space-y-6 ${isDarkMode ? 'bg-zinc-900/50 border-zinc-900' : 'bg-white border-zinc-200 shadow-sm'}`}>
+                      <div className="flex items-center space-x-2.5 pb-2 border-b border-light-divider dark:border-zinc-800">
+                        <div className="p-2 bg-amber-500/10 text-amber-500 rounded-xl">
+                          <Printer className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h3 className="font-extrabold text-xs uppercase tracking-wider text-amber-600 dark:text-amber-500">Atelier Voucher Designer &amp; Ledger Studio</h3>
+                          <p className="text-[10px] text-stone-400">Design the layout style, font typography, color combinations, and text content of your printed invoices dynamically</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-sans">
+                        {/* LEFT COLUMN: CONTROLS (Col: 5) */}
+                        <div className="lg:col-span-5 space-y-4">
+                          {/* 1. Typography & Borders */}
+                          <div className="space-y-3 p-4 rounded-xl bg-stone-50/50 dark:bg-zinc-950/40 border border-stone-200/60 dark:border-zinc-800/80">
+                            <span className="text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-500 font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">Typography &amp; Structural Assets</span>
+                            
+                            <div>
+                              <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-widest block mb-1">Voucher Font Family</label>
+                              <select
+                                value={voucherFont}
+                                onChange={(e) => {
+                                  setVoucherFont(e.target.value);
+                                  triggerToast(`Sartorial typeface changed to ${e.target.value}!`, "info");
+                                }}
+                                className={`w-full p-2.5 rounded-xl border text-[11px] font-bold focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-stone-200 text-stone-850 shadow-3xs'}`}
+                              >
+                                <option value="Plus Jakarta Sans">Plus Jakarta Sans (Contemporary Bespoke)</option>
+                                <option value="Playfair Display">Playfair Display (Italian Sartorial Serif)</option>
+                                <option value="Cinzel">Cinzel (Royal Roman Imperial)</option>
+                                <option value="Montserrat">Montserrat (Modernist Tailor Rail)</option>
+                                <option value="Space Grotesk">Space Grotesk (Avant-Garde Technical)</option>
+                                <option value="JetBrains Mono">JetBrains Mono (System Sizing Grid)</option>
+                                <option value="Courier New">Courier New (Legacy Tailoring Ticket)</option>
+                                <option value="Inter">Inter (Classic Elegant Neutral)</option>
+                              </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-widest block mb-1">Divider Style</label>
+                                <select
+                                  value={voucherBorderStyle}
+                                  onChange={(e) => setVoucherBorderStyle(e.target.value)}
+                                  className={`w-full p-2 rounded-xl border text-[11px] focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-stone-200 text-stone-850 shadow-3xs'}`}
+                                >
+                                  <option value="dashed">Dashed Coupon</option>
+                                  <option value="solid">Solid Slate Frame</option>
+                                  <option value="dotted">Perforated Tear</option>
+                                  <option value="double">Royal Double Border</option>
+                                  <option value="none">No Divider</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-widest block mb-1">Brand Alignment</label>
+                                <select
+                                  value={voucherLogoAlignment}
+                                  onChange={(e) => setVoucherLogoAlignment(e.target.value)}
+                                  className={`w-full p-2 rounded-xl border text-[11px] focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-stone-200 text-stone-850 shadow-3xs'}`}
+                                >
+                                  <option value="left">Left Aligned</option>
+                                  <option value="center">Center Centered</option>
+                                  <option value="right">Right Aligned</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 2. Color Palette Customizer */}
+                          <div className="space-y-3 p-4 rounded-xl bg-stone-50/50 dark:bg-zinc-950/40 border border-stone-200/60 dark:border-zinc-800/80">
+                            <span className="text-[9px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">Colorways &amp; Accents</span>
+                            
+                            {/* Accent preset buttons */}
+                            <div>
+                              <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-widest block mb-1.5">Regal Accent Presets</label>
+                              <div className="flex gap-2 mb-2">
+                                {[
+                                  { name: 'Amber Gold', hex: '#d97706' },
+                                  { name: 'Royale Red', hex: '#dc2626' },
+                                  { name: 'Forest Moss', hex: '#15803d' },
+                                  { name: 'Tailor Onyx', hex: '#1c1917' },
+                                  { name: 'Boutique Iris', hex: '#7c3aed' },
+                                ].map((wp, idx) => (
+                                  <button
+                                    type="button"
+                                    key={idx}
+                                    title={wp.name}
+                                    onClick={() => {
+                                      setVoucherAccentColor(wp.hex);
+                                      triggerToast(`Applied ${wp.name} accent!`, "success");
+                                    }}
+                                    className={`w-7 h-7 rounded-full border-2 transition hover:scale-110 cursor-pointer ${voucherAccentColor === wp.hex ? 'border-amber-500 ring-2 ring-white scale-105' : 'border-transparent'}`}
+                                    style={{ backgroundColor: wp.hex }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                              <div>
+                                <label className="text-[9px] font-extrabold text-stone-400 uppercase tracking-wider block mb-1">Accent Custom</label>
+                                <input
+                                  type="color"
+                                  value={voucherAccentColor}
+                                  onChange={(e) => setVoucherAccentColor(e.target.value)}
+                                  className="w-full h-8 cursor-pointer rounded-lg border border-stone-200 bg-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[9px] font-extrabold text-stone-400 uppercase tracking-wider block mb-1">Voucher BG</label>
+                                <input
+                                  type="color"
+                                  value={voucherBgColor}
+                                  onChange={(e) => setVoucherBgColor(e.target.value)}
+                                  className="w-full h-8 cursor-pointer rounded-lg border border-stone-200 bg-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[9px] font-extrabold text-stone-400 uppercase tracking-wider block mb-1">Voucher Text</label>
+                                <input
+                                  type="color"
+                                  value={voucherTextColor}
+                                  onChange={(e) => setVoucherTextColor(e.target.value)}
+                                  className="w-full h-8 cursor-pointer rounded-lg border border-stone-200 bg-white"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 3. Text content strings */}
+                          <div className="space-y-3 p-4 rounded-xl bg-stone-50/50 dark:bg-zinc-950/40 border border-stone-200/60 dark:border-zinc-800/80">
+                            <span className="text-[9px] bg-blue-500/10 text-blue-600 dark:text-blue-400 font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">Dynamic Texts Layout</span>
+                            
+                            <div className="space-y-3">
+                              <div>
+                                <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-widest block mb-1">Voucher Header Name</label>
+                                <input
+                                  type="text"
+                                  value={voucherMainTitle}
+                                  onChange={(e) => setVoucherMainTitle(e.target.value)}
+                                  className={`w-full p-2 rounded-xl border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-stone-200 text-stone-850 shadow-3xs'}`}
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-widest block mb-1">Voucher Tagline Subtitle</label>
+                                <input
+                                  type="text"
+                                  value={voucherSubtitle}
+                                  onChange={(e) => setVoucherSubtitle(e.target.value)}
+                                  className={`w-full p-2 rounded-xl border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-stone-200 text-stone-850 shadow-3xs'}`}
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-widest block mb-1">Footer Legal Notes / Return Guarantee Policy</label>
+                                <textarea
+                                  rows={3}
+                                  value={voucherFooterNotes}
+                                  onChange={(e) => setVoucherFooterNotes(e.target.value)}
+                                  className={`w-full p-2 rounded-xl border text-[11px] focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-stone-200 text-stone-850 shadow-3xs'}`}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* RIGHT COLUMN: HIGH-FIDELITY LIVE PRINT PREVIEW (Col: 7) */}
+                        <div className="lg:col-span-7 bg-stone-100 dark:bg-zinc-950 p-4 rounded-xl border border-stone-200 dark:border-zinc-800">
+                          <div className="flex items-center justify-between mb-3 pb-2 border-b dark:border-zinc-900">
+                            <span className="text-[9px] uppercase font-black text-stone-450 tracking-wider">High-Fidelity Real-time Print Simulation</span>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-amber-500/10 text-amber-500">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1 animate-pulse"></span>
+                              Active Render
+                            </span>
+                          </div>
+
+                          {/* Simulated Ticket Frame */}
+                          <div
+                            className="p-6 rounded-lg text-left shadow-md transition-all duration-300 mx-auto max-w-[420px] select-none"
+                            style={{
+                              fontFamily: `'${voucherFont}', sans-serif`,
+                              color: voucherTextColor,
+                              backgroundColor: voucherBgColor,
+                              borderTop: `8px solid ${voucherAccentColor}`
+                            }}
+                          >
+                            {/* App Header info */}
+                            <div className="text-center text-[8px] tracking-widest uppercase font-extrabold opacity-60 mb-1">
+                              Tailor Shop ERP Active Design
+                            </div>
+
+                            {/* Header details */}
+                            <div
+                              className="pb-4 mb-4 border-stone-200/80 flex flex-col"
+                              style={{
+                                borderBottom: `2px ${voucherBorderStyle} #e7e5e4`,
+                                alignItems: voucherLogoAlignment === 'center' ? 'center' : (voucherLogoAlignment === 'right' ? 'flex-end' : 'flex-start'),
+                                textAlign: voucherLogoAlignment
+                              }}
+                            >
+                              {customLogoUrl ? (
+                                <img
+                                  src={customLogoUrl}
+                                  className="h-10 max-w-[120px] object-contain mb-2 rounded"
+                                  alt="Mock Logo"
+                                />
+                              ) : (
+                                <div className="p-1 px-2.5 bg-zinc-100 text-zinc-900 dark:bg-zinc-900 dark:text-white rounded-md text-[9px] mb-2 font-bold tracking-wider">
+                                  ✂️ ATELIER LOGO
+                                </div>
+                              )}
+                              <h4 className="text-base font-extrabold leading-tight tracking-tight">{voucherMainTitle}</h4>
+                              <p className="text-[9px] tracking-wider uppercase font-bold mt-1" style={{ color: voucherAccentColor }}>
+                                {voucherSubtitle}
+                              </p>
+                            </div>
+
+                            {/* Simulated Client block */}
+                            <div className="p-3 bg-stone-50/60 dark:bg-zinc-900/40 rounded-lg border border-stone-150/40 dark:border-zinc-800/40 mb-4 flex justify-between items-center text-[10px]">
+                              <div>
+                                <div className="font-extrabold text-stone-900 dark:text-stone-100">Arjun Sharma</div>
+                                <div className="text-[9px] text-stone-405 mt-0.5">📞 +91 98765 43210</div>
+                                <div className="text-[9px] text-stone-405">✉️ arjun.sharma@example.com</div>
+                              </div>
+                              <div className="font-mono text-[8px] bg-stone-200/60 dark:bg-zinc-800 p-1 rounded text-stone-500">
+                                VCH-SAMPLE-781
+                              </div>
+                            </div>
+
+                            {/* Simulated Measurements */}
+                            <div className="text-[9px] font-extrabold uppercase tracking-widest text-stone-400 mb-2">
+                              Trouser pattern blueprint
+                            </div>
+                            <div className="grid grid-cols-4 gap-2 mb-4">
+                              {[
+                                { k: 'Waist', v: '34.5"' },
+                                { k: 'Length', v: '39.5"' },
+                                { k: 'Inseam', v: '30.0"' },
+                                { k: 'Hip', v: '41.5"' }
+                              ].map((mItem, mIdx) => (
+                                <div
+                                  key={mIdx}
+                                  className="p-1.5 rounded border border-stone-200/50 dark:border-zinc-800 text-center"
+                                  style={{ borderBottom: `2.5px solid ${voucherAccentColor}` }}
+                                >
+                                  <div className="font-extrabold text-xs">{mItem.v}</div>
+                                  <div className="text-[8px] text-stone-400 font-bold uppercase tracking-wider mt-0.5">{mItem.k}</div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Style alterations block */}
+                            <div className="text-[9px] font-extrabold uppercase tracking-widest text-stone-400 mb-2">
+                              Alterations &amp; Custom Specs
+                            </div>
+                            <div className="text-[10px] p-2.5 bg-stone-50/60 dark:bg-zinc-900/40 rounded mb-4 italic text-stone-600 dark:text-stone-300" style={{ borderLeft: `3px solid ${voucherAccentColor}` }}>
+                              Custom slim tapering from knees; slanted front pockets. Back right pocket button-fastened.
+                            </div>
+
+                            {/* Simulated bill Ledger */}
+                            <div className="text-[9px] font-extrabold uppercase tracking-widest text-stone-400 mb-2">
+                              Accounting Ledger Transaction
+                            </div>
+                            <table className="w-full text-[10px] border-collapse mb-4">
+                              <tbody>
+                                <tr className="border-b border-dashed border-stone-200 dark:border-zinc-800 py-1">
+                                  <td className="py-1">Garment Assembly:</td>
+                                  <td className="text-right font-bold py-1">Slim Suit Trouser</td>
+                                </tr>
+                                <tr className="border-b border-dashed border-stone-200 dark:border-zinc-800 py-1">
+                                  <td className="py-1">Commission Price (Total):</td>
+                                  <td className="text-right font-bold py-1">₹4,500.00</td>
+                                </tr>
+                                <tr className="border-b border-dashed border-stone-200 dark:border-zinc-800 py-1 text-emerald-600">
+                                  <td className="py-1">Paid Cutter Advance:</td>
+                                  <td className="text-right font-bold py-1">- ₹1,500.00</td>
+                                </tr>
+                                <tr className="font-extrabold text-xs" style={{ borderTop: '1.5px solid #1c1917' }}>
+                                  <td className="pt-2">Balance Due at Trial:</td>
+                                  <td className="text-right pt-2 text-rose-500 font-black">₹3,000.00</td>
+                                </tr>
+                              </tbody>
+                            </table>
+
+                            {/* Delivery pick up */}
+                            <div
+                              className="p-2 rounded-lg text-center font-extrabold text-xs text-white uppercase tracking-wider mb-4"
+                              style={{ background: `linear-gradient(135deg, ${voucherAccentColor}, #1c1917)` }}
+                            >
+                              ✨ Ready for pick-up on Saturday
+                            </div>
+
+                            {/* Footer text */}
+                            <div
+                              className="pt-3 text-[9px] text-center italic text-stone-400 leading-normal"
+                              style={{ borderTop: `1px ${voucherBorderStyle} #e7e5e4` }}
+                            >
+                              {voucherFooterNotes}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Lock action row */}
+                      <div className="p-4 bg-amber-500/[0.04] border border-amber-500/20 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-left font-sans">
+                        <div className="space-y-0.5">
+                          <h4 className="text-[11px] font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wide">Lock Ledger Design Blueprint</h4>
+                          <p className="text-[10px] text-stone-400">Lock, synchronize and publish this design onto all printed vouchers immediately.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            localStorage.setItem('voucher_main_title', voucherMainTitle);
+                            localStorage.setItem('voucher_subtitle', voucherSubtitle);
+                            localStorage.setItem('voucher_footer_notes', voucherFooterNotes);
+                            localStorage.setItem('voucher_bg_color', voucherBgColor);
+                            localStorage.setItem('voucher_text_color', voucherTextColor);
+                            localStorage.setItem('voucher_accent_color', voucherAccentColor);
+                            localStorage.setItem('voucher_font', voucherFont);
+                            localStorage.setItem('voucher_border_style', voucherBorderStyle);
+                            localStorage.setItem('voucher_logo_alignment', voucherLogoAlignment);
+                            triggerToast("Voucher designs propagate and locked successfully!", "success");
+                          }}
+                          className="w-full sm:w-auto px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center space-x-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                        >
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          <span>Lock &amp; Publish Voucher Style</span>
+                        </button>
+                      </div>
+                    </div>
+                   <div className="hidden">
+                     <div className="flex items-center space-x-2 mb-4">
+                       <div className="p-1.5 bg-emerald-500/10 text-emerald-600 rounded-lg">
+                         <ShieldCheck className="h-4 w-4" />
+                       </div>
+                       <h3 className="font-extrabold text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-500">Live Website Header Mockup</h3>
+                     </div>
+
+                     <p className="text-[10px] text-stone-400 mb-6">See exactly how your customized navbar looks on both light and dark systems here:</p>
+
+                     {/* Mockup Frame 1: LIGHT MODE NAVBAR */}
+                     <div className="border border-stone-200 bg-stone-50 rounded-xl overflow-hidden mb-4 font-sans">
+                       <div className="bg-stone-200/50 p-1.5 px-3 flex items-center space-x-1.5 border-b border-stone-200">
+                         <div className="w-2 h-2 rounded-full bg-rose-400"></div>
+                         <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
+                         <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+                         <span className="text-[8px] text-stone-400 font-mono pl-2">Simulation (Light System UI)</span>
+                       </div>
+                       <div className="bg-white p-3.5 flex items-center justify-between border-b border-stone-200">
+                         <div className="flex items-center space-x-2">
+                           {customLogoUrl ? (
+                             <img src={customLogoUrl} alt="Logo" className="h-8 w-8 object-contain rounded-md animate-fade-in" />
+                           ) : (
+                             <div className="p-2 bg-amber-600 text-white rounded-md text-[10px] font-bold">✂️</div>
+                           )}
+                           <span className="font-black text-xs tracking-wider uppercase text-stone-900">{atelierName || 'STYLUS'}</span>
+                         </div>
+                         <div className="flex space-x-2">
+                           <span className="w-8 h-3.5 bg-stone-100 rounded"></span>
+                           <span className="w-12 h-3.5 bg-stone-100 rounded"></span>
+                         </div>
+                       </div>
+                       <div className="p-4 bg-white text-center">
+                         <span className="text-[9px] text-stone-400 italic">Pre-allocated client site navigation banner</span>
+                       </div>
+                     </div>
+
+                     {/* Mockup Frame 2: DARK MODE NAVBAR */}
+                     <div className="border border-slate-900 bg-slate-950 rounded-xl overflow-hidden font-sans">
+                       <div className="bg-slate-900/60 p-1.5 px-3 flex items-center space-x-1.5 border-b border-slate-900">
+                         <div className="w-2 h-2 rounded-full bg-rose-500/60"></div>
+                         <div className="w-2 h-2 rounded-full bg-yellow-500/60"></div>
+                         <div className="w-2 h-2 rounded-full bg-emerald-500/60"></div>
+                         <span className="text-[8px] text-slate-500 font-mono pl-2">Simulation (Dark System UI)</span>
+                       </div>
+                       <div className="bg-slate-950 p-3.5 flex items-center justify-between border-b border-slate-900">
+                         <div className="flex items-center space-x-2">
+                           {customLogoUrl ? (
+                             <img src={customLogoUrl} alt="Logo" className="h-8 w-8 object-contain rounded-md animate-fade-in" />
+                           ) : (
+                             <div className="p-2 bg-amber-500 text-white rounded-md text-[10px] font-bold">✂️</div>
+                           )}
+                           <span className="font-black text-xs tracking-wider uppercase text-white">{atelierName || 'STYLUS'}</span>
+                         </div>
+                         <div className="flex space-x-2">
+                           <span className="w-8 h-3.5 bg-slate-900 rounded"></span>
+                           <span className="w-12 h-3.5 bg-slate-900 rounded"></span>
+                         </div>
+                       </div>
+                       <div className="p-4 bg-slate-950 text-center">
+                         <span className="text-[9px] text-slate-500 italic">Pre-allocated client site navigation banner</span>
+                       </div>
+                     </div>
+
+                     <div className="mt-6">
+                       <button
+                         type="button"
+                         onClick={() => {
+                           triggerToast("Configuration applied & secured!", "success");
+                         }}
+                         className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 shadow-sm cursor-pointer"
+                       >
+                         <CheckCircle className="h-4 w-4" />
+                         <span>Lock &amp; Apply Branding Layout</span>
+                       </button>
+                       <p className="text-[9px] text-stone-400 mt-2.5 text-center">Your branding settings are securely written database objects. If you ever wish to return to original templates, click the Reset button in other tabs.</p>
+                     </div>
+                   </div>
+                 </div>
+             </div>
+          ) : ownerTab === 'registered_tailors' ? (
+             /* Tailor users logins page */
+             <div className="space-y-6 fade-in font-sans">
+               <div className="border-b border-stone-200 dark:border-slate-800 pb-4">
+                 <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                   <span className="p-2 bg-amber-500/10 text-amber-600 rounded-lg"><Scissors className="h-4.5 w-4.5" /></span>
+                   <span>Atelier Worker Staff Logins</span>
+                 </h2>
+                 <p className="text-xs text-stone-400 mt-1">View and manage workshop employee credentials and room identifiers.</p>
+               </div>
+
+               <div className="space-y-4">
+                 {/* Full width: Existing logins list */}
+                 <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
+                   <h3 className="text-sm font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-4 flex items-center gap-1.5 justify-between">
+                     <span>Taylor Workshop Staff Logins</span>
+                     <span className="text-[10px] bg-amber-600/10 text-amber-600 px-2 py-0.5 rounded-full font-bold">
+                       {getRegisteredTailors().length} Active
+                     </span>
+                   </h3>
+                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                     {getRegisteredTailors().map((t: any) => {
+                       return (
+                         <div key={t.id} className="p-4 rounded-xl border flex justify-between items-center gap-2 dark:bg-slate-950 border-slate-900 bg-stone-50 border-stone-150">
+                           <div className="space-y-1 text-left">
+                             <div className="font-extrabold text-xs text-stone-850 dark:text-white">{t.name}</div>
+                             <div className="text-[10.5px] text-stone-450 space-y-0.5 font-semibold">
+                               <p><span className="font-mono">Email:</span> {t.email}</p>
+                               <p><span className="font-mono">Phone:</span> {t.phone}</p>
+                               <p><span className="font-mono">Room:</span> {t.location}</p>
+                               <p className="text-[10.5px] font-mono text-amber-600 p-1 bg-amber-600/5 rounded inline-block">PSWD: {t.password}</p>
+                             </div>
+                           </div>
+                           <button
+                             type="button"
+                             disabled={t.id === 'TAILOR-OWNER-MASTER'}
+                             onClick={() => {
+                               if (confirm(`Remove staff ${t.name}?`)) {
+                                 const filtered = getRegisteredTailors().filter((x: any) => x.id !== t.id);
+                                 saveRegisteredTailors(filtered);
+                                 setRegisteredTailors(filtered);
+                                 triggerToast('Removed staff credentials!', 'success');
+                               }
+                             }}
+                             className={`p-2 rounded hover:bg-red-500/10 hover:text-red-500 text-stone-400 cursor-pointer ${t.id === 'TAILOR-OWNER-MASTER' ? 'cursor-not-allowed opacity-30' : ''}`}
+                           >
+                             <Trash2 className="h-4 w-4" />
+                           </button>
+                         </div>
+                       );
+                     })}
+                     {getRegisteredTailors().length === 0 && (
+                       <div className="col-span-full text-center py-10 text-stone-400 text-xs">
+                         No staff logins found in the system.
+                       </div>
+                     )}
+                   </div>
+                 </div>
+               </div>
+             </div>
+          ) : ownerTab === 'staffs_erp' ? (
+             /* Staffs TailorShop ERP view */
+             <div className="space-y-6 fade-in font-sans">
+               <WorkerManagementView
+                 workers={workers}
+                 orders={orders}
+                 onAddWorker={handleAddWorker}
+                 isDarkMode={isDarkMode}
+               />
+             </div>
+          ) : (
+             /* Customer Patrons view */
+             <div className="space-y-6 fade-in font-sans">
+               <CustomerManagementView
+                 customers={customers}
+                 orders={orders}
+                 onAddCustomer={handleAddNewCustomer}
+                 onEditCustomer={handleEditExistingCustomer}
+                 onDeleteCustomer={handleDeleteExistingCustomer}
+                 isDarkMode={isDarkMode}
+                 searchFilter=""
+               />
+             </div>
+          )
+        ) : tailorPage === 'sizing' ? (
           <>
             {/* Central Session Control Center */}
             {sessionStage === 'active' ? (
@@ -4337,7 +4570,7 @@ export default function App() {
                     )}
 
                     {/* Sizing inputs grid ("blocks like before") */}
-                    <div className="py-6 min-h-[220px]">
+                    <div className="py-4">
                       <div className="grid grid-cols-1 gap-3 text-xs max-w-xl mx-auto">
                         {Object.keys(sizingFields).map((fieldName) => {
                           const isDefaultCategoryType = ['Shirt', 'Pant', 'Suit', 'Kurta', 'Custom'].includes(clothingType);
@@ -4522,6 +4755,11 @@ export default function App() {
                   <div className={`p-6 rounded-2xl border flex flex-col justify-between relative overflow-hidden transition-all ${
                     isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'
                   }`}>
+                    {/* Decorative background visual thread */}
+                    <div className="absolute top-0 right-0 p-8 text-stone-100 dark:text-slate-900/10 -z-10 font-sans font-black text-9xl select-none pointer-events-none">
+                      Atelier
+                    </div>
+
                     <div className="space-y-6">
                       <div className="pb-3 border-b border-stone-100 dark:border-slate-800 flex items-center justify-between">
                         <div>
@@ -4680,12 +4918,12 @@ export default function App() {
                 <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-stone-50 border-stone-150'}`}>
                   <h4 className="font-bold text-xs border-b pb-2 mb-3 flex items-center gap-1.5 uppercase text-stone-400">
                     <User className="h-4 w-4 text-amber-600" />
-                    <span>Registered Patron Particulars</span>
+                    <span>Registered Customer Particulars</span>
                   </h4>
 
                   <div className="grid grid-cols-2 gap-4 text-xs mb-4">
                     <div>
-                      <p className="text-stone-400 uppercase text-[9px] font-bold">Patron Name</p>
+                      <p className="text-stone-400 uppercase text-[9px] font-bold">Customer Name</p>
                       <p className="font-bold text-sm">{lastSavedSession?.customer.name}</p>
                     </div>
                     <div>
@@ -4745,7 +4983,7 @@ export default function App() {
                       rel="noopener noreferrer"
                       className="p-2.5 px-4 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white text-xs flex items-center justify-center space-x-1.5 shadow-sm hover:shadow active:scale-[0.98] transition cursor-pointer self-start md:self-center shrink-0"
                     >
-                      <WhatsAppIcon className="h-4 w-4" />
+                      <MessageSquare className="h-3.5 w-3.5" />
                       <span>Send via WhatsApp</span>
                       <ExternalLink className="h-3 w-3" />
                     </a>
@@ -4838,7 +5076,7 @@ export default function App() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
                   <input
                     type="text"
-                    placeholder="Search order ref, patron name..."
+                    placeholder="Search order ref, customer name..."
                     value={orderSearch}
                     onChange={(e) => setOrderSearch(e.target.value)}
                     className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 ${
@@ -4883,7 +5121,7 @@ export default function App() {
               <table className="w-full text-left text-xs min-w-[750px]">
                 <thead>
                   <tr className="border-b dark:border-slate-800 text-stone-400 dark:text-stone-300 uppercase font-bold text-[9.5px] tracking-wider">
-                    <th className="py-3 px-4">Order & Patron Information</th>
+                    <th className="py-3 px-4">Order & Customer Information</th>
                     <th className="py-3 px-4">Dressmaking Sizing Specs & Design Guidelines</th>
                     <th className="py-3 px-4">Production Phase</th>
                     <th className="py-3 px-4 text-right">Settlement & Actions</th>
@@ -4969,7 +5207,7 @@ export default function App() {
                                   }}
                                   className="text-amber-600 dark:text-amber-450 font-bold text-[10px] hover:underline flex items-center space-x-1"
                                 >
-                                  <span>Measure Patron Now</span>
+                                  <span>Measure Customer</span>
                                 </button>
                               </div>
                             )}
@@ -5025,7 +5263,7 @@ export default function App() {
                                   </div>
                                 ) : (
                                   <div className="text-emerald-500 dark:text-emerald-400 text-[9px] font-extrabold tracking-wider uppercase pt-0.5 animate-pulse">
-                                    ✓ Settled In Full
+                                    ★ Settled In Full
                                   </div>
                                 )}
                               </div>
@@ -5052,7 +5290,7 @@ export default function App() {
                                   className="p-1.5 bg-stone-100 hover:bg-stone-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-stone-600 dark:text-stone-300 rounded-lg inline-flex border border-stone-200 dark:border-slate-700 transition"
                                   title="Share progress via WhatsApp"
                                 >
-                                  <WhatsAppIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                  <MessageSquare className="h-3.5 w-3.5" />
                                 </a>
 
                                 <button
@@ -5081,1126 +5319,68 @@ export default function App() {
               </table>
             </div>
           </section>
-        ) : tailorPage === 'admin' ? (
-          /* ==========================================
-             Branding & Site Customizer (Admin Section)
-             ========================================== */
-          <div className="space-y-6 fade-in font-sans">
-
-            <div className="border-b border-stone-200 dark:border-slate-800 pb-4">
-              <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                <span>Owner Branding &amp; Site Customization</span>
+        ) : tailorPage === 'tailors' ? (
+          /* Tailors List/Registry Page Section */
+          <section className={`p-6 rounded-2xl border transition-all ${
+            isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'
+          }`}>
+            <div className="border-b border-stone-200 dark:border-slate-800 pb-4 mb-6">
+              <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2 font-sans">
+                <span className="p-2 bg-amber-500/10 text-amber-600 rounded-lg"><Scissors className="h-4.5 w-4.5" /></span>
+                <span>Registered Tailors Registry</span>
               </h2>
-              <p className="text-xs text-stone-400 mt-1">Re-brand the entire tailor suite! Custom logo icon, welcome messages, voucher details, login screen content and staff authorization lists.</p>
+              <p className="text-xs text-stone-400 mt-1">Sartorial database of all active master artisans and tailors registered in the workspace system.</p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Card 1: Navbar settings */}
-              <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'} space-y-4`}>
-                <h3 className="font-bold text-sm text-stone-800 dark:text-stone-200 flex items-center gap-1.5 uppercase font-mono tracking-widest pb-2 border-b border-stone-100 dark:border-slate-850">
-                  Navbar App Design
-                </h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-[10px] font-extrabold uppercase tracking-widest text-stone-400 mb-1">App Brand Name</label>
-                    <input
-                      type="text"
-                      value={navbarAppName}
-                      onChange={(e) => setNavbarAppName(e.target.value)}
-                      placeholder="e.g. TAILORSHOP ERP"
-                      className={`w-full p-2.5 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 font-bold ${
-                        isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                      }`}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-extrabold uppercase tracking-widest text-stone-400 mb-1">App Custom Logo Image (URL or Upload)</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={navbarAppLogo}
-                        onChange={(e) => setNavbarAppLogo(e.target.value)}
-                        placeholder="Leave empty to fallback to custom Scissors icon (or enter URL)"
-                        className={`flex-1 p-2.5 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                        }`}
-                      />
-                      <label className="p-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl cursor-pointer shrink-0 transition flex items-center gap-1 shadow-3xs">
-                        <Upload className="h-3.5 w-3.5" />
-                        <span>Upload</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => handleImageUpload(e, setNavbarAppLogo)}
-                        />
-                      </label>
-                    </div>
-                    {navbarAppLogo && (
-                      <div className="mt-2 flex items-center gap-2 text-xs text-stone-400">
-                        <span>Preview:</span>
-                        <img src={navbarAppLogo} className="w-8 h-8 rounded-lg object-cover border" alt="Navbar Logo preview" />
-                        <button
-                          type="button"
-                          onClick={() => setNavbarAppLogo('')}
-                          className="text-[10px] text-red-500 hover:underline"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: App Welcome Panel Welcome Header */}
-              <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'} space-y-4`}>
-                <h3 className="font-bold text-sm text-stone-800 dark:text-stone-200 flex items-center gap-1.5 uppercase font-mono tracking-widest pb-2 border-b border-stone-100 dark:border-slate-850">
-                  App Dashboard Greeting Welcome
-                </h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-[10px] font-extrabold uppercase tracking-widest text-stone-400 mb-1">App Welcome Banner Title</label>
-                    <input
-                      type="text"
-                      value={appWelcomeTitle}
-                      onChange={(e) => setAppWelcomeTitle(e.target.value)}
-                      className={`w-full p-2.5 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 font-bold ${
-                        isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                      }`}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-extrabold uppercase tracking-widest text-stone-400 mb-1">App Welcome Banner Descriptive Text</label>
-                    <textarea
-                      value={appWelcomeDesc}
-                      onChange={(e) => setAppWelcomeDesc(e.target.value)}
-                      rows={3}
-                      className={`w-full p-2.5 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                        isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                      }`}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 3: Login selector screen customizer */}
-              <div className={`p-6 rounded-2xl border lg:col-span-2 ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'} space-y-4`}>
-                <h3 className="font-bold text-sm text-stone-800 dark:text-stone-200 flex items-center gap-1.5 uppercase font-mono tracking-widest pb-2 border-b border-stone-100 dark:border-slate-850">
-                  Login Screen &amp; Landing Cards Customizer
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 font-sans">
+              {registeredTailors.map((t: any) => (
+                <div key={t.id} className={`p-5 rounded-2xl border text-left flex flex-col justify-between ${
+                  isDarkMode ? 'bg-slate-950 border-slate-900 text-white' : 'bg-stone-50 border-stone-150 text-stone-800'
+                }`}>
                   <div className="space-y-3">
-                    <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-widest text-stone-400 mb-1">Landing Welcome Title</label>
-                      <input
-                        type="text"
-                        value={loginPageTitle}
-                        onChange={(e) => setLoginPageTitle(e.target.value)}
-                        className={`w-full p-2.5 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 font-bold ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                        }`}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-widest text-stone-400 mb-1">Landing Welcome Details</label>
-                      <textarea
-                        value={loginPageDesc}
-                        onChange={(e) => setLoginPageDesc(e.target.value)}
-                        rows={3}
-                        className={`w-full p-2.5 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-803 text-white' : 'bg-stone-50 border-stone-200'
-                        }`}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 bg-stone-50 dark:bg-slate-950 p-4 rounded-xl border border-stone-200 dark:border-slate-800">
-                    <span className="text-[10px] uppercase font-bold tracking-widest text-stone-400 block mb-2">Live Login Metadata Tips:</span>
-                    <p className="text-[11px] text-stone-550 leading-relaxed">
-                      Custom content can enhance your digital showroom branding. You can customize the image URLs, header slogans, and explanatory details for both cards below. Let's configure them precisely:
-                    </p>
-                  </div>
-                </div>
-
-                <hr className="my-4 dark:border-slate-800" />
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Tailor card configs */}
-                  <div className="space-y-3 p-4 rounded-xl border dark:border-slate-850">
-                    <h4 className="font-bold text-xs text-amber-600 uppercase tracking-wider block mb-1">Tailor Login Card</h4>
-                    <div>
-                      <label className="block text-[10px] font-bold text-stone-400 mb-1">Login Card Title</label>
-                      <input
-                        type="text"
-                        value={loginWorkplaceTitle}
-                        onChange={(e) => setLoginWorkplaceTitle(e.target.value)}
-                        className={`w-full p-2 text-xs rounded-lg border focus:outline-none ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200'
-                        }`}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-stone-400 mb-1">Login Card Image (URL or Upload)</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={loginWorkplaceImage}
-                          onChange={(e) => setLoginWorkplaceImage(e.target.value)}
-                          className={`flex-1 p-2 text-xs rounded-lg border font-mono focus:outline-none ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200'
-                          }`}
-                        />
-                        <label className="p-2 bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold rounded-lg cursor-pointer shrink-0 transition flex items-center gap-1">
-                          <Upload className="h-3 w-3" />
-                          <span>Upload</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => handleImageUpload(e, setLoginWorkplaceImage)}
-                          />
-                        </label>
+                    <div className="flex items-center space-x-3">
+                      <div className="p-3 bg-amber-500/15 rounded-xl text-amber-600 font-black text-sm">
+                        {t.name ? t.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'TL'}
                       </div>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-stone-400 mb-1">Login Card Description</label>
-                      <textarea
-                        value={loginWorkplaceDesc}
-                        onChange={(e) => setLoginWorkplaceDesc(e.target.value)}
-                        rows={2}
-                        className={`w-full p-2 text-xs rounded-lg border focus:outline-none ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200'
-                        }`}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Customer card configs */}
-                  <div className="space-y-3 p-4 rounded-xl border dark:border-slate-850">
-                    <h4 className="font-bold text-xs text-emerald-600 uppercase tracking-wider block mb-1">Customer Portal Card</h4>
-                    <div>
-                      <label className="block text-[10px] font-bold text-stone-400 mb-1">Customer Card Title</label>
-                      <input
-                        type="text"
-                        value={loginCustomerTitle}
-                        onChange={(e) => setLoginCustomerTitle(e.target.value)}
-                        className={`w-full p-2 text-xs rounded-lg border focus:outline-none ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200'
-                        }`}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-stone-400 mb-1">Customer Card Image (URL or Upload)</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={loginCustomerImage}
-                          onChange={(e) => setLoginCustomerImage(e.target.value)}
-                          className={`flex-1 p-2 text-xs rounded-lg border font-mono focus:outline-none ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200'
-                          }`}
-                        />
-                        <label className="p-2 bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold rounded-lg cursor-pointer shrink-0 transition flex items-center gap-1">
-                          <Upload className="h-3 w-3" />
-                          <span>Upload</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => handleImageUpload(e, setLoginCustomerImage)}
-                          />
-                        </label>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-stone-400 mb-1">Customer Card Description</label>
-                      <textarea
-                        value={loginCustomerDesc}
-                        onChange={(e) => setLoginCustomerDesc(e.target.value)}
-                        rows={2}
-                        className={`w-full p-2 text-xs rounded-lg border focus:outline-none ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200'
-                        }`}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 4: Physical receipt voucher designer */}
-              <div className={`p-6 rounded-2xl border lg:col-span-2 ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'} space-y-4`}>
-                <h3 className="font-bold text-sm text-stone-800 dark:text-stone-200 flex items-center gap-1.5 uppercase font-mono tracking-widest pb-2 border-b border-stone-100 dark:border-slate-850">
-                  Physical Printed Voucher Customizer &amp; Live Designer
-                </h3>
-                
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-                  {/* Left Column: Form Inputs & Color Pickers */}
-                  <div className="xl:col-span-5 space-y-4">
-                    <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-widest text-stone-400 mb-1">Printed Slip Main Title</label>
-                      <input
-                        type="text"
-                        value={voucherTitle}
-                        onChange={(e) => setVoucherTitle(e.target.value)}
-                        className={`w-full p-2.5 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 font-bold ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                        }`}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-widest text-stone-400 mb-1">Printed Slip Subtitle</label>
-                      <input
-                        type="text"
-                        value={voucherSubtitle}
-                        onChange={(e) => setVoucherSubtitle(e.target.value)}
-                        className={`w-full p-2.5 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                        }`}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-widest text-stone-400 mb-1">Footer Notes &amp; Terms ("Couched")</label>
-                      <textarea
-                        value={voucherFooter}
-                        onChange={(e) => setVoucherFooter(e.target.value)}
-                        rows={3}
-                        className={`w-full p-2.5 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                        }`}
-                      />
-                    </div>
-
-                    {/* Voucher Custom Branded Color Pickers */}
-                    <div className="border-t border-stone-100 dark:border-slate-850 pt-3 space-y-3">
-                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-600 block">Boutique Custom Palette</span>
-                      
-                      <div className="grid grid-cols-3 gap-2.5">
-                        <div>
-                          <label className="block text-[9px] font-bold text-stone-400 mb-1">Voucher BG</label>
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="color"
-                              value={voucherBgColor}
-                              onChange={(e) => setVoucherBgColor(e.target.value)}
-                              className="w-8 h-8 rounded cursor-pointer border border-stone-300 dark:border-slate-800 bg-transparent shrink-0"
-                            />
-                            <span className="text-[9px] font-mono opacity-80">{voucherBgColor}</span>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-bold text-stone-400 mb-1">Voucher Text</label>
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="color"
-                              value={voucherTextColor}
-                              onChange={(e) => setVoucherTextColor(e.target.value)}
-                              className="w-8 h-8 rounded cursor-pointer border border-stone-300 dark:border-slate-800 bg-transparent shrink-0"
-                            />
-                            <span className="text-[9px] font-mono opacity-80">{voucherTextColor}</span>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-bold text-stone-400 mb-1">Accent Highlight</label>
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="color"
-                              value={voucherAccentColor}
-                              onChange={(e) => setVoucherAccentColor(e.target.value)}
-                              className="w-8 h-8 rounded cursor-pointer border border-stone-300 dark:border-slate-800 bg-transparent shrink-0"
-                            />
-                            <span className="text-[9px] font-mono opacity-80">{voucherAccentColor}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Color Presets */}
-                      <div className="flex items-center gap-1.5 flex-wrap pt-1 mr-1">
-                        <span className="text-[9px] text-stone-400 mr-1">Presets:</span>
-                        <button
-                          type="button"
-                          onClick={() => { setVoucherBgColor('#ffffff'); setVoucherTextColor('#1c1917'); setVoucherAccentColor('#aa8612'); }}
-                          className="px-2 py-0.5 rounded text-[8px] font-bold border border-stone-200 hover:bg-stone-100 dark:border-slate-800 dark:hover:bg-slate-900"
-                        >
-                          Classic Ivory
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setVoucherBgColor('#111827'); setVoucherTextColor('#f3f4f6'); setVoucherAccentColor('#f59e0b'); }}
-                          className="px-2 py-0.5 rounded text-[8px] font-bold border border-stone-200 hover:bg-stone-100 dark:border-slate-800 dark:hover:bg-slate-900"
-                        >
-                          Regal Black
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setVoucherBgColor('#ecfdf5'); setVoucherTextColor('#065f46'); setVoucherAccentColor('#059669'); }}
-                          className="px-2 py-0.5 rounded text-[8px] font-bold border border-stone-200 hover:bg-stone-100 dark:border-slate-800 dark:hover:bg-slate-900"
-                        >
-                          Classic Green
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Column: Interactive Real-Time Ticket Live Visualizer */}
-                  <div className="xl:col-span-7 bg-stone-50 dark:bg-slate-950 p-4 rounded-xl border border-stone-200/65 dark:border-slate-900 space-y-3">
-                    <span className="text-[10px] uppercase font-bold tracking-widest text-stone-400 block mb-2">Real-Time Physical Ticket Mockup:</span>
-                    
-                    <div 
-                      className="p-6 rounded shadow-md border-y-2 border-stone-300 font-sans text-xs leading-relaxed space-y-4 relative overflow-hidden transition-all duration-300"
-                      style={{ backgroundColor: voucherBgColor, color: voucherTextColor, borderStyle: 'dashed', borderColor: `${voucherTextColor}44` }}
-                    >
-                      {/* Torn paper decorative pattern header */}
-                      <div className="flex justify-between text-[10px] uppercase font-bold tracking-widest pb-3 border-b border-dashed opacity-75" style={{ borderColor: `${voucherTextColor}25` }}>
-                        <span>ATELIER OUT-TICKET</span>
-                        <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-amber-500 font-extrabold" style={{ color: voucherAccentColor }}>
-                          <Scissors className="h-3 w-3 animate-pulse" />
-                          <span>Boutique Seal</span>
-                        </div>
-                      </div>
-                      
-                      {/* Logo & Headline */}
-                      <div className="text-center space-y-1 py-1">
-                        <div className="text-2xl font-serif italic tracking-wide font-black" style={{ color: voucherAccentColor }}>
-                          <input
-                            type="text"
-                            value={voucherTitle}
-                            onChange={(e) => setVoucherTitle(e.target.value)}
-                            className="bg-transparent border-b border-transparent hover:border-dashed hover:border-amber-500 text-center w-full focus:outline-none focus:ring-0 focus:border-amber-600 font-serif italic text-2xl"
-                            title="Click to edit Title"
-                          />
-                        </div>
-                        <div className="text-[10px] tracking-wide font-medium font-mono uppercase opacity-75">
-                          <input
-                            type="text"
-                            value={voucherSubtitle}
-                            onChange={(e) => setVoucherSubtitle(e.target.value)}
-                            className="bg-transparent border-b border-transparent hover:border-dashed hover:border-amber-500 text-center w-full focus:outline-none focus:ring-0 text-[10px] tracking-wider uppercase font-mono"
-                            title="Click to edit Subtitle"
-                          />
-                        </div>
-                      </div>
-                      
-                      {/* Mock Sizing details inside live preview */}
-                      <div className="space-y-1.5 font-mono text-[11px] leading-snug">
-                        <div className="flex justify-between">
-                          <span className="opacity-70">RECEIPT &amp; ID:</span>
-                          <span className="font-extrabold tracking-wide text-right">#ORD-2851 / CUST-94</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="opacity-70">GUEST MEMBER:</span>
-                          <span className="font-extrabold tracking-wide text-right">SARAH JEFFERSON (Classic Fit)</span>
-                        </div>
-                        
-                        <div className="border-t border-dashed my-2 opacity-35" style={{ borderColor: `${voucherTextColor}35` }}></div>
-                        
-                        {/* Mock sizing metrics */}
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                          <div className="flex justify-between"><span className="opacity-60">Collar Width:</span><span className="font-bold">15.5"</span></div>
-                          <div className="flex justify-between"><span className="opacity-60">Chest Circum:</span><span className="font-bold">42.2"</span></div>
-                          <div className="flex justify-between"><span className="opacity-60">Waist Waist:</span><span className="font-bold">34.0"</span></div>
-                          <div className="flex justify-between"><span className="opacity-60">Hips Sizing:</span><span className="font-bold">39.5"</span></div>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-dashed opacity-35" style={{ borderColor: `${voucherTextColor}35` }}></div>
-                      
-                      {/* Barcode representation */}
-                      <div className="flex flex-col items-center justify-center py-1 opacity-70">
-                        <div className="font-mono text-[16px] tracking-[6px] font-light leading-none">||||| | |||| || || | |||| ||</div>
-                        <span className="text-[7px] tracking-wider opacity-65 mt-1">VERIFIED SARTORIAL SEAL #8347</span>
-                      </div>
-                      
-                      {/* Footer terms */}
-                      <p className="text-[9.5px] italic text-center leading-relaxed opacity-85 border-t pt-2 font-serif" style={{ borderColor: `${voucherTextColor}15` }}>
-                        <span className="inline-block p-1 rounded">
-                          {voucherFooter}
+                      <div>
+                        <h3 className="font-extrabold text-sm text-stone-900 dark:text-white">{t.name}</h3>
+                        <span className="text-[9px] bg-amber-600/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                          Active Tailor
                         </span>
+                      </div>
+                    </div>
+
+                    <div className="text-xs space-y-1.5 pt-2 border-t border-dashed dark:border-slate-900 border-stone-200 text-stone-500 dark:text-stone-400">
+                      <p className="flex items-center justify-between">
+                        <span className="font-mono text-[10px] text-stone-400 font-bold">EMAIL:</span>
+                        <span className="font-semibold text-stone-800 dark:text-stone-200">{t.email}</span>
                       </p>
-                      
-                      {/* Cut line visual with Scissors */}
-                      <div className="absolute bottom-1 right-2 opacity-30 text-[9px] flex items-center gap-1 font-mono">
-                        <Scissors className="w-2.5 h-2.5" />
-                        <span>Cut here</span>
-                      </div>
-                    </div>
-                    <span className="text-[10px] text-stone-400 block text-center italic">Click directly on any text inside the invoice ticket title/subtitle above to edit it in real-time!</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 5 Staff and Operators customization */}
-              <div id="manage-staff-card" className={`p-6 rounded-2xl border lg:col-span-2 ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'} space-y-6`}>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-stone-100 dark:border-slate-850 gap-2">
-                  <div>
-                    <h3 className="font-bold text-sm text-stone-800 dark:text-stone-200 flex items-center gap-1.5 uppercase font-mono tracking-widest">
-                      Manage Atelier Staff &amp; Workshop Tailors
-                    </h3>
-                    <p className="text-[11px] text-stone-400 mt-0.5">View login credentials, register new custom creators, or dismiss workshop staff roles.</p>
-                  </div>
-                  <span className="text-[10px] tracking-wider uppercase font-extrabold bg-amber-500/15 text-amber-700 dark:text-amber-400 px-2.5 py-0.5 rounded-full whitespace-nowrap self-start sm:self-center">
-                    Credentials &amp; Roles
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6">
-                  {/* Lists of active administrative operators & workshop tailors */}
-                  <div className="space-y-5">
-                    {/* Admin Operators directory */}
-                    <div className="space-y-2">
-                      <span className="text-[10px] uppercase tracking-widest font-bold text-amber-600 dark:text-amber-500 block">
-                        Active Central Admins ({tailorOperators.length})
-                      </span>
-                      <div className="max-h-[180px] overflow-y-auto space-y-2 pr-1">
-                        {tailorOperators.map((operator: any) => (
-                          <div
-                            key={operator.id || operator.email}
-                            className={`p-3.5 rounded-xl border flex items-center justify-between text-xs transition ${
-                              isDarkMode ? 'bg-slate-950/40 border-slate-900/60' : 'bg-stone-50 border-stone-200'
-                            }`}
-                          >
-                            <div className="flex items-center space-x-3">
-                              <div className="h-8 w-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold text-xs uppercase font-mono shrinkage-0">
-                                AD
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-extrabold text-stone-900 dark:text-white">{operator.name}</span>
-                                  <span className="text-[8px] bg-amber-500/10 text-amber-600 dark:text-amber-500 font-extrabold px-1 py-0.25 rounded uppercase font-mono">Owner</span>
-                                </div>
-                                <p className="text-[10px] text-stone-400 mt-0.5">{operator.email} • {operator.phone || 'No phone'}</p>
-                              </div>
-                            </div>
-
-                            {tailorOperators.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const updated = tailorOperators.filter(op => op.email.toLowerCase().trim() !== operator.email.toLowerCase().trim());
-                                  setTailorOperators(updated);
-                                  triggerToast(`Admin Operator [${operator.name}] removed successfully!`, 'info');
-                                }}
-                                className="p-1.5 hover:bg-rose-500/15 text-stone-400 hover:text-rose-500 rounded-lg transition cursor-pointer"
-                                title="Revoke Login Authorization"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Workshop staff tailors directory */}
-                    <div className="space-y-2">
-                      <span className="text-[10px] uppercase tracking-widest font-bold text-sky-600 dark:text-sky-500 block">
-                        Workshop Seamstresses &amp; Tailor Workers ({workers.length})
-                      </span>
-                      <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1">
-                        {workers.map((worker: Worker) => (
-                          <div
-                            key={worker.id}
-                            className={`p-3.5 rounded-xl border flex items-center justify-between text-xs transition ${
-                              isDarkMode ? 'bg-slate-950/40 border-slate-900/60' : 'bg-stone-50 border-stone-200'
-                            }`}
-                          >
-                            <div className="flex items-center space-x-3">
-                              <img src={worker.avatar} className="h-8 w-8 rounded-lg object-cover bg-stone-105 shrink-0" referrerPolicy="no-referrer" alt={worker.name} />
-                              <div>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-extrabold text-stone-900 dark:text-white">{worker.name}</span>
-                                  <span className="text-[8px] bg-sky-550/15 text-sky-600 dark:text-sky-450 font-bold px-1.5 py-0.25 rounded uppercase font-mono">{worker.role}</span>
-                                </div>
-                                <p className="text-[10px] text-stone-400 mt-0.5">Rating Score: {worker.rating} • Pay: ₹{worker.baseSalary}/mo • ID: {worker.id}</p>
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = workers.filter(w => w.id !== worker.id);
-                                setWorkers(updated);
-                                triggerToast(`Tailor [${worker.name}] removed from the workshop!`, 'info');
-                              }}
-                              className="p-1.5 hover:bg-rose-500/15 text-stone-400 hover:text-rose-500 rounded-lg transition cursor-pointer"
-                              title="Dismiss worker"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+                      <p className="flex items-center justify-between">
+                        <span className="font-mono text-[10px] text-stone-400 font-bold">PHONE:</span>
+                        <span className="font-semibold text-stone-800 dark:text-stone-200">{t.phone || 'N/A'}</span>
+                      </p>
+                      <p className="flex items-center justify-between">
+                        <span className="font-mono text-[10px] text-stone-400 font-bold">ROOM / LOC:</span>
+                        <span className="font-semibold text-stone-800 dark:text-stone-200">{t.location || 'Central Desk'}</span>
+                      </p>
+                      <p className="flex items-center justify-between">
+                        <span className="font-mono text-[10px] text-stone-400 font-bold">JOINED:</span>
+                        <span className="font-semibold text-stone-800 dark:text-stone-200">{t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'Initial'}</span>
+                      </p>
                     </div>
                   </div>
                 </div>
-              </div>
+              ))}
+              {registeredTailors.length === 0 && (
+                <div className="col-span-full py-12 text-center text-stone-400 text-xs font-sans font-semibold">
+                  No registered tailors found in our database system.
+                </div>
+              )}
             </div>
-          </div>
-        ) : tailorPage === 'tailors_management' ? (
-          /* =========================================================
-             Dedicated Registered Workshop Tailors Database
-             ========================================================= */
-          <div className="space-y-6 fade-in font-sans">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-stone-200 dark:border-slate-800 gap-4">
-              <div>
-                <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                  <span className="p-2 bg-amber-500/10 text-amber-600 rounded-lg"><Scissors className="h-5 w-5" /></span>
-                  <span>Registered Workshop Tailors</span>
-                </h2>
-                <p className="text-xs text-stone-400 mt-1">Active workshop seamstresses, master cutters, senior stitchers, and craft apprentices.</p>
-              </div>
-
-              {/* Quick stats panel */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 shrink-0">
-                <div className={`p-2.5 px-4 rounded-xl border text-center ${isDarkMode ? 'bg-slate-900/40 border-slate-900' : 'bg-[#fffcf8] border-stone-200'}`}>
-                  <div className="text-[10px] uppercase font-bold text-stone-400">Total Tailors</div>
-                  <div className="text-sm font-extrabold text-[#aa8612]">{workers.length}</div>
-                </div>
-                <div className={`p-2.5 px-4 rounded-xl border text-center ${isDarkMode ? 'bg-slate-900/40 border-slate-900' : 'bg-[#fffcf8] border-stone-200'}`}>
-                  <div className="text-[10px] uppercase font-bold text-stone-400">Payroll Base</div>
-                  <div className="text-sm font-extrabold text-amber-600">₹{workers.reduce((acc, w) => acc + (w.baseSalary || 0), 0)}</div>
-                </div>
-                <div className={`p-2.5 px-4 rounded-xl border text-center ${isDarkMode ? 'bg-slate-900/40 border-slate-900' : 'bg-[#fffcf8] border-stone-200'}`}>
-                  <div className="text-[10px] uppercase font-bold text-stone-400">Average Rate</div>
-                  <div className="text-sm font-extrabold text-sky-600">₹{Math.round(workers.reduce((acc, w) => acc + (init => init.perOrderBonus || 15)(w), 0) / (workers.length || 1))}/piece</div>
-                </div>
-                <div className={`p-2.5 px-4 rounded-xl border text-center ${isDarkMode ? 'bg-slate-900/40 border-slate-900' : 'bg-[#fffcf8] border-stone-200'}`}>
-                  <div className="text-[10px] uppercase font-bold text-stone-400">Avg Skill Rating</div>
-                  <div className="text-sm font-extrabold text-emerald-600">{(workers.reduce((acc, w) => acc + (w.rating || 5), 0) / (workers.length || 1)).toFixed(1)}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Active Directory with filter (Full width layout) */}
-            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'} space-y-4`}>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 border-b dark:border-slate-850 gap-2">
-                <div>
-                  <h3 className="font-extrabold text-sm text-stone-800 dark:text-stone-200 uppercase font-mono tracking-wider">
-                    Workshop Stylist &amp; Stitcher Roster
-                  </h3>
-                  <p className="text-[11px] text-stone-400 mt-0.5">Explore active profiles, assigned workspace stations, rating reviews, and specialized skills.</p>
-                </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <input
-                    type="text"
-                    placeholder="Search tailors by name..."
-                    value={adminUsersSearch}
-                    onChange={(e) => setAdminUsersSearch(e.target.value)}
-                    className={`p-2 px-3 rounded-lg text-xs leading-none border focus:outline-none focus:ring-1 focus:ring-amber-500 w-full sm:w-[200px] ${
-                      isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                    }`}
-                  />
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-stone-105 dark:border-slate-800 text-stone-400 font-extrabold uppercase text-[9px] tracking-wider">
-                      <th className="pb-2 text-left">Tailor Artist / Seamstress</th>
-                      <th className="pb-2 text-left">Specialty Station Role</th>
-                      <th className="pb-2 text-left">Guaranteed Base / Commission</th>
-                      <th className="pb-2 text-left">Rating &amp; Workload</th>
-                      <th className="pb-2 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-100 dark:divide-slate-850">
-                    {workers
-                      .filter(w => w.name.toLowerCase().includes(adminUsersSearch.toLowerCase()))
-                      .map((worker: Worker) => {
-                        const isEditing = editingWorkerId === worker.id;
-
-                        return (
-                          <tr key={worker.id} className="hover:bg-amber-500/5 transition">
-                            <td className="py-3.5 font-semibold">
-                              <div className="flex items-center space-x-3">
-                                <img src={worker.avatar} alt={worker.name} className="w-9 h-9 rounded-lg object-cover ring-2 ring-stone-200/55 shadow-3xs shrink-0 bg-stone-100" referrerPolicy="no-referrer" />
-                                <div className="leading-snug">
-                                  <div className="text-stone-900 dark:text-white font-extrabold text-sm">{worker.name}</div>
-                                  <div className="text-[10px] text-stone-400">ID PIN: <span className="font-mono font-bold">{worker.id}</span></div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-3.5">
-                              {isEditing ? (
-                                <select
-                                  value={editingWorkerRoleState}
-                                  onChange={(e) => setEditingWorkerRoleState(e.target.value as any)}
-                                  className={`p-1.5 text-[10px] font-bold rounded border cursor-pointer ${
-                                    isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-250 text-stone-800'
-                                  }`}
-                                >
-                                  <option value="Master Cutter">Master Cutter</option>
-                                  <option value="Senior Stitcher">Senior Stitcher</option>
-                                  <option value="Finisher & Ironer">Finisher &amp; Ironer</option>
-                                  <option value="Apprentice">Apprentice</option>
-                                </select>
-                              ) : (
-                                <span className="px-2.5 py-0.5 rounded-full text-[9px] uppercase tracking-wide font-black border bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-400/20 font-mono">
-                                  {worker.role}
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-3.5">
-                              {isEditing ? (
-                                <div className="space-y-1.5 max-w-[120px]">
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[9px] text-stone-400 font-bold">Base:</span>
-                                    <input
-                                      type="number"
-                                      value={editingWorkerSalary}
-                                      onChange={(e) => setEditingWorkerSalary(parseInt(e.target.value) || 0)}
-                                      className={`w-full p-0.5 px-1.5 text-[10.5px] rounded border font-mono ${
-                                        isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-200'
-                                      }`}
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[9px] text-stone-400 font-bold">Piece:</span>
-                                    <input
-                                      type="number"
-                                      value={editingWorkerBonus}
-                                      onChange={(e) => setEditingWorkerBonus(parseInt(e.target.value) || 0)}
-                                      className={`w-full p-0.5 px-1.5 text-[10.5px] rounded border font-mono ${
-                                        isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-200'
-                                      }`}
-                                    />
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="leading-snug font-mono">
-                                  <div className="text-stone-850 dark:text-stone-200 font-extrabold text-xs">₹{worker.baseSalary || 1500}/mo</div>
-                                  <div className="text-[10px] text-stone-400">+₹{worker.perOrderBonus || 15}/completed piece</div>
-                                </div>
-                              )}
-                            </td>
-                            <td className="py-3.5 font-mono text-stone-500">
-                              <div className="text-xs font-bold text-stone-700 dark:text-stone-300 flex items-center gap-1">
-                                <span>{worker.rating || 5.0} / 5.0</span>
-                              </div>
-                              <div className="text-[10px] text-stone-400">Continuous Duty</div>
-                            </td>
-                            <td className="py-3.5 text-right">
-                              <div className="flex justify-end gap-1.5">
-                                {isEditing ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const updated = workers.map(w => {
-                                          if (w.id === worker.id) {
-                                            return {
-                                              ...w,
-                                              role: editingWorkerRoleState,
-                                              baseSalary: editingWorkerSalary,
-                                              perOrderBonus: editingWorkerBonus
-                                            };
-                                          }
-                                          return w;
-                                        });
-                                        setWorkers(updated);
-                                        setEditingWorkerId(null);
-                                        triggerToast(`Updated parameters for Tailor [${worker.name}]!`, 'success');
-                                      }}
-                                      className="p-1 px-2 text-[10px] font-bold bg-emerald-500 text-white rounded hover:bg-emerald-600 cursor-pointer"
-                                    >
-                                      Save
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingWorkerId(null)}
-                                      className="p-1 px-2 text-[10px] font-semibold bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 text-stone-500 rounded cursor-pointer"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditingWorkerId(worker.id);
-                                        setEditingWorkerSalary(worker.baseSalary || 1500);
-                                        setEditingWorkerBonus(worker.perOrderBonus || 15);
-                                        setEditingWorkerRoleState(worker.role);
-                                      }}
-                                      className="p-1.5 px-3 text-[10px] font-semibold bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 text-stone-600 dark:text-stone-300 rounded-lg cursor-pointer"
-                                    >
-                                      Configure
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const updated = workers.filter(w => w.id !== worker.id);
-                                        setWorkers(updated);
-                                        triggerToast(`Tailor [${worker.name}] removed from register!`, 'info');
-                                      }}
-                                      className="p-1.5 px-2.5 text-[10px] font-bold bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white rounded-lg transition cursor-pointer"
-                                    >
-                                      Dismiss
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        ) : tailorPage === 'users' ? (
-          /* ==========================================
-             Central show staff and tailors directory view
-             ========================================== */
-          <div className="space-y-6 fade-in font-sans">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-stone-200 dark:border-slate-800 gap-4">
-              <div>
-                <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                  <span className="p-2 bg-amber-500/10 text-amber-600 rounded-lg"><Users className="h-5 w-5" /></span>
-                  <span>STAFFS tailorshop ERP</span>
-                </h2>
-                <p className="text-xs text-stone-400 mt-1">Central catalog of active operators, seamstresses, master cutters, and registered workshop staff.</p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center w-full lg:w-auto shrink-0">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-                  <input
-                    type="text"
-                    placeholder="Search staff name or role..."
-                    value={adminUsersSearch}
-                    onChange={(e) => setAdminUsersSearch(e.target.value)}
-                    className={`pl-9 pr-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 w-full sm:w-[220px] ${
-                      isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                    }`}
-                  />
-                </div>
-
-                <select
-                  value={adminUsersRoleFilter === 'Client' ? 'All' : adminUsersRoleFilter}
-                  onChange={(e) => setAdminUsersRoleFilter(e.target.value)}
-                  className={`p-2 py-1.5 px-3 border text-xs rounded-xl focus:outline-none font-medium cursor-pointer ${
-                    isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                  }`}
-                >
-                  <option value="All">All Registered Staff</option>
-                  <option value="Operator">Atelier Operators (Owner/Manager)</option>
-                  <option value="Worker">Workshop Seamstresses / Tailors</option>
-                </select>
-              </div>
-            </div>
-
-            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-stone-105 dark:border-slate-800 text-stone-400 font-extrabold uppercase text-[10px] tracking-wider">
-                      <th className="pb-3 text-left">Patron Identity / Member Name</th>
-                      <th className="pb-3 text-left">Registered Coordinates</th>
-                      <th className="pb-3 text-left">Workspace Title / Assigned Desk</th>
-                      <th className="pb-3 text-center">Atelier Role Context</th>
-                      <th className="pb-3 text-right">Identifier PIN</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-100 dark:divide-slate-805">
-                    {(() => {
-                      const combined = [
-                        ...tailorOperators.map(o => ({
-                          id: o.id || 'N/A',
-                          name: o.name,
-                          email: o.email,
-                          phone: o.phone || 'N/A',
-                          desk: o.location || 'Central Desk',
-                          subTitle: 'Central HQ Seat',
-                          roleColor: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-400/20',
-                          roleLabel: 'Atelier Operator',
-                          roleCategory: 'Operator',
-                          avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(o.name)}`
-                        })),
-                        ...workers.map(w => ({
-                          id: w.id || 'N/A',
-                          name: w.name,
-                          email: `${w.name.toLowerCase().replace(/\s+/g, '')}@atelier.com`,
-                          phone: w.phone || 'N/A',
-                          desk: w.role || 'Workshop Floor',
-                          subTitle: 'Atelier Craft floor',
-                          roleColor: 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-400/20',
-                          roleLabel: 'Workshop Stitcher / Seamster',
-                          roleCategory: 'Worker',
-                          avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(w.name)}`
-                        }))
-                      ];
-
-                      const matched = combined.filter(u => {
-                        if (adminUsersRoleFilter !== 'All' && adminUsersRoleFilter !== 'Client' && u.roleCategory !== adminUsersRoleFilter) return false;
-
-                        const query = adminUsersSearch.toLowerCase().trim();
-                        if (!query) return true;
-
-                        return (
-                          u.name.toLowerCase().includes(query) ||
-                          u.email.toLowerCase().includes(query) ||
-                          u.phone.toLowerCase().includes(query) ||
-                          u.id.toLowerCase().includes(query) ||
-                          u.desk.toLowerCase().includes(query)
-                        );
-                      });
-
-                      if (matched.length === 0) {
-                        return (
-                          <tr>
-                            <td colSpan={5} className="py-12 text-center text-stone-400 italic">
-                              No matching atelier staff members found in the staff database. Try editing your search query.
-                            </td>
-                          </tr>
-                        );
-                      }
-
-                      return matched.map((user, idx) => {
-                        const emailMatchesPfp = user.email && user.email.includes('@') && !user.email.endsWith('@atelier.com');
-
-                        return (
-                          <tr key={`${user.id}-${idx}`} className="hover:bg-amber-500/5 transition">
-                            <td className="py-3 font-semibold">
-                              <div className="flex items-center space-x-3">
-                                {emailMatchesPfp ? (
-                                  <img
-                                    src={`https://unavatar.io/google/${user.email.trim().toLowerCase()}?fallback=${encodeURIComponent(user.avatar)}`}
-                                    alt={user.name}
-                                    referrerPolicy="no-referrer"
-                                    className="w-10 h-10 rounded-xl object-cover ring-2 ring-stone-200 shadow-3xs"
-                                    onError={(e) => {
-                                      e.currentTarget.src = user.avatar;
-                                    }}
-                                  />
-                                ) : (
-                                  <img
-                                    src={user.avatar}
-                                    alt={user.name}
-                                    referrerPolicy="no-referrer"
-                                    className="w-10 h-10 rounded-xl object-cover ring-2 ring-stone-200 shadow-3xs"
-                                  />
-                                )}
-                                <div className="leading-snug">
-                                  <div className="text-stone-900 dark:text-white font-extrabold text-sm">{user.name}</div>
-                                  <div className="text-[10px] text-stone-400">{user.subTitle}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-3 font-semibold">
-                              <div className="leading-tight">
-                                <div className="font-mono text-stone-500 dark:text-stone-300">{user.email}</div>
-                                <div className="text-[10px] text-stone-400">{user.phone}</div>
-                              </div>
-                            </td>
-                            <td className="py-3 font-extrabold text-stone-700 dark:text-stone-300">
-                              <span>Seat: {user.desk}</span>
-                            </td>
-                            <td className="py-3 text-center">
-                              <span className={`px-2.5 py-1 rounded-full text-[9px] uppercase tracking-wide font-black border ${user.roleColor}`}>
-                                {user.roleLabel}
-                              </span>
-                            </td>
-                            <td className="py-3 text-right font-mono text-stone-400">
-                              <span>#{user.id}</span>
-                            </td>
-                          </tr>
-                        );
-                      });
-
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-          </div>
-        ) : tailorPage === 'customers' ? (
-          /* ==========================================
-             Central show customers directory view only
-             ========================================== */
-          <div className="space-y-6 fade-in font-sans">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-stone-200 dark:border-slate-800 gap-4">
-              <div>
-                <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                  <span className="p-2 bg-emerald-500/10 text-emerald-600 rounded-lg"><User className="h-5 w-5" /></span>
-                  <span>Customer Patrons Directory</span>
-                </h2>
-                <p className="text-xs text-stone-400 mt-1">Central catalog of active registered client patrons, guests, and boutique customers.</p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center w-full lg:w-auto shrink-0">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-                  <input
-                    type="text"
-                    placeholder="Search customers name or email..."
-                    value={adminUsersSearch}
-                    onChange={(e) => setAdminUsersSearch(e.target.value)}
-                    className={`pl-9 pr-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 w-full sm:w-[220px] ${
-                      isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                    }`}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-stone-105 dark:border-slate-800 text-stone-400 font-extrabold uppercase text-[10px] tracking-wider">
-                      <th className="pb-3 text-left">Patron Identity / Member Name</th>
-                      <th className="pb-3 text-left">Registered Coordinates</th>
-                      <th className="pb-3 text-left">Workspace Title / Assigned Desk</th>
-                      <th className="pb-3 text-center">Atelier Role Context</th>
-                      <th className="pb-3 text-right">Identifier PIN</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-100 dark:divide-slate-805">
-                    {(() => {
-                      const combined = customers.map(c => ({
-                        id: c.id || 'N/A',
-                        name: c.name,
-                        email: c.email || 'No email registered',
-                        phone: c.phone || 'No phone registered',
-                        desk: c.location || 'Central Pool',
-                        subTitle: 'Client patron / Guest',
-                        roleColor: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-400/20',
-                        roleLabel: 'Client Patron',
-                        roleCategory: 'Client',
-                        avatar: c.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(c.name)}`
-                      }));
-
-                      const matched = combined.filter(u => {
-                        const query = adminUsersSearch.toLowerCase().trim();
-                        if (!query) return true;
-
-                        return (
-                          u.name.toLowerCase().includes(query) ||
-                          u.email.toLowerCase().includes(query) ||
-                          u.phone.toLowerCase().includes(query) ||
-                          u.id.toLowerCase().includes(query) ||
-                          u.desk.toLowerCase().includes(query)
-                        );
-                      });
-
-                      if (matched.length === 0) {
-                        return (
-                          <tr>
-                            <td colSpan={5} className="py-12 text-center text-stone-400 italic">
-                              No matching client patrons found in the directory. Create a new sizing session or order to enroll clients!
-                            </td>
-                          </tr>
-                        );
-                      }
-
-                      return matched.map((user, idx) => {
-                        const emailMatchesPfp = user.email && user.email.includes('@');
-
-                        return (
-                          <tr key={`${user.id}-${idx}`} className="hover:bg-amber-500/5 transition">
-                            <td className="py-3 font-semibold">
-                              <div className="flex items-center space-x-3">
-                                {emailMatchesPfp ? (
-                                  <img
-                                    src={`https://unavatar.io/google/${user.email.trim().toLowerCase()}?fallback=${encodeURIComponent(user.avatar)}`}
-                                    alt={user.name}
-                                    referrerPolicy="no-referrer"
-                                    className="w-10 h-10 rounded-xl object-cover ring-2 ring-stone-200 shadow-3xs"
-                                    onError={(e) => {
-                                      e.currentTarget.src = user.avatar;
-                                    }}
-                                  />
-                                ) : (
-                                  <img
-                                    src={user.avatar}
-                                    alt={user.name}
-                                    referrerPolicy="no-referrer"
-                                    className="w-10 h-10 rounded-xl object-cover ring-2 ring-stone-200 shadow-3xs"
-                                  />
-                                )}
-                                <div className="leading-snug">
-                                  <div className="text-stone-900 dark:text-white font-extrabold text-sm">{user.name}</div>
-                                  <div className="text-[10px] text-stone-400">{user.subTitle}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-3 font-semibold">
-                              <div className="leading-tight">
-                                <div className="font-mono text-stone-500 dark:text-stone-300">{user.email}</div>
-                                <div className="text-[10px] text-stone-400">{user.phone}</div>
-                              </div>
-                            </td>
-                            <td className="py-3 font-extrabold text-stone-700 dark:text-stone-300">
-                              <span>Seat: {user.desk}</span>
-                            </td>
-                            <td className="py-3 text-center">
-                              <span className={`px-2.5 py-1 rounded-full text-[9px] uppercase tracking-wide font-black border ${user.roleColor}`}>
-                                {user.roleLabel}
-                              </span>
-                            </td>
-                            <td className="py-3 text-right font-mono text-stone-400">
-                              <span>#{user.id}</span>
-                            </td>
-                          </tr>
-                        );
-                      });
-
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-          </div>
+          </section>
         ) : (
           /* Settings Page Section */
           <div className="space-y-6 fade-in font-sans">
-            {/* Elegant Nested Sub-navigation Switcher */}
-            <div className="flex border-b border-stone-200 dark:border-slate-800 gap-6 pb-1">
-              <button
-                type="button"
-                onClick={() => setSettingsSubTab('blueprint')}
-                className={`pb-3 text-xs font-bold tracking-wide border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
-                  settingsSubTab === 'blueprint'
-                    ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500 font-extrabold'
-                    : 'border-transparent text-stone-400 hover:text-stone-700 dark:hover:text-stone-200'
-                }`}
-              >
-                <Settings className="h-4 w-4" />
-                <span>Garment Blueprint &amp; Pricing</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSettingsSubTab('branding')}
-                className={`pb-3 text-xs font-bold tracking-wide border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
-                  settingsSubTab === 'branding'
-                    ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500 font-extrabold'
-                    : 'border-transparent text-stone-400 hover:text-stone-700 dark:hover:text-stone-200'
-                }`}
-              >
-                <Pencil className="h-4 w-4 text-amber-550" />
-                <span>Branding &amp; Customization</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSettingsSubTab('users')}
-                className={`pb-3 text-xs font-bold tracking-wide border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
-                  settingsSubTab === 'users'
-                    ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500 font-extrabold'
-                    : 'border-transparent text-stone-400 hover:text-stone-700 dark:hover:text-stone-200'
-                }`}
-              >
-                <Users className="h-4 w-4 text-emerald-500" />
-                <span>User &amp; Patron Directory</span>
-              </button>
-            </div>
-
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-slate-800 pb-4">
               <div>
                 <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
@@ -6209,14 +5389,26 @@ export default function App() {
                 </h2>
                 <p className="text-xs text-stone-400 mt-1">Configure personalized garment templates, pricing, default measurements and workshop properties.</p>
               </div>
-              <button
-                type="button"
-                onClick={handleResetAtelierConfig}
-                className="px-3.5 py-1.5 border border-stone-300 dark:border-slate-700 bg-transparent hover:bg-red-500/10 text-stone-600 hover:text-red-750 dark:text-stone-300 dark:hover:text-red-400 rounded-xl text-xs font-bold transition duration-155 flex items-center space-x-1.5 cursor-pointer shadow-3xs"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                <span>Restore Factory Defaults</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetAtelierConfig}
+                  className="px-3.5 py-1.5 border border-stone-300 dark:border-slate-700 bg-transparent hover:bg-yellow-500/10 text-stone-600 hover:text-yellow-700 dark:text-stone-300 dark:hover:text-yellow-400 rounded-xl text-xs font-bold transition duration-155 flex items-center space-x-1.5 cursor-pointer shadow-3xs"
+                  title="Reset Categories and Templates"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  <span>Restore Factory Defaults</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePurgeAllDatabase}
+                  className="px-3.5 py-1.5 border border-rose-350 dark:border-rose-900 bg-transparent hover:bg-rose-500/10 text-stone-600 hover:text-rose-700 dark:text-stone-300 dark:hover:text-rose-450 rounded-xl text-xs font-bold transition duration-155 flex items-center space-x-1.5 cursor-pointer shadow-3xs"
+                  title="Purge all customer list and order database"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Purge Database (Clean Slate)</span>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -6265,6 +5457,133 @@ export default function App() {
                             </button>
                           );
                         })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Brand Customization & White-Label Panel */}
+                <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-4 flex items-center gap-1.5">
+                    <Settings className="h-4 w-4" />
+                    <span>White-Label &amp; Landing Config</span>
+                  </h3>
+                  
+                  <div className="space-y-4 text-left">
+                    <div>
+                      <label className="text-[10px] font-extrabold text-stone-440 dark:text-stone-300 uppercase tracking-wider block mb-1">Brand Logo Image URL</label>
+                      <input
+                        type="text"
+                        value={customLogoUrl}
+                        onChange={(e) => setCustomLogoUrl(e.target.value)}
+                        placeholder="Paste image URL (e.g. https://...)"
+                        className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-250 text-stone-800 shadow-3xs'
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-extrabold text-stone-440 dark:text-stone-300 uppercase tracking-wider block mb-1">Landing Title</label>
+                      <input
+                        type="text"
+                        value={customLandingTitle}
+                        onChange={(e) => setCustomLandingTitle(e.target.value)}
+                        placeholder="e.g. Welcome to Sartorial Atelier"
+                        className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-250'
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-extrabold text-stone-440 dark:text-stone-300 uppercase tracking-wider block mb-1">Landing Sub-Description</label>
+                      <textarea
+                        value={customLandingDescription}
+                        onChange={(e) => setCustomLandingDescription(e.target.value)}
+                        rows={3}
+                        placeholder="Brief overview description..."
+                        className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-250'
+                        }`}
+                      />
+                    </div>
+
+                    <div className="border-t border-dashed border-stone-200 dark:border-slate-800 my-4 pt-3">
+                      <span className="text-[10.5px] font-extrabold text-amber-600 dark:text-amber-500 uppercase tracking-wider block mb-3 leading-none">Tailor Card Customization</span>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-[9px] font-bold text-stone-500 block mb-1">Card Display Name</label>
+                          <input
+                            type="text"
+                            value={customTailorTitle}
+                            onChange={(e) => setCustomTailorTitle(e.target.value)}
+                            className={`w-full p-2 rounded-lg border text-xs ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
+                            }`}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-stone-500 block mb-1">Card Subtitle Description</label>
+                          <textarea
+                            value={customTailorDescription}
+                            onChange={(e) => setCustomTailorDescription(e.target.value)}
+                            rows={2}
+                            className={`w-full p-2 rounded-lg border text-xs ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
+                            }`}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-stone-500 block mb-1">Background Image URL</label>
+                          <input
+                            type="text"
+                            value={customTailorImage}
+                            onChange={(e) => setCustomTailorImage(e.target.value)}
+                            className={`w-full p-2 rounded-lg border text-xs ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
+                            }`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-dashed border-stone-200 dark:border-slate-800 my-4 pt-3">
+                      <span className="text-[10.5px] font-extrabold text-amber-600 dark:text-amber-500 uppercase tracking-wider block mb-3 leading-none">Customer Card Customization</span>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-[9px] font-bold text-stone-500 block mb-1">Card Display Name</label>
+                          <input
+                            type="text"
+                            value={customCustomerTitle}
+                            onChange={(e) => setCustomCustomerTitle(e.target.value)}
+                            className={`w-full p-2 rounded-lg border text-xs ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
+                            }`}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-stone-500 block mb-1">Card Subtitle Description</label>
+                          <textarea
+                            value={customCustomerDescription}
+                            onChange={(e) => setCustomCustomerDescription(e.target.value)}
+                            rows={2}
+                            className={`w-full p-2 rounded-lg border text-xs ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
+                            }`}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-stone-500 block mb-1">Background Image URL</label>
+                          <input
+                            type="text"
+                            value={customCustomerImage}
+                            onChange={(e) => setCustomCustomerImage(e.target.value)}
+                            className={`w-full p-2 rounded-lg border text-xs ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
+                            }`}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -6652,10 +5971,10 @@ export default function App() {
 
                 {/* 2-column Information Block */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  {/* Patron particulars card */}
+                  {/* Customer particulars card */}
                   <div className={`p-4 rounded-xl border relative ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-stone-50 border-stone-150'}`}>
                     <div className="flex justify-between items-center mb-2">
-                      <h4 className="font-mono font-extrabold text-[10px] uppercase tracking-wider text-amber-500">Patron Particulars</h4>
+                       <h4 className="font-mono font-extrabold text-[10px] uppercase tracking-wider text-amber-500">Customer Particulars</h4>
                       {customer && (
                         isEditingCustomer ? (
                           <div className="flex space-x-1 z-10">
@@ -6996,7 +6315,7 @@ export default function App() {
                       rel="noopener noreferrer"
                       className="p-2 px-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 cursor-pointer transition"
                     >
-                      <WhatsAppIcon className="h-4 w-4" />
+                      <MessageSquare className="h-4 w-4" />
                       <span>WhatsApp</span>
                     </a>
 

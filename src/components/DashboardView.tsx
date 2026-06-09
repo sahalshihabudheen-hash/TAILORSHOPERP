@@ -76,7 +76,7 @@ export default function DashboardView({
           : 'bg-gradient-to-tr from-stone-900 to-amber-950 border-stone-850 text-white shadow-xl'
       }`}>
         <div className="space-y-1">
-          <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-amber-400 block">Sartorial Atelier</span>
+          <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-amber-400 block">tailorSHOP ERP</span>
           <h2 className="font-serif text-2.5xl font-bold tracking-tight">Owner Dashboard Overview</h2>
           <p className="text-stone-300 text-xs max-w-lg">
             Manage your fine tailoring workshops, track measurements, and generate bespoke delivery packages cleanly.

@@ -165,13 +165,15 @@ export default function CustomerManagementView({
             <h3 className="font-serif text-lg font-bold">Clients Registry</h3>
             <p className="text-[11px] text-stone-400">Total {filteredCustomers.length} bespoke profiles</p>
           </div>
-          <button
-            onClick={handleOpenAddModal}
-            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 transition-all font-semibold text-xs rounded-xl text-white flex items-center space-x-1"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>Add Client</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleOpenAddModal}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 transition-all font-semibold text-xs rounded-xl text-white flex items-center space-x-1"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Add Client</span>
+            </button>
+          </div>
         </div>
 
         {/* Search */}

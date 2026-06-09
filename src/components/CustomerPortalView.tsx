@@ -44,7 +44,7 @@ export default function CustomerPortalView({
   isDarkMode,
   onNavigateToTab
 }: CustomerPortalProps) {
-  const [usernameInput, setUsernameInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [activePortalCustomer, setActivePortalCustomer] = useState<Customer | null>(null);
 
@@ -55,54 +55,22 @@ export default function CustomerPortalView({
 
   const handlePortalLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!usernameInput.trim() || !passwordInput.trim()) {
+    if (!emailInput.trim() || !passwordInput.trim()) {
       alert('Password credentials required.');
       return;
     }
 
-    const cleanInput = usernameInput.trim();
-    const normalizedInputDigits = cleanInput.replace(/\D/g, '');
-
-    // Finding customer matching email (case-insensitive) or phone number (digits matching)
-    const match = customers.find((c) => {
-      // 1. Match Email
-      if (c.email.toLowerCase().trim() === cleanInput.toLowerCase()) {
-        return true;
-      }
-      
-      // 2. Match Phone / WhatsApp
-      const normalizedCustomerPhone = c.phone.replace(/\D/g, '');
-      const normalizedCustomerWhatsApp = c.whatsapp.replace(/\D/g, '');
-      
-      if (normalizedInputDigits && normalizedInputDigits.length >= 7) {
-        if (normalizedCustomerPhone.endsWith(normalizedInputDigits) || normalizedInputDigits.endsWith(normalizedCustomerPhone)) {
-          return true;
-        }
-        if (normalizedCustomerWhatsApp.endsWith(normalizedInputDigits) || normalizedInputDigits.endsWith(normalizedCustomerWhatsApp)) {
-          return true;
-        }
-      }
-      
-      // Fallback: Exact/trimmed phone match
-      if (c.phone.trim() === cleanInput || c.whatsapp.trim() === cleanInput) {
-        return true;
-      }
-
-      return false;
-    });
-
+    // Try finding customer matching email
+    const match = customers.find((c) => c.email.toLowerCase().trim() === emailInput.toLowerCase().trim());
     if (!match) {
-      alert('Wrong credentials. No customer found matching this email or phone number.');
+      alert('Wrong email credentials. Please check with your workshop tailor to ensure your customer email is registered.');
       return;
     }
 
-    // Use default first login pass as customer Unique ID (match.id) if not changed,
-    // and also accept the raw customer ID (match.id) directly
+    // Use default first login pass as customer Unique ID if not changed
     const effectivePass = match.password || match.id;
-    const isPasswordValid = passwordInput.trim() === effectivePass || passwordInput.trim() === match.id;
-
-    if (!isPasswordValid) {
-      alert(`Wrong password. Try entering your Unique Customer ID (e.g. ${match.id}) to access.`);
+    if (passwordInput !== effectivePass) {
+      alert(`Wrong password. Try entering ${effectivePass} to access.`);
       return;
     }
 
@@ -140,7 +108,7 @@ export default function CustomerPortalView({
 
   const handlePortalLogout = () => {
     setActivePortalCustomer(null);
-    setUsernameInput('');
+    setEmailInput('');
     setPasswordInput('');
     setIsForcedResetCodeOpen(false);
     setNewPassword('');
@@ -342,25 +310,19 @@ export default function CustomerPortalView({
           <p className="text-stone-400 leading-tight">Enter credentials to track active commissions, deliveries, sizing ledgers, and download billing invoices.</p>
         </div>
 
-        {/* Demo Credentials Helper banner */}
-        <div className="p-3 bg-amber-500/10 border border-amber-200/40 rounded-xl text-[10px] text-amber-600 dark:text-amber-400 leading-tight space-y-1.5 mb-4 font-mono font-medium">
-          <p className="font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">💡 Testing options (Email or Phone + Unique ID):</p>
-          <p>• <strong>Sarah:</strong> <span className="opacity-90">sarah.r@example.com</span> or <span className="opacity-90">+1 (555) 234-5678</span> (Unique ID: <strong className="text-amber-700 dark:text-amber-300">CUST-101</strong>)</p>
-          <p>• <strong>Michael (Reset):</strong> <span className="opacity-90">m.chen@example.com</span> or <span className="opacity-90">+1 (555) 987-6543</span> (Unique ID: <strong className="text-amber-700 dark:text-amber-300">CUST-102</strong>)</p>
-          <p className="text-[9px] text-stone-500 dark:text-stone-400 mt-1 italic">Password is the Unique Customer ID assigned by the tailor.</p>
-        </div>
+
 
         <form onSubmit={handlePortalLoginSubmit} className="space-y-4">
           <div>
-            <label className="block text-stone-400 font-semibold mb-1">Email or Phone Number *</label>
+            <label className="block text-stone-400 font-semibold mb-1">Email username *</label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-stone-400" />
               <input
-                type="text"
+                type="email"
                 required
-                placeholder="email@example.com or +1 (555) 000-0000"
-                value={usernameInput}
-                onChange={(e) => setUsernameInput(e.target.value)}
+                placeholder="name@domain.com"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 border rounded-xl dark:bg-slate-800 focus:outline-none"
               />
             </div>
@@ -368,20 +330,20 @@ export default function CustomerPortalView({
 
           <div>
             <label className="block text-stone-200 font-semibold mb-1">
-              <span className="text-stone-400 font-semibold text-xs">Password (Unique Customer ID) *</span>
+              <span className="text-stone-400 font-semibold text-xs">Password key *</span>
             </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-stone-400" />
               <input
                 type="password"
                 required
-                placeholder="e.g. CUST-101"
+                placeholder="••••••"
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 border rounded-xl dark:bg-slate-800 focus:outline-none"
               />
             </div>
-            <p className="text-[9.5px] text-stone-400 mt-1">Please enter your Unique Customer ID given by the tailor.</p>
+            <p className="text-[9.5px] text-stone-400 mt-1">If this is your first entry, enter your Unique Customer ID.</p>
           </div>
 
           <button

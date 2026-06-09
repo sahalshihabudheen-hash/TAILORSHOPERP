@@ -7,9 +7,8 @@ import {
   INITIAL_NOTIFICATIONS,
   INITIAL_ACTIVITIES
 } from '../data/initialData';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDocs, collection, deleteDoc } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
 const KEYS = {
   CUSTOMERS: 'tailor_customers',
@@ -20,285 +19,171 @@ const KEYS = {
   ACTIVITIES: 'tailor_activities',
 };
 
-// Initialize Firebase only if the user has completed setup
-let db: any = null;
-const isFirebaseConfigured = firebaseConfig && 
-  firebaseConfig.apiKey && 
-  firebaseConfig.apiKey !== 'place_your_firebase_api_key_here';
+// Generic Sync setup function to sync Firestore collections to LocalStorage securely
+const setupSync = <T extends { id: string }>(
+  collectionName: string,
+  localStorageKey: string,
+  initialData: T[]
+) => {
+  const colRef = collection(db, collectionName);
+  
+  onSnapshot(colRef, (snapshot) => {
+    if (snapshot.empty) {
+      console.log(`Seeding ${collectionName} in Firestore...`);
+      const batch = writeBatch(db);
+      initialData.forEach((item) => {
+        const docRef = doc(db, collectionName, item.id);
+        batch.set(docRef, item);
+      });
+      batch.commit().catch((err) => {
+        console.error(`Failed to seed ${collectionName}:`, err);
+      });
 
-if (isFirebaseConfigured) {
-  try {
-    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    db = getFirestore(app);
-  } catch (error) {
-    console.error("Firebase Initialization Error:", error);
-  }
+      const prev = localStorage.getItem(localStorageKey);
+      const str = JSON.stringify(initialData);
+      if (prev !== str) {
+        localStorage.setItem(localStorageKey, str);
+        window.dispatchEvent(new CustomEvent('db-sync-update'));
+      }
+    } else {
+      const items: T[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as T;
+        const custId = data.id;
+        const customerId = (data as any).customerId;
+        const email = (data as any).email;
+        const customerEmail = (data as any).customerEmail;
+
+        const isFake = 
+          ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(custId) ||
+          ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(customerId) ||
+          (typeof email === 'string' && email.toLowerCase().includes('@example.com')) ||
+          (typeof customerEmail === 'string' && customerEmail.toLowerCase().includes('@example.com'));
+
+        if (isFake) {
+          deleteDoc(doc(db, collectionName, docSnap.id)).catch((err) => {
+            console.error(`Failed to delete fake record ${docSnap.id} from ${collectionName}:`, err);
+          });
+        } else {
+          items.push(data);
+        }
+      });
+
+      const prev = localStorage.getItem(localStorageKey);
+      const str = JSON.stringify(items);
+      if (prev !== str) {
+        localStorage.setItem(localStorageKey, str);
+        window.dispatchEvent(new CustomEvent('db-sync-update'));
+      }
+    }
+  }, (err) => {
+    console.error(`Error in onSnapshot for ${collectionName}:`, err);
+    try {
+      handleFirestoreError(err, OperationType.LIST, collectionName);
+    } catch (e) {
+      // Keep running and maintain state propagation/logging
+    }
+  });
+};
+
+// Start the real-time syncing client-side
+if (typeof window !== 'undefined') {
+  setupSync('customers', KEYS.CUSTOMERS, INITIAL_CUSTOMERS);
+  setupSync('workers', KEYS.WORKERS, INITIAL_WORKERS);
+  setupSync('measurements', KEYS.MEASUREMENTS, INITIAL_MEASUREMENTS);
+  setupSync('orders', KEYS.ORDERS, INITIAL_ORDERS);
+  setupSync('notifications', KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
+  setupSync('activities', KEYS.ACTIVITIES, INITIAL_ACTIVITIES);
 }
 
-// Low-level sync helpers
-const syncToFirestore = async (collectionName: string, docId: string, data: any) => {
-  if (!db) return;
+// Helper to update elements in Firestore and clean up any deleted items safely
+const syncListToFirestore = async <T extends { id: string }>(
+  collectionName: string,
+  items: T[]
+) => {
+  const ids = new Set(items.map(item => item.id));
+
+  // Write new or updated docs
+  for (const item of items) {
+    try {
+      await setDoc(doc(db, collectionName, item.id), item);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `${collectionName}/${item.id}`);
+    }
+  }
+
+  // Query database in background to clean up deleted records
   try {
-    // Avoid saving undefined fields to firestore
-    const cleanData = JSON.parse(JSON.stringify(data));
-    await setDoc(doc(db, collectionName, docId), cleanData);
+    const colRef = collection(db, collectionName);
+    const snapshot = await getDocs(colRef);
+    snapshot.forEach(async (docSnap) => {
+      if (!ids.has(docSnap.id)) {
+        await deleteDoc(docSnap.ref);
+      }
+    });
   } catch (err) {
-    console.warn(`Firestore sync write error for ${collectionName}/${docId}:`, err);
+    console.error(`Failed to dry-clean deleted documents from Firestore for ${collectionName}:`, err);
   }
 };
 
-const deleteFromFirestore = async (collectionName: string, docId: string) => {
-  if (!db) return;
-  try {
-    await deleteDoc(doc(db, collectionName, docId));
-  } catch (err) {
-    console.warn(`Firestore sync delete error for ${collectionName}/${docId}:`, err);
-  }
-};
-
-export const fetchAllFromFirestore = async () => {
-  if (!db) return;
-  try {
-    // 1. Customers
-    const customersSnap = await getDocs(collection(db, 'customers'));
-    if (!customersSnap.empty) {
-      const list: Customer[] = [];
-      customersSnap.forEach(d => list.push(d.data() as Customer));
-      localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(list));
-    }
-
-    // 2. Workers
-    const workersSnap = await getDocs(collection(db, 'workers'));
-    if (!workersSnap.empty) {
-      const list: Worker[] = [];
-      workersSnap.forEach(d => list.push(d.data() as Worker));
-      localStorage.setItem(KEYS.WORKERS, JSON.stringify(list));
-    }
-
-    // 3. Measurements
-    const measurementsSnap = await getDocs(collection(db, 'measurements'));
-    if (!measurementsSnap.empty) {
-      const list: MeasurementRecord[] = [];
-      measurementsSnap.forEach(d => list.push(d.data() as MeasurementRecord));
-      localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(list));
-    }
-
-    // 4. Orders
-    const ordersSnap = await getDocs(collection(db, 'orders'));
-    if (!ordersSnap.empty) {
-      const list: Order[] = [];
-      ordersSnap.forEach(d => list.push(d.data() as Order));
-      localStorage.setItem(KEYS.ORDERS, JSON.stringify(list));
-    }
-
-    // 5. Notifications
-    const notificationsSnap = await getDocs(collection(db, 'notifications'));
-    if (!notificationsSnap.empty) {
-      const list: NotificationLog[] = [];
-      notificationsSnap.forEach(d => list.push(d.data() as NotificationLog));
-      localStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(list));
-    }
-
-    // 6. Activities
-    const activitiesSnap = await getDocs(collection(db, 'activities'));
-    if (!activitiesSnap.empty) {
-      const list: RecentActivity[] = [];
-      activitiesSnap.forEach(d => list.push(d.data() as RecentActivity));
-      localStorage.setItem(KEYS.ACTIVITIES, JSON.stringify(list));
-    }
-
-    // Notify listeners to update view states
-    window.dispatchEvent(new Event('firestore-sync-completed'));
-  } catch (err) {
-    console.error("Failed to fetch from Firestore:", err);
-  }
-};
-
-// Auto boot async load if connected
-if (isFirebaseConfigured) {
-  fetchAllFromFirestore();
-}
-
-// 1. Customers
 export const getCustomers = (): Customer[] => {
   const data = localStorage.getItem(KEYS.CUSTOMERS);
-  if (!data) {
-    localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(INITIAL_CUSTOMERS));
-    if (db) {
-      INITIAL_CUSTOMERS.forEach(cust => syncToFirestore('customers', cust.id, cust));
-    }
-    return INITIAL_CUSTOMERS;
-  }
-  return JSON.parse(data);
+  return data ? JSON.parse(data) : INITIAL_CUSTOMERS;
 };
 
 export const saveCustomers = (customers: Customer[]) => {
   localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(customers));
-  if (db) {
-    // Save current items
-    customers.forEach(cust => {
-      syncToFirestore('customers', cust.id, cust);
-    });
-    // Async cleanup deleted profiles
-    const localIds = new Set(customers.map(c => c.id));
-    getDocs(collection(db, 'customers')).then(snap => {
-      snap.forEach(docRef => {
-        if (!localIds.has(docRef.id)) {
-          deleteFromFirestore('customers', docRef.id);
-        }
-      });
-    }).catch(err => console.warn(err));
-  }
+  syncListToFirestore('customers', customers);
 };
 
-// 2. Workers
 export const getWorkers = (): Worker[] => {
   const data = localStorage.getItem(KEYS.WORKERS);
-  if (!data) {
-    localStorage.setItem(KEYS.WORKERS, JSON.stringify(INITIAL_WORKERS));
-    if (db) {
-      INITIAL_WORKERS.forEach(w => syncToFirestore('workers', w.id, w));
-    }
-    return INITIAL_WORKERS;
-  }
-  return JSON.parse(data);
+  return data ? JSON.parse(data) : INITIAL_WORKERS;
 };
 
 export const saveWorkers = (workers: Worker[]) => {
   localStorage.setItem(KEYS.WORKERS, JSON.stringify(workers));
-  if (db) {
-    workers.forEach(w => {
-      syncToFirestore('workers', w.id, w);
-    });
-    const localIds = new Set(workers.map(w => w.id));
-    getDocs(collection(db, 'workers')).then(snap => {
-      snap.forEach(docRef => {
-        if (!localIds.has(docRef.id)) {
-          deleteFromFirestore('workers', docRef.id);
-        }
-      });
-    }).catch(err => console.warn(err));
-  }
+  syncListToFirestore('workers', workers);
 };
 
-// 3. Measurements
 export const getMeasurements = (): MeasurementRecord[] => {
   const data = localStorage.getItem(KEYS.MEASUREMENTS);
-  if (!data) {
-    localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(INITIAL_MEASUREMENTS));
-    if (db) {
-      INITIAL_MEASUREMENTS.forEach(m => syncToFirestore('measurements', m.id, m));
-    }
-    return INITIAL_MEASUREMENTS;
-  }
-  return JSON.parse(data);
+  return data ? JSON.parse(data) : INITIAL_MEASUREMENTS;
 };
 
 export const saveMeasurements = (records: MeasurementRecord[]) => {
   localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(records));
-  if (db) {
-    records.forEach(r => {
-      syncToFirestore('measurements', r.id, r);
-    });
-    const localIds = new Set(records.map(r => r.id));
-    getDocs(collection(db, 'measurements')).then(snap => {
-      snap.forEach(docRef => {
-        if (!localIds.has(docRef.id)) {
-          deleteFromFirestore('measurements', docRef.id);
-        }
-      });
-    }).catch(err => console.warn(err));
-  }
+  syncListToFirestore('measurements', records);
 };
 
-// 4. Orders
 export const getOrders = (): Order[] => {
   const data = localStorage.getItem(KEYS.ORDERS);
-  if (!data) {
-    localStorage.setItem(KEYS.ORDERS, JSON.stringify(INITIAL_ORDERS));
-    if (db) {
-      INITIAL_ORDERS.forEach(o => syncToFirestore('orders', o.id, o));
-    }
-    return INITIAL_ORDERS;
-  }
-  return JSON.parse(data);
+  return data ? JSON.parse(data) : INITIAL_ORDERS;
 };
 
 export const saveOrders = (orders: Order[]) => {
   localStorage.setItem(KEYS.ORDERS, JSON.stringify(orders));
-  if (db) {
-    orders.forEach(o => {
-      syncToFirestore('orders', o.id, o);
-    });
-    const localIds = new Set(orders.map(o => o.id));
-    getDocs(collection(db, 'orders')).then(snap => {
-      snap.forEach(docRef => {
-        if (!localIds.has(docRef.id)) {
-          deleteFromFirestore('orders', docRef.id);
-        }
-      });
-    }).catch(err => console.warn(err));
-  }
+  syncListToFirestore('orders', orders);
 };
 
-// 5. Notifications
 export const getNotifications = (): NotificationLog[] => {
   const data = localStorage.getItem(KEYS.NOTIFICATIONS);
-  if (!data) {
-    localStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(INITIAL_NOTIFICATIONS));
-    if (db) {
-      INITIAL_NOTIFICATIONS.forEach(n => syncToFirestore('notifications', n.id, n));
-    }
-    return INITIAL_NOTIFICATIONS;
-  }
-  return JSON.parse(data);
+  return data ? JSON.parse(data) : INITIAL_NOTIFICATIONS;
 };
 
 export const saveNotifications = (logs: NotificationLog[]) => {
   localStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(logs));
-  if (db) {
-    logs.forEach(l => {
-      syncToFirestore('notifications', l.id, l);
-    });
-    const localIds = new Set(logs.map(l => l.id));
-    getDocs(collection(db, 'notifications')).then(snap => {
-      snap.forEach(docRef => {
-        if (!localIds.has(docRef.id)) {
-          deleteFromFirestore('notifications', docRef.id);
-        }
-      });
-    }).catch(err => console.warn(err));
-  }
+  syncListToFirestore('notifications', logs);
 };
 
-// 6. Activities
 export const getActivities = (): RecentActivity[] => {
   const data = localStorage.getItem(KEYS.ACTIVITIES);
-  if (!data) {
-    localStorage.setItem(KEYS.ACTIVITIES, JSON.stringify(INITIAL_ACTIVITIES));
-    if (db) {
-      INITIAL_ACTIVITIES.forEach(a => syncToFirestore('activities', a.id, a));
-    }
-    return INITIAL_ACTIVITIES;
-  }
-  return JSON.parse(data);
+  return data ? JSON.parse(data) : INITIAL_ACTIVITIES;
 };
 
 export const saveActivities = (activities: RecentActivity[]) => {
   localStorage.setItem(KEYS.ACTIVITIES, JSON.stringify(activities));
-  if (db) {
-    activities.forEach(a => {
-      syncToFirestore('activities', a.id, a);
-    });
-    const localIds = new Set(activities.map(a => a.id));
-    getDocs(collection(db, 'activities')).then(snap => {
-      snap.forEach(docRef => {
-        if (!localIds.has(docRef.id)) {
-          deleteFromFirestore('activities', docRef.id);
-        }
-      });
-    }).catch(err => console.warn(err));
-  }
+  syncListToFirestore('activities', activities);
 };
 
 export const addActivity = (action: string, details: string, userRole: string, userName: string) => {
@@ -311,7 +196,8 @@ export const addActivity = (action: string, details: string, userRole: string, u
     userRole: userRole as any,
     userName
   };
-  saveActivities([newItem, ...list]);
+  const updated = [newItem, ...list];
+  saveActivities(updated);
 };
 
 export const triggerSystemNotification = (type: 'WhatsApp' | 'Email', recipient: string, message: string) => {
@@ -324,5 +210,36 @@ export const triggerSystemNotification = (type: 'WhatsApp' | 'Email', recipient:
     timestamp: new Date().toISOString(),
     status: 'Delivered'
   };
-  saveNotifications([newLog, ...list]);
+  const updated = [newLog, ...list];
+  saveNotifications(updated);
 };
+
+export const purgeAllDatabaseRecords = async () => {
+  const collections = ['customers', 'workers', 'measurements', 'orders', 'notifications', 'activities'];
+  const batch = writeBatch(db);
+  for (const colName of collections) {
+    try {
+      const colRef = collection(db, colName);
+      const snapshot = await getDocs(colRef);
+      snapshot.forEach((docSnap) => {
+        batch.delete(docSnap.ref);
+      });
+    } catch (err) {
+      console.error(`Failed to stage purge for ${colName}:`, err);
+    }
+  }
+  try {
+    await batch.commit();
+  } catch (err) {
+    console.error(`Failed to commit purge batch:`, err);
+  }
+
+  // Clear local storage keys
+  Object.values(KEYS).forEach((k) => {
+    localStorage.removeItem(k);
+  });
+
+  // Dispatch custom update
+  window.dispatchEvent(new CustomEvent('db-sync-update'));
+};
+

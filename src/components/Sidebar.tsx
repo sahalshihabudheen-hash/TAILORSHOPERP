@@ -56,8 +56,8 @@ export default function Sidebar({ activeTab, setActiveTab, currentRole, isDarkMo
             <Scissors className="h-5 w-5 animate-pulse" />
           </div>
           <div>
-            <span className="font-serif font-bold text-lg tracking-wider block">Sartorial</span>
-            <span className="text-[10px] uppercase font-semibold tracking-[0.2em] text-amber-500 block">Luxury Tailors</span>
+            <span className="font-serif font-bold text-lg tracking-wider block">tailorSHOP</span>
+            <span className="text-[10px] uppercase font-semibold tracking-[0.2em] text-amber-500 block">ERP SYSTEM</span>
           </div>
         </div>
       </div>
@@ -111,7 +111,7 @@ export default function Sidebar({ activeTab, setActiveTab, currentRole, isDarkMo
       <div className={`p-4 border-t text-center text-[11px] ${
         isDarkMode ? 'border-slate-800 text-stone-500' : 'border-stone-200 text-stone-400'
       }`}>
-        <p className="font-serif italic font-medium">Sartorial CRM v1.4</p>
+        <p className="font-serif italic font-medium">tailorSHOP ERP v1.4</p>
         <p className="font-mono mt-0.5 text-[9px] uppercase tracking-widest text-[var(--color-gold-500)]">EST. 2026</p>
       </div>
     </aside>

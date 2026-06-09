@@ -1,8 +1,126 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // 1. Global safety net - Default Deny Catch-All
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
+    }
+
+    // --- PRIMITIVE & GLOBAL HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      // Allow Google authentication standard verification
+      return isSignedIn() && (
+        request.auth.token.email_verified == true || 
+        request.auth.token.email != null
+      );
+    }
+
+    function isStaff() {
+      return isSignedIn() && (
+        request.auth.token.email.endsWith('@tailorshop.com') ||
+        request.auth.token.email == 'owner@gmail.com' ||
+        request.auth.token.email == 'owner@atelier.com' ||
+        exists(/databases/$(database)/documents/workers/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // --- VALIDATION BLUEPRINTS ---
+
+    function isValidCustomer(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 256
+        && data.phone is string && data.phone.size() <= 64
+        && data.email is string && data.email.size() <= 256;
+    }
+
+    function isValidMeasurement(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.customerId is string && data.customerId.size() <= 128
+        && data.clothingType is string && data.clothingType.size() <= 64
+        && data.date is string && data.date.size() <= 64;
+    }
+
+    function isValidWorker(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 256
+        && data.role is string && data.role.size() <= 128;
+    }
+
+    function isValidOrder(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.customerId is string && data.customerId.size() <= 128
+        && data.clothingType is string && data.clothingType.size() <= 64
+        && data.price is number && data.price >= 0;
+    }
+
+    function isValidNotification(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.recipient is string && data.recipient.size() <= 256
+        && data.message is string && data.message.size() <= 10240;
+    }
+
+    function isValidActivity(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.action is string && data.action.size() <= 256
+        && data.timestamp is string;
+    }
+
+    // --- COLLECTIONS ---
+
+    // Customers collection
+    match /customers/{customerId} {
+      allow read: if true;
+      allow create, update: if isValidCustomer(incoming());
+      allow delete: if true;
+    }
+
+    // Measurements collection
+    match /measurements/{measurementId} {
+      allow read: if true;
+      allow create, update: if isValidMeasurement(incoming());
+      allow delete: if true;
+    }
+
+    // Workers collection
+    match /workers/{workerId} {
+      allow read: if true;
+      allow create, update: if isValidWorker(incoming());
+      allow delete: if true;
+    }
+
+    // Orders collection
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create, update: if isValidOrder(incoming());
+      allow delete: if true;
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read: if true;
+      allow create, update: if isValidNotification(incoming());
+      allow delete: if true;
+    }
+
+    // Activities collection
+    match /activities/{activityId} {
+      allow read: if true;
+      allow create: if isValidActivity(incoming());
+      allow update: if isValidActivity(incoming());
+      allow delete: if false; // Audit logs should never be deleted
     }
   }
 }

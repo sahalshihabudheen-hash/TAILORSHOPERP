@@ -2,7 +2,7 @@
   "entities": {
     "Customer": {
       "title": "Customer",
-      "description": "Tailor shop customer and patron details",
+      "description": "Customer profiles and contact details",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -21,40 +21,21 @@
     },
     "MeasurementRecord": {
       "title": "MeasurementRecord",
-      "description": "Bespoke dimensions and body parameters for garments",
+      "description": "Measurement profiles for customer Bespoke fittings",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "customerId": { "type": "string" },
         "clothingType": { "type": "string" },
         "date": { "type": "string" },
+        "fields": { "type": "object" },
         "notes": { "type": "string" }
       },
       "required": ["id", "customerId", "clothingType", "date"]
     },
-    "Order": {
-      "title": "Order",
-      "description": "Fabrication job details and pricing records",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "customerId": { "type": "string" },
-        "clothingType": { "type": "string" },
-        "quantity": { "type": "number" },
-        "deliveryDate": { "type": "string" },
-        "status": { "type": "string" },
-        "assignedWorkerId": { "type": "string" },
-        "price": { "type": "number" },
-        "advancePayment": { "type": "number" },
-        "remainingBalance": { "type": "number" },
-        "paymentStatus": { "type": "string" },
-        "createdAt": { "type": "string" }
-      },
-      "required": ["id", "customerId", "clothingType", "quantity", "deliveryDate", "status", "price"]
-    },
     "Worker": {
       "title": "Worker",
-      "description": "Register workspace professional and workshop staff",
+      "description": "Tailor shop work employees and credentials",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -67,11 +48,33 @@
         "perOrderBonus": { "type": "number" },
         "avatar": { "type": "string" }
       },
-      "required": ["id", "name", "phone", "email", "role"]
+      "required": ["id", "name", "email", "role"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Bespoke orders for clothing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "clothingType": { "type": "string" },
+        "quantity": { "type": "number" },
+        "deliveryDate": { "type": "string" },
+        "status": { "type": "string" },
+        "assignedWorkerId": { "type": "string" },
+        "notes": { "type": "object" },
+        "images": { "type": "object" },
+        "price": { "type": "number" },
+        "advancePayment": { "type": "number" },
+        "remainingBalance": { "type": "number" },
+        "paymentStatus": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "customerId", "clothingType", "quantity", "price", "status"]
     },
     "NotificationLog": {
       "title": "NotificationLog",
-      "description": "System output and alerts logger",
+      "description": "System alerts and dispatch history logs",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -81,11 +84,11 @@
         "timestamp": { "type": "string" },
         "status": { "type": "string" }
       },
-      "required": ["id", "type", "recipient", "message", "timestamp", "status"]
+      "required": ["id", "type", "recipient", "message", "timestamp"]
     },
     "RecentActivity": {
       "title": "RecentActivity",
-      "description": "Live status actions tracker",
+      "description": "Owner and Staff security and audit trail",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -95,33 +98,33 @@
         "userRole": { "type": "string" },
         "userName": { "type": "string" }
       },
-      "required": ["id", "action", "details", "timestamp", "userRole", "userName"]
+      "required": ["id", "action", "timestamp", "userName"]
     }
   },
   "firestore": {
-    "/customers/{customerId}": {
+    "customers": {
       "schema": "Customer",
-      "description": "Active client profiles catalog"
+      "description": "Central collection of customer profile documents"
     },
-    "/measurements/{measurementId}": {
+    "measurements": {
       "schema": "MeasurementRecord",
-      "description": "Archived measurement sessions database"
+      "description": "Historical measurement logs by customer ID mapping"
     },
-    "/orders/{orderId}": {
-      "schema": "Order",
-      "description": "Active bespoke order sheets ledger"
-    },
-    "/workers/{workerId}": {
+    "workers": {
       "schema": "Worker",
-      "description": "Active registered workshop tailors roster"
+      "description": "Profiles for active and reserve workshop staff members"
     },
-    "/notifications/{notificationId}": {
+    "orders": {
+      "schema": "Order",
+      "description": "Workshop tailoring order lifecycles and payments database"
+    },
+    "notifications": {
       "schema": "NotificationLog",
-      "description": "Alert coordinates and alert outputs ledger"
+      "description": "WhatsApp and Email notification dispatch history logs"
     },
-    "/activities/{activityId}": {
+    "activities": {
       "schema": "RecentActivity",
-      "description": "Global activity tracker logging"
+      "description": "Audit logging for staff and admin operations"
     }
   }
 }

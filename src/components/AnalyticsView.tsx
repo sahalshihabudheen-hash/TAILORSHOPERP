@@ -74,7 +74,7 @@ export default function AnalyticsView({
         }`}>
           <h3 className="font-serif text-sm font-bold mb-4 flex items-center space-x-1.5 pb-2 border-b border-stone-100 dark:border-slate-800">
             <Users className="h-4 w-4 text-amber-500" />
-            <span>Top bespoke patrons</span>
+            <span>Top customers</span>
           </h3>
 
           <div className="space-y-4">
