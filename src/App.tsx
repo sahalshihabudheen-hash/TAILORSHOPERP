@@ -4335,13 +4335,13 @@ export default function App() {
                <div className="border-b border-stone-200 dark:border-slate-800 pb-4">
                  <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
                    <span className="p-2 bg-amber-500/10 text-amber-600 rounded-lg"><Scissors className="h-4.5 w-4.5" /></span>
-                   <span>Atelier Worker Staff Logins</span>
+                   <span>Register Direct Atelier Worker Staff Logins</span>
                  </h2>
-                 <p className="text-xs text-stone-400 mt-1">View and manage workshop employee credentials and room identifiers.</p>
+                 <p className="text-xs text-stone-400 mt-1">Configure and manage workshop employee credentials, strong passwords, and room identifiers.</p>
                </div>
 
-               <div className="space-y-4">
-                 {/* Full width: Existing logins list */}
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                 {/* Left Side: Existing logins list */}
                  <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
                    <h3 className="text-sm font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-4 flex items-center gap-1.5 justify-between">
                      <span>Taylor Workshop Staff Logins</span>
@@ -4349,7 +4349,7 @@ export default function App() {
                        {getRegisteredTailors().length} Active
                      </span>
                    </h3>
-                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                   <div className="space-y-3">
                      {getRegisteredTailors().map((t: any) => {
                        return (
                          <div key={t.id} className="p-4 rounded-xl border flex justify-between items-center gap-2 dark:bg-slate-950 border-slate-900 bg-stone-50 border-stone-150">
@@ -4380,12 +4380,58 @@ export default function App() {
                          </div>
                        );
                      })}
-                     {getRegisteredTailors().length === 0 && (
-                       <div className="col-span-full text-center py-10 text-stone-400 text-xs">
-                         No staff logins found in the system.
-                       </div>
-                     )}
                    </div>
+                 </div>
+
+                 {/* Right Side: Register direct tailor */}
+                 <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
+                   <h3 className="text-sm font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-4">Register Direct Atelier Worker Node</h3>
+                   <form onSubmit={(e) => {
+                     e.preventDefault();
+                     const target = e.currentTarget;
+                     const name = (target.elements.namedItem('workerName') as HTMLInputElement).value.trim();
+                     const email = (target.elements.namedItem('workerEmail') as HTMLInputElement).value.trim();
+                     const password = (target.elements.namedItem('workerPswd') as HTMLInputElement).value.trim() || 'tailor123';
+                     const room = (target.elements.namedItem('workerLoc') as HTMLInputElement).value.trim();
+                     const phone = (target.elements.namedItem('workerPhone') as HTMLInputElement).value.trim();
+
+                     if (!name || !email) {
+                       triggerToast('Name and email are required fields!', 'error');
+                       return;
+                     }
+                     const list = getRegisteredTailors();
+                     if (list.some((x: any) => x.email.toLowerCase().trim() === email.toLowerCase().trim())) {
+                       triggerToast('This email is already registered!', 'error');
+                       return;
+                     }
+                     const updated = [...list, { id: `TLR-${Date.now()}`, name, email, password, phone, location: room }];
+                     saveRegisteredTailors(updated);
+                     setRegisteredTailors(updated);
+                     triggerToast('Staff added to tailor database successfully!', 'success');
+                     target.reset();
+                   }} className="space-y-4 text-left">
+                     <div>
+                       <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">Worker Display Name</label>
+                       <input name="workerName" type="text" className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs dark:bg-slate-950" required />
+                     </div>
+                     <div>
+                       <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">Internal Login Email ID</label>
+                       <input name="workerEmail" type="email" className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs dark:bg-slate-950" required />
+                     </div>
+                     <div>
+                       <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">Secure System Password</label>
+                       <input name="workerPswd" type="text" placeholder="tailor123" className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs dark:bg-slate-950" />
+                     </div>
+                     <div>
+                       <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">Workshop Location / Room</label>
+                       <input name="workerLoc" type="text" placeholder="Room B" className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs dark:bg-slate-950" />
+                     </div>
+                     <div>
+                       <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">Phone Coordinates</label>
+                       <input name="workerPhone" type="text" placeholder="+91..." className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs dark:bg-slate-950" />
+                     </div>
+                     <button type="submit" className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl cursor-pointer">Register Direct Login</button>
+                   </form>
                  </div>
                </div>
              </div>
