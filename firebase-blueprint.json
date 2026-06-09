@@ -1,0 +1,127 @@
+{
+  "entities": {
+    "Customer": {
+      "title": "Customer",
+      "description": "Tailor shop customer and patron details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "qrCodeData": { "type": "string" },
+        "avatar": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "passwordChanged": { "type": "boolean" },
+        "password": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "email"]
+    },
+    "MeasurementRecord": {
+      "title": "MeasurementRecord",
+      "description": "Bespoke dimensions and body parameters for garments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "clothingType": { "type": "string" },
+        "date": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "customerId", "clothingType", "date"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Fabrication job details and pricing records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "clothingType": { "type": "string" },
+        "quantity": { "type": "number" },
+        "deliveryDate": { "type": "string" },
+        "status": { "type": "string" },
+        "assignedWorkerId": { "type": "string" },
+        "price": { "type": "number" },
+        "advancePayment": { "type": "number" },
+        "remainingBalance": { "type": "number" },
+        "paymentStatus": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "customerId", "clothingType", "quantity", "deliveryDate", "status", "price"]
+    },
+    "Worker": {
+      "title": "Worker",
+      "description": "Register workspace professional and workshop staff",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "rating": { "type": "number" },
+        "baseSalary": { "type": "number" },
+        "perOrderBonus": { "type": "number" },
+        "avatar": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "email", "role"]
+    },
+    "NotificationLog": {
+      "title": "NotificationLog",
+      "description": "System output and alerts logger",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "recipient": { "type": "string" },
+        "message": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "type", "recipient", "message", "timestamp", "status"]
+    },
+    "RecentActivity": {
+      "title": "RecentActivity",
+      "description": "Live status actions tracker",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "userRole": { "type": "string" },
+        "userName": { "type": "string" }
+      },
+      "required": ["id", "action", "details", "timestamp", "userRole", "userName"]
+    }
+  },
+  "firestore": {
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Active client profiles catalog"
+    },
+    "/measurements/{measurementId}": {
+      "schema": "MeasurementRecord",
+      "description": "Archived measurement sessions database"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Active bespoke order sheets ledger"
+    },
+    "/workers/{workerId}": {
+      "schema": "Worker",
+      "description": "Active registered workshop tailors roster"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "NotificationLog",
+      "description": "Alert coordinates and alert outputs ledger"
+    },
+    "/activities/{activityId}": {
+      "schema": "RecentActivity",
+      "description": "Global activity tracker logging"
+    }
+  }
+}
