@@ -3417,7 +3417,20 @@ export default function App() {
               }`}
             >
               <Scissors className="h-4 w-4" />
-              <span>Tailors</span>
+              <span>Registered Tailors</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setOwnerTab('staffs_erp')}
+              className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
+                ownerTab === 'staffs_erp'
+                  ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500 font-extrabold'
+                  : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
+              }`}
+            >
+              <Users className="h-4 w-4" />
+              <span>Staffs TailorShop ERP</span>
             </button>
           </div>
         ) : (
@@ -4249,7 +4262,7 @@ export default function App() {
                         </button>
                       </div>
                     </div>
-                   <div className="hidden">
+                   <div>
                      <div className="flex items-center space-x-2 mb-4">
                        <div className="p-1.5 bg-emerald-500/10 text-emerald-600 rounded-lg">
                          <ShieldCheck className="h-4 w-4" />
