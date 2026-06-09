@@ -4353,98 +4353,45 @@ export default function App() {
                  <p className="text-xs text-stone-400 mt-1">Configure and manage workshop employee credentials, strong passwords, and room identifiers.</p>
                </div>
 
-               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                 {/* Left Side: Existing logins list */}
-                 <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
-                   <h3 className="text-sm font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-4 flex items-center gap-1.5 justify-between">
-                     <span>Taylor Workshop Staff Logins</span>
-                     <span className="text-[10px] bg-amber-600/10 text-amber-600 px-2 py-0.5 rounded-full font-bold">
-                       {getRegisteredTailors().length} Active
-                     </span>
-                   </h3>
-                   <div className="space-y-3">
-                     {getRegisteredTailors().map((t: any) => {
-                       return (
-                         <div key={t.id} className="p-4 rounded-xl border flex justify-between items-center gap-2 dark:bg-slate-950 border-slate-900 bg-stone-50 border-stone-150">
-                           <div className="space-y-1 text-left">
-                             <div className="font-extrabold text-xs text-stone-850 dark:text-white">{t.name}</div>
-                             <div className="text-[10.5px] text-stone-450 space-y-0.5 font-semibold">
-                               <p><span className="font-mono">Email:</span> {t.email}</p>
-                               <p><span className="font-mono">Phone:</span> {t.phone}</p>
-                               <p><span className="font-mono">Room:</span> {t.location}</p>
-                               <p className="text-[10.5px] font-mono text-amber-600 p-1 bg-amber-600/5 rounded inline-block">PSWD: {t.password}</p>
-                             </div>
+               {/* Existing logins list */}
+               <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
+                 <h3 className="text-sm font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-4 flex items-center gap-1.5 justify-between">
+                   <span>Taylor Workshop Staff Logins</span>
+                   <span className="text-[10px] bg-amber-600/10 text-amber-600 px-2 py-0.5 rounded-full font-bold">
+                     {getRegisteredTailors().length} Active
+                   </span>
+                 </h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   {getRegisteredTailors().map((t: any) => {
+                     return (
+                       <div key={t.id} className="p-4 rounded-xl border flex justify-between items-center gap-2 dark:bg-slate-950 border-slate-900 bg-stone-50 border-stone-150">
+                         <div className="space-y-1 text-left">
+                           <div className="font-extrabold text-xs text-stone-850 dark:text-white">{t.name}</div>
+                           <div className="text-[10.5px] text-stone-450 space-y-0.5 font-semibold">
+                             <p><span className="font-mono">Email:</span> {t.email}</p>
+                             <p><span className="font-mono">Phone:</span> {t.phone}</p>
+                             <p><span className="font-mono">Room:</span> {t.location}</p>
+                             <p className="text-[10.5px] font-mono text-amber-600 p-1 bg-amber-600/5 rounded inline-block">PSWD: {t.password}</p>
                            </div>
-                           <button
-                             type="button"
-                             disabled={t.id === 'TAILOR-OWNER-MASTER'}
-                             onClick={() => {
-                               if (confirm(`Remove staff ${t.name}?`)) {
-                                 const filtered = getRegisteredTailors().filter((x: any) => x.id !== t.id);
-                                 saveRegisteredTailors(filtered);
-                                 setRegisteredTailors(filtered);
-                                 triggerToast('Removed staff credentials!', 'success');
-                               }
-                             }}
-                             className={`p-2 rounded hover:bg-red-500/10 hover:text-red-500 text-stone-400 cursor-pointer ${t.id === 'TAILOR-OWNER-MASTER' ? 'cursor-not-allowed opacity-30' : ''}`}
-                           >
-                             <Trash2 className="h-4 w-4" />
-                           </button>
                          </div>
-                       );
-                     })}
-                   </div>
-                 </div>
-
-                 {/* Right Side: Register direct tailor */}
-                 <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
-                   <h3 className="text-sm font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-4">Register Direct Atelier Worker Node</h3>
-                   <form onSubmit={(e) => {
-                     e.preventDefault();
-                     const target = e.currentTarget;
-                     const name = (target.elements.namedItem('workerName') as HTMLInputElement).value.trim();
-                     const email = (target.elements.namedItem('workerEmail') as HTMLInputElement).value.trim();
-                     const password = (target.elements.namedItem('workerPswd') as HTMLInputElement).value.trim() || 'tailor123';
-                     const room = (target.elements.namedItem('workerLoc') as HTMLInputElement).value.trim();
-                     const phone = (target.elements.namedItem('workerPhone') as HTMLInputElement).value.trim();
-
-                     if (!name || !email) {
-                       triggerToast('Name and email are required fields!', 'error');
-                       return;
-                     }
-                     const list = getRegisteredTailors();
-                     if (list.some((x: any) => x.email.toLowerCase().trim() === email.toLowerCase().trim())) {
-                       triggerToast('This email is already registered!', 'error');
-                       return;
-                     }
-                     const updated = [...list, { id: `TLR-${Date.now()}`, name, email, password, phone, location: room }];
-                     saveRegisteredTailors(updated);
-                     setRegisteredTailors(updated);
-                     triggerToast('Staff added to tailor database successfully!', 'success');
-                     target.reset();
-                   }} className="space-y-4 text-left">
-                     <div>
-                       <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">Worker Display Name</label>
-                       <input name="workerName" type="text" className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs dark:bg-slate-950" required />
-                     </div>
-                     <div>
-                       <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">Internal Login Email ID</label>
-                       <input name="workerEmail" type="email" className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs dark:bg-slate-950" required />
-                     </div>
-                     <div>
-                       <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">Secure System Password</label>
-                       <input name="workerPswd" type="text" placeholder="tailor123" className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs dark:bg-slate-950" />
-                     </div>
-                     <div>
-                       <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">Workshop Location / Room</label>
-                       <input name="workerLoc" type="text" placeholder="Room B" className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs dark:bg-slate-950" />
-                     </div>
-                     <div>
-                       <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">Phone Coordinates</label>
-                       <input name="workerPhone" type="text" placeholder="+91..." className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs dark:bg-slate-950" />
-                     </div>
-                     <button type="submit" className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl cursor-pointer">Register Direct Login</button>
-                   </form>
+                         <button
+                           type="button"
+                           disabled={t.id === 'TAILOR-OWNER-MASTER'}
+                           onClick={() => {
+                             if (confirm(`Remove staff ${t.name}?`)) {
+                               const filtered = getRegisteredTailors().filter((x: any) => x.id !== t.id);
+                               saveRegisteredTailors(filtered);
+                               setRegisteredTailors(filtered);
+                               triggerToast('Removed staff credentials!', 'success');
+                             }
+                           }}
+                           className={`p-2 rounded hover:bg-red-500/10 hover:text-red-500 text-stone-400 cursor-pointer ${t.id === 'TAILOR-OWNER-MASTER' ? 'cursor-not-allowed opacity-30' : ''}`}
+                         >
+                           <Trash2 className="h-4 w-4" />
+                         </button>
+                       </div>
+                     );
+                   })}
                  </div>
                </div>
              </div>
