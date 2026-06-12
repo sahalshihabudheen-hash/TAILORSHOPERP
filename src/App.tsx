@@ -222,14 +222,14 @@ export default function App() {
     name: string;
     email: string;
     phone?: string;
-    role: 'Tailor' | 'Customer';
+    role: 'Owner' | 'Tailor' | 'Customer';
     location?: string;
+    hasRegisteredShop?: boolean;
   } | null>(null);
 
   // Sign In inputs
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
-  const [signInRole, setSignInRole] = useState<'Tailor' | 'Customer'>('Tailor');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -240,7 +240,7 @@ export default function App() {
   const [signUpPhone, setSignUpPhone] = useState('');
   const [signUpLocation, setSignUpLocation] = useState('');
   const [signUpRole, setSignUpRole] = useState<'Tailor' | 'Customer'>('Tailor');
-  const [gatekeeperScreen, setGatekeeperScreen] = useState<'selector' | 'signup' | 'signin'>('selector');
+  const [gatekeeperScreen, setGatekeeperScreen] = useState<'selector' | 'signup' | 'signin'>('signin');
 
   // Phone OTP Verification state
   const [phoneOtpCode, setPhoneOtpCode] = useState<string | null>(null);
@@ -297,7 +297,7 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [registeredTailors, setRegisteredTailors] = useState<any[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
-  const [ownerTab, setOwnerTab] = useState<'branding' | 'registered_tailors' | 'staffs_erp' | 'customer_patrons'>('branding');
+  const [ownerTab, setOwnerTab] = useState<'branding' | 'staffs_erp' | 'customer_patrons'>('branding');
   const [logoInputType, setLogoInputType] = useState<'url' | 'upload'>('url');
 
   // New admin form states
@@ -323,6 +323,54 @@ export default function App() {
   const [newCustAddressAdmin, setNewCustAddressAdmin] = useState('');
   
   const [welcomeBannerTitle, setWelcomeBannerTitle] = useState(() => localStorage.getItem('welcome_banner_title') || 'Owner Dashboard Overview');
+
+  // First-time tailor shop setup states
+  const [setupShopName, setSetupShopName] = useState('');
+  const [setupShopLocation, setSetupShopLocation] = useState('');
+  const [setupShopPhone, setSetupShopPhone] = useState('');
+  const [setupOwnerName, setSetupOwnerName] = useState('');
+  const [setupLogoUrl, setSetupLogoUrl] = useState('');
+  const [setupLatitude, setSetupLatitude] = useState('');
+  const [setupLongitude, setSetupLongitude] = useState('');
+  const [setupDragging, setSetupDragging] = useState(false);
+  const [setupLocationLoading, setSetupLocationLoading] = useState(false);
+
+  const handleLogoFileSelect = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      triggerToast('Please upload an image file.', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64Url = e.target?.result as string;
+      setSetupLogoUrl(base64Url);
+      triggerToast('Logo loaded and previewed successfully!', 'success');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleGetSetupLocation = () => {
+    if (!navigator.geolocation) {
+      triggerToast('Geolocation is not supported by your browser.', 'error');
+      return;
+    }
+    setSetupLocationLoading(true);
+    triggerToast('Requesting GPS coordinates...', 'info');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setSetupLatitude(position.coords.latitude.toFixed(6));
+        setSetupLongitude(position.coords.longitude.toFixed(6));
+        setSetupLocationLoading(false);
+        triggerToast('Current location coordinates retrieved successfully!', 'success');
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        setSetupLocationLoading(false);
+        triggerToast(`Location access failed: ${error.message}`, 'error');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
   const [welcomeBannerDesc, setWelcomeBannerDesc] = useState(() => localStorage.getItem('welcome_banner_desc') || 'Manage your fine tailoring workshops, track measurements, and generate bespoke delivery packages cleanly.');
 
   const [voucherMainTitle, setVoucherMainTitle] = useState(() => {
@@ -500,6 +548,16 @@ export default function App() {
     localStorage.setItem('customer_image', customCustomerImage);
   }, [customCustomerImage]);
 
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'Tailor' && !currentUser.hasRegisteredShop) {
+      setSetupShopName(atelierName || '');
+      setSetupShopPhone(currentUser.phone || '');
+      setSetupOwnerName(currentUser.name || '');
+      setSetupShopLocation(currentUser.location || '');
+      setSetupLogoUrl(customLogoUrl || '');
+    }
+  }, [currentUser]);
+
   const [clothingCategoryEmojis, setClothingCategoryEmojis] = useState<Record<string, string>>(() => {
     const saved = localStorage.getItem('custom_clothing_emojis');
     const defaults: Record<string, string> = {
@@ -660,6 +718,15 @@ export default function App() {
     triggerToast(`Staff "${newWorker.name}" added successfully to the ERP!`, "success");
   };
 
+  const handleDeleteWorker = (id: string) => {
+    const worker = workers.find(w => w.id === id);
+    const updated = workers.filter(w => w.id !== id);
+    setWorkers(updated);
+    saveWorkers(updated);
+    addActivity('Staff Erased', `Pruned tailor profile for ${worker?.name || id}`, currentUser?.role || 'Owner', currentUser?.name || 'Owner');
+    triggerToast(`Tailor erased successfully from ERP!`, 'success');
+  };
+
   // Sign In event trigger
   const handleSignIn = (e: React.FormEvent) => {
     e.preventDefault();
@@ -670,8 +737,23 @@ export default function App() {
 
     const emailClean = signInEmail.toLowerCase().trim();
     const passwordClean = signInPassword.trim();
+    const passwordCleanUpper = passwordClean.toUpperCase();
 
-    // Secure Master Admin / Creator Bypass check
+    // Helper to match phone numbers with or without country codes, spaces, or formatting robustly
+    const isPhoneMatch = (phone1: string, phone2: string) => {
+      const c1 = (phone1 || '').replace(/\D/g, '');
+      const c2 = (phone2 || '').replace(/\D/g, '');
+      if (!c1 || !c2) return false;
+      if (c1 === c2) return true;
+      if (c1.length >= 8 && c2.length >= 8) {
+        if (c1.endsWith(c2) || c2.endsWith(c1)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // 1. Check Master Admin/Owner Bypass
     if (emailClean === 'owner@gmail.com' && passwordClean === 'AtelierOwner2026!') {
       const user = {
         id: 'TAILOR-OWNER-MASTER',
@@ -690,126 +772,168 @@ export default function App() {
       return;
     }
 
-    if (signInRole === 'Tailor') {
-      const tailors = getRegisteredTailors();
-      const match = tailors.find((t: any) => t.email.toLowerCase().trim() === emailClean && t.password === passwordClean);
-      if (match) {
-        const user = {
-          id: match.id,
-          name: match.name,
-          email: match.email,
-          phone: match.phone,
-          location: match.location,
-          role: 'Tailor' as const
-        };
-        setCurrentUser(user);
-        if (rememberMe) {
-          localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
-        }
-        addActivity('Sign In', `Atelier Owner logged in successfully`, 'Owner', user.name);
-        triggerToast(`Welcome back to the studio, ${user.name}!`, 'success');
-      } else {
-        triggerToast('Incorrect credentials for Tailor Owner.', 'error');
-      }
-    } else {
-      // Customer Portal Sign In (Login by Email or Phone number, password is any Order ID e.g. ORD-9841)
-      const activeCustomers = getCustomers();
-      const allOrders = getOrders();
-      const cleanInput = signInEmail.trim().toLowerCase();
-      const cleanDigitsInput = cleanInput.replace(/\D/g, '');
-      const passwordCleanUpper = signInPassword.trim().toUpperCase();
+    // 2. Check Tailor List from registered_tailors and workers (direct staff tailors) lists
+    const registeredTailorsList = getRegisteredTailors();
+    const combinedTailors = [
+      ...registeredTailorsList,
+      ...workers.map((w: any) => ({
+        id: w.id,
+        name: w.name,
+        email: w.email || '',
+        phone: w.phone || '',
+        location: w.location || 'Studio Workspace',
+        password: w.phone || w.name, // Setup phone or name as fallback passwords
+        hasRegisteredShop: false
+      }))
+    ];
 
-      // Type-tolerant and Order-based Lookups
-      let match: any = null;
+    // Find all potential matching tailors (we'll check password for all matching tailors to be robust)
+    const matchingTailors = combinedTailors.filter((t: any) => {
+      const tName = (t.name || '').toLowerCase().trim();
+      const tEmail = (t.email || '').toLowerCase().trim();
+      const tPhone = (t.phone || '').trim();
 
-      // Scenario A: Check if the password entered is a valid Order ID
-      const matchingOrder = allOrders.find(o => o.id.toUpperCase().trim() === passwordCleanUpper);
-      if (matchingOrder) {
-        const customerOfOrder = activeCustomers.find(c => c.id === matchingOrder.customerId);
-        if (customerOfOrder) {
-          const custEmail = (customerOfOrder.email || '').toLowerCase().trim();
-          const custPhone = (customerOfOrder.phone || '').trim();
-          const custPhoneDigits = custPhone.replace(/\D/g, '');
+      return (tEmail && tEmail === emailClean) || 
+             (tPhone && isPhoneMatch(tPhone, emailClean)) ||
+             (tPhone && isPhoneMatch(tPhone, signInEmail.trim())) ||
+             (tName && tName === emailClean) ||
+             (tName && tName.replace(/\s+/g, '') === emailClean.replace(/\s+/g, ''));
+    });
 
-          // Check if username matches this customer (with prefix/typo tolerance!)
-          const emailPrefixTyped = cleanInput.split('@')[0].toLowerCase().trim().slice(0, 5);
-          const emailPrefixCust = custEmail.split('@')[0].toLowerCase().trim().slice(0, 5);
-          const isEmailPrefixMatch = emailPrefixTyped.length >= 3 && emailPrefixTyped === emailPrefixCust;
+    // Check if any matching tailor has the correct password
+    for (const tailor of matchingTailors) {
+      const tName = (tailor.name || '').trim();
+      const tPhone = (tailor.phone || '').trim();
+      const tPassword = (tailor.password || '').trim();
 
-          if (
-            custEmail === cleanInput ||
-            custPhone === signInEmail.trim() ||
-            (cleanDigitsInput && custPhoneDigits === cleanDigitsInput) ||
-            isEmailPrefixMatch
-          ) {
-            match = customerOfOrder;
-          }
-        }
-      }
+      const isPasswordMatch = 
+        (tPassword && tPassword === passwordClean) ||
+        (tPhone && isPhoneMatch(tPhone, passwordClean)) ||
+        (tPassword && isPhoneMatch(tPassword, passwordClean)) ||
+        (tName && tName.toLowerCase() === passwordClean.toLowerCase()) ||
+        (tName && tName.toLowerCase().replace(/\s+/g, '') === passwordClean.toLowerCase().replace(/\s+/g, ''));
 
-      // Scenario B: Traditional lookup by Email or Phone if no order matched or password is a general one
-      if (!match) {
-        match = activeCustomers.find((c: any) => {
-          const custEmail = (c.email || '').toLowerCase().trim();
-          const custPhone = (c.phone || '').trim();
-          const custPhoneDigits = custPhone.replace(/\D/g, '');
-
-          // Support exact or typo tolerant match on email prefix
-          const emailPrefixTyped = cleanInput.split('@')[0].toLowerCase().trim().slice(0, 5);
-          const emailPrefixCust = custEmail.split('@')[0].toLowerCase().trim().slice(0, 5);
-          const isEmailPrefixMatch = emailPrefixTyped.length >= 5 && emailPrefixTyped === emailPrefixCust;
-
-          return custEmail === cleanInput || 
-                 custPhone === signInEmail.trim() ||
-                 (cleanDigitsInput && custPhoneDigits === cleanDigitsInput) ||
-                 isEmailPrefixMatch;
-        });
-      }
-
-      if (match) {
-        const customerOrders = allOrders.filter(o => o.customerId === match.id);
-
-        const isOrderIdPassword = customerOrders.some(o => o.id.toUpperCase().trim() === passwordCleanUpper);
-        const isFallbackPassword = (match.password && match.password === signInPassword.trim()) || 
-                                   signInPassword.trim() === 'password123' || 
-                                   signInPassword.trim() === match.id;
-
-        if (isOrderIdPassword || isFallbackPassword) {
-          const user = {
-            id: match.id,
-            name: match.name,
-            email: match.email,
-            phone: match.phone,
-            role: 'Customer' as const
-          };
-          setCurrentUser(user);
-          if (rememberMe) {
-            localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
-          }
-          addActivity('Sign In', `Customer logged in successfully (ID: ${match.id})`, 'Customer', user.name);
-          triggerToast(`Welcome back, ${user.name}!`, 'success');
-        } else {
-          triggerToast('Invalid Password. Please use your Order ID (e.g. ORD-9841) as the password.', 'error');
-        }
-      } else {
-        triggerToast('No registered customer profile found with that email address or phone number.', 'error');
+      if (isPasswordMatch) {
+         const user = {
+           id: tailor.id,
+           name: tailor.name,
+           email: tailor.email,
+           phone: tailor.phone,
+           location: tailor.location || 'Studio Workspace',
+           role: 'Tailor' as const,
+           hasRegisteredShop: !!tailor.hasRegisteredShop
+         };
+         setCurrentUser(user);
+         if (rememberMe) {
+           localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
+         }
+         addActivity('Sign In', `Atelier Owner / Tailor logged in successfully`, 'Owner', tailor.name);
+         triggerToast(`Welcome back to the studio, ${tailor.name}!`, 'success');
+         return;
       }
     }
+
+    // 3. Check Customers List (Bespoke lookup: phone, email, or name matches)
+    const activeCustomers = getCustomers();
+    const allOrders = getOrders();
+
+    // Find all matching customers
+    const matchingCustomers = activeCustomers.filter((c: any) => {
+      const custName = (c.name || '').toLowerCase().trim();
+      const custEmail = (c.email || '').toLowerCase().trim();
+      const custPhone = (c.phone || '').trim();
+
+      const emailPrefixTyped = emailClean.split('@')[0].slice(0, 5);
+      const emailPrefixCust = custEmail.split('@')[0].slice(0, 5);
+      const isEmailPrefixMatch = emailPrefixTyped.length >= 5 && emailPrefixTyped === emailPrefixCust;
+
+      // Check if they matched by email, phone, name, or order ID (if typed in email clean)
+      const matchesContact = 
+        custEmail === emailClean || 
+        isPhoneMatch(custPhone, emailClean) ||
+        isPhoneMatch(custPhone, signInEmail.trim()) ||
+        custName === emailClean ||
+        custName.replace(/\s+/g, '') === emailClean.replace(/\s+/g, '') ||
+        isEmailPrefixMatch;
+
+      if (matchesContact) return true;
+
+      // Or check if the user entered an Order ID or phone/email that matches an order of this customer
+      const hasMatchingOrder = allOrders.some(o => 
+        o.customerId === c.id && 
+        (o.id.toUpperCase().trim() === emailClean.toUpperCase() || 
+         o.id.toUpperCase().trim() === passwordCleanUpper)
+      );
+
+      return hasMatchingOrder;
+    });
+
+    // Validate customer password among matching customers
+    for (const customer of matchingCustomers) {
+      const custName = (customer.name || '').trim();
+      const custPhone = (customer.phone || '').trim();
+      const custEmail = (customer.email || '').trim().toLowerCase();
+      const customerOrders = allOrders.filter(o => o.customerId === customer.id);
+      
+      const isOrderIdPassword = customerOrders.some(o => o.id.toUpperCase().trim() === passwordCleanUpper);
+
+      const isPasswordMatch = 
+        (customer.password && customer.password === passwordClean) || 
+        passwordClean === 'password123' || 
+        passwordClean === customer.id ||
+        (custPhone && isPhoneMatch(custPhone, passwordClean)) ||
+        (customer.password && isPhoneMatch(customer.password, passwordClean)) ||
+        (custEmail && custEmail === passwordClean.toLowerCase()) ||
+        (custName && custName.toLowerCase() === passwordClean.toLowerCase()) ||
+        (custName && custName.toLowerCase().replace(/\s+/g, '') === passwordClean.toLowerCase().replace(/\s+/g, ''));
+
+      if (isOrderIdPassword || isPasswordMatch) {
+         const user = {
+           id: customer.id,
+           name: customer.name,
+           email: customer.email,
+           phone: customer.phone,
+           role: 'Customer' as const
+         };
+         setCurrentUser(user);
+         if (rememberMe) {
+           localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
+         }
+         addActivity('Sign In', `Customer logged in successfully (ID: ${customer.id})`, 'Customer', customer.name);
+         triggerToast(`Welcome back, ${customer.name}!`, 'success');
+         return;
+      }
+    }
+
+    // 4. Handle Incorrect Passwords specifically for the matched roles
+    if (matchingTailors.length > 0) {
+       triggerToast('Incorrect password for Tailor (you can use your registered Phone Number as your password).', 'error');
+       return;
+    }
+
+    if (matchingCustomers.length > 0) {
+       triggerToast('Incorrect password for Customer. (You can use your Phone Number, Email, Name, or Order ID as password)', 'error');
+       return;
+    }
+
+    // No role matched at all
+    triggerToast('No tailored profiles or customer records found with those credentials.', 'error');
   };
 
   // Sign Up event trigger
   const handleSignUp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!signUpName.trim() || !signUpEmail.trim() || !signUpPassword.trim() || !signUpPhone.trim()) {
+    const isTailor = signUpRole === 'Tailor';
+    if (!signUpName.trim() || !signUpEmail.trim() || (!isTailor && !signUpPassword.trim()) || !signUpPhone.trim()) {
       triggerToast('Please fulfill all critical sizing accounts fields.', 'error');
       return;
     }
 
     const nameVal = signUpName.trim();
     const emailVal = signUpEmail.toLowerCase().trim();
-    const passwordVal = signUpPassword;
+    const passwordVal = isTailor ? signUpPhone.trim() : signUpPassword;
     const phoneVal = signUpPhone.trim();
-    const locVal = signUpLocation.trim() || 'Walk-in Studio Client';
+    const locVal = isTailor ? 'Studio Workspace' : signUpLocation.trim() || 'Walk-in Studio Client';
 
     if (signUpRole === 'Tailor') {
       const tailors = getRegisteredTailors();
@@ -2232,7 +2356,6 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     setSignUpRole('Tailor');
-                    setSignInRole('Tailor');
                     setGatekeeperScreen('signin');
                     triggerToast("Atelier Owner Portal selected! Please sign in with your workshop credentials.", 'info');
                   }}
@@ -2289,7 +2412,6 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    setSignInRole('Customer');
                     setGatekeeperScreen('signin');
                     triggerToast("Customer Lounge selected! Please sign in using your phone or email.", 'info');
                   }}
@@ -2501,89 +2623,102 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Password */}
-                    <div>
-                      <label className={`block text-[11px] uppercase tracking-wider font-bold mb-1 ${
-                        isDarkMode ? 'text-zinc-400' : 'text-zinc-650'
-                      }`}>
-                        Password
-                      </label>
-                      <div className="relative">
-                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-                        <input
-                          type="password"
-                          required
-                          placeholder="••••••••"
-                          value={signUpPassword}
-                          onChange={(e) => setSignUpPassword(e.target.value)}
-                          className={`w-full pl-11 pr-4 py-2 rounded-xl border focus:outline-none focus:ring-1 focus:ring-yellow-400 text-xs font-sans font-semibold ${
-                            isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-zinc-300 text-black shadow-xs'
-                          }`}
-                        />
+                    {signUpRole === 'Tailor' && (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-stone-600 dark:text-stone-300 leading-relaxed font-sans mb-3 flex items-start gap-2">
+                        <span className="text-amber-600 dark:text-amber-400 font-bold">💡</span>
+                        <div>
+                          <strong className="text-amber-700 dark:text-amber-400">Tailor Registration Policy:</strong> Only Name, Email address and Phone number are required. Your mobile number will serve as your login password, and we will verify it with an OTP.
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    {/* Location Column */}
-                    <div>
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <label className={`block text-[11px] uppercase tracking-wider font-bold ${
+                    {/* Password */}
+                    {signUpRole !== 'Tailor' && (
+                      <div>
+                        <label className={`block text-[11px] uppercase tracking-wider font-bold mb-1 ${
                           isDarkMode ? 'text-zinc-400' : 'text-zinc-650'
                         }`}>
-                          Location / Address
+                          Password
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (navigator.geolocation) {
-                              triggerToast('Requesting satellite coordinates...', 'info');
-                              navigator.geolocation.getCurrentPosition(
-                                (pos) => {
-                                  const lat = pos.coords.latitude.toFixed(2);
-                                  const lon = pos.coords.longitude.toFixed(2);
-                                  const locStr = `Mayfair Core (Lat ${lat}, Lon ${lon})`;
-                                  setSignUpLocation(locStr);
-                                  triggerToast('GCP Geolocation successfully locked current coordinates!', 'success');
-                                },
-                                (err) => {
-                                  triggerToast('Location access denied. Please key in your address manually!', 'error');
-                                }
-                              );
-                            }
-                          }}
-                          className={`hover:underline font-bold text-[10px] cursor-pointer ${
-                            isDarkMode ? 'text-yellow-400' : 'text-black font-extrabold'
-                          }`}
-                        >
-                          Use my location
-                        </button>
+                        <div className="relative">
+                          <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                          <input
+                            type="password"
+                            required
+                            placeholder="••••••••"
+                            value={signUpPassword}
+                            onChange={(e) => setSignUpPassword(e.target.value)}
+                            className={`w-full pl-11 pr-4 py-2 rounded-xl border focus:outline-none focus:ring-1 focus:ring-yellow-400 text-xs font-sans font-semibold ${
+                              isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-zinc-300 text-black shadow-xs'
+                            }`}
+                          />
+                        </div>
                       </div>
-                      <div className="relative">
-                        <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-                        <input
-                          type="text"
-                          placeholder="City, Country"
-                          value={signUpLocation}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setSignUpLocation(val);
-                            if (val.toLowerCase().includes('india')) {
-                              setSignUpPhone((prev) => {
-                                if (!prev || prev.trim() === '' || prev.startsWith('+44')) {
-                                  return '+91 ';
-                                }
-                                if (!prev.startsWith('+91')) {
-                                  return '+91 ' + prev.replace(/^\+\d+\s*/, '').trim();
-                                }
-                                return prev;
-                              });
-                            }
-                          }}
-                          className={`w-full pl-11 pr-4 py-2 rounded-xl border focus:outline-none focus:ring-1 focus:ring-yellow-400 text-xs font-semibold ${
-                            isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-zinc-300 text-black shadow-xs'
-                          }`}
-                        />
+                    )}
+
+                    {/* Location Column */}
+                    {signUpRole !== 'Tailor' && (
+                      <div>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <label className={`block text-[11px] uppercase tracking-wider font-bold ${
+                            isDarkMode ? 'text-zinc-400' : 'text-zinc-650'
+                          }`}>
+                            Location / Address
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (navigator.geolocation) {
+                                triggerToast('Requesting satellite coordinates...', 'info');
+                                navigator.geolocation.getCurrentPosition(
+                                  (pos) => {
+                                    const lat = pos.coords.latitude.toFixed(2);
+                                    const lon = pos.coords.longitude.toFixed(2);
+                                    const locStr = `Mayfair Core (Lat ${lat}, Lon ${lon})`;
+                                    setSignUpLocation(locStr);
+                                    triggerToast('GCP Geolocation successfully locked current coordinates!', 'success');
+                                  },
+                                  (err) => {
+                                    triggerToast('Location access denied. Please key in your address manually!', 'error');
+                                  }
+                                );
+                              }
+                            }}
+                            className={`hover:underline font-bold text-[10px] cursor-pointer ${
+                              isDarkMode ? 'text-yellow-400' : 'text-black font-extrabold'
+                            }`}
+                          >
+                            Use my location
+                          </button>
+                        </div>
+                        <div className="relative">
+                          <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                          <input
+                            type="text"
+                            placeholder="City, Country"
+                            value={signUpLocation}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSignUpLocation(val);
+                              if (val.toLowerCase().includes('india')) {
+                                setSignUpPhone((prev) => {
+                                  if (!prev || prev.trim() === '' || prev.startsWith('+44')) {
+                                    return '+91 ';
+                                  }
+                                  if (!prev.startsWith('+91')) {
+                                    return '+91 ' + prev.replace(/^\+\d+\s*/, '').trim();
+                                  }
+                                  return prev;
+                                });
+                              }
+                            }}
+                            className={`w-full pl-11 pr-4 py-2 rounded-xl border focus:outline-none focus:ring-1 focus:ring-yellow-400 text-xs font-semibold ${
+                              isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-zinc-300 text-black shadow-xs'
+                            }`}
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Mobile Number */}
                     <div>
@@ -2628,7 +2763,6 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSignInRole(signUpRole);
                       setGatekeeperScreen('signin');
                       triggerToast(`Switched directly to sign in mode!`, 'info');
                     }}
@@ -2656,36 +2790,19 @@ export default function App() {
                 isDarkMode ? 'bg-black text-white' : 'bg-[#faf9f6] text-black border-r border-zinc-200'
               }`}>
                 <img
-                  src={
-                    signInRole === 'Tailor'
-                      ? "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=800"
-                      : "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=800"
-                  }
+                  src="https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=800"
                   alt="Atmospheric brand cover"
                   className={`absolute inset-0 w-full h-full object-cover transition-all duration-300 ${
                     isDarkMode ? 'opacity-40 brightness-75' : 'opacity-70 contrast-[1.05]'
                   }`}
                   referrerPolicy="no-referrer"
                 />
-                <div className={`absolute inset-0 transition-all duration-300 ${
+                <div className={`absolute inset-0 transition-all duration-350 ${
                   isDarkMode 
                     ? 'bg-gradient-to-b from-black/70 via-transparent to-black/90' 
                     : 'bg-gradient-to-b from-black/5 via-transparent to-black/10'
                 }`} />
                 
-                {/* Back Link */}
-                <button
-                  type="button"
-                  onClick={() => setGatekeeperScreen('selector')}
-                  className={`relative z-10 self-start flex items-center space-x-2 text-xs font-bold px-3.5 py-2.5 rounded-xl backdrop-blur-md transition-all active:scale-95 shadow-sm ${
-                    isDarkMode 
-                      ? 'bg-black/60 hover:bg-black/80 text-white border border-zinc-800/85' 
-                      : 'bg-white/95 hover:bg-white text-zinc-900 border border-zinc-200/85'
-                  }`}
-                >
-                  <span>← Choose Another Role</span>
-                </button>
-
                 <div className={`relative z-10 p-5 rounded-2xl border backdrop-blur-md transition-all duration-300 shadow-xl ${
                   isDarkMode 
                     ? 'bg-black/80 border-zinc-800/85' 
@@ -2694,19 +2811,17 @@ export default function App() {
                   <span className={`text-[10px] uppercase font-mono tracking-[0.25em] font-extrabold ${
                     isDarkMode ? 'text-yellow-400' : 'text-amber-700'
                   }`}>
-                    {signInRole === 'Tailor' ? 'Authorized Master System' : 'Customer Lounge Access'}
+                    Authorized Atelier Workspace
                   </span>
                   <h2 className={`font-sans font-black text-2xl tracking-tight mt-1 leading-tight ${
                     isDarkMode ? 'text-white' : 'text-zinc-950'
                   }`}>
-                    <Typewriter text={signInRole === 'Tailor' ? 'Resuming Atelier Services' : 'Your Customized Fit Workspace'} speed={40} isDark={isDarkMode} />
+                    <Typewriter text="Sartorial Design Center" speed={40} isDark={isDarkMode} />
                   </h2>
                   <p className={`text-xs mt-2 select-none leading-relaxed font-semibold ${
                     isDarkMode ? 'text-zinc-350' : 'text-zinc-700'
                   }`}>
-                    {signInRole === 'Tailor'
-                      ? 'Seamless coordinate access keys to resume digital stitching schedules and verify material specifications.'
-                      : 'Verify instant chest sizing ratios or tracking metrics. Use your phone credentials.'}
+                    Enter your email or phone credentials to access tailored design measurements, manage shop schedules, or track boutique orders.
                   </p>
                 </div>
               </div>
@@ -2732,7 +2847,7 @@ export default function App() {
                     <p className={`text-xs mt-1 font-semibold ${
                       isDarkMode ? 'text-zinc-400' : 'text-zinc-505'
                     }`}>
-                      Identify your workshop account credentials
+                      Unified Sign-In for Master Admins, Tailor Shop Owners &amp; Customers
                     </p>
                   </div>
 
@@ -2744,14 +2859,14 @@ export default function App() {
                       <label className={`block text-[11px] uppercase tracking-wider font-bold mb-1.5 ${
                         isDarkMode ? 'text-zinc-400' : 'text-zinc-650'
                       }`}>
-                        {signInRole === 'Customer' ? 'Email or Phone Number' : 'Email Address'}
+                        Username, Email Address or Phone Number
                       </label>
                       <div className="relative">
                         <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
                         <input
-                          type={signInRole === 'Customer' ? 'text' : 'email'}
+                          type="text"
                           required
-                          placeholder={signInRole === 'Customer' ? 'e.g. customer@domain.com or phone number' : 'owner@atelier.com'}
+                          placeholder="e.g. Arthur, owner@atelier.com, or phone number"
                           value={signInEmail}
                           onChange={(e) => setSignInEmail(e.target.value)}
                           className={`w-full pl-11 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-yellow-400 text-xs font-semibold ${
@@ -2766,14 +2881,14 @@ export default function App() {
                       <label className={`block text-[11px] uppercase tracking-wider font-bold mb-1.5 ${
                         isDarkMode ? 'text-zinc-400' : 'text-zinc-650'
                       }`}>
-                        {signInRole === 'Customer' ? 'Password (Order ID like ORD-9841)' : 'Password'}
+                        Password, Username, Phone, or Order ID
                       </label>
                       <div className="relative">
                         <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
                         <input
                           type={showPassword ? "text" : "password"}
                           required
-                          placeholder={signInRole === 'Customer' ? 'e.g. ORD-9841' : '••••••••'}
+                          placeholder="e.g. phone/username, custom password or ORD-9841"
                           value={signInPassword}
                           onChange={(e) => setSignInPassword(e.target.value)}
                           className={`w-full pl-11 pr-11 py-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-yellow-400 text-xs font-sans font-semibold ${
@@ -2783,7 +2898,7 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-405 hover:text-stone-605"
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-405 hover:text-stone-605 cursor-pointer"
                         >
                           {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
@@ -2806,7 +2921,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => triggerToast('Security pins or password reset alerts dispatched on registered phone lines.', 'info')}
-                        className={`hover:underline font-bold ${
+                        className={`hover:underline font-bold cursor-pointer ${
                           isDarkMode ? 'text-yellow-400' : 'text-black'
                         }`}
                       >
@@ -2827,36 +2942,18 @@ export default function App() {
                   </form>
                 </div>
 
-                 {/* Toggle logic link to creation */}
-                 {signInRole !== 'Customer' ? (
-                   <div className={`mt-8 text-center text-xs font-semibold ${
-                     isDarkMode ? 'text-zinc-400' : 'text-zinc-500'
-                   }`}>
-                     <span>Atelier logins are managed by administrators. Default: <strong>owner@atelier.com</strong> (pass: <strong>password123</strong>)</span>
-                     <button
-                       type="button"
-                       onClick={() => {
-                         setSignUpRole(signInRole);
-                         setGatekeeperScreen('signup');
-                         triggerToast(`Switched to account creation mode!`, 'info');
-                       }}
-                       className={`hover:underline font-extrabold cursor-pointer text-sm ${
-                         isDarkMode ? 'text-yellow-400' : 'text-black'
-                       }`}
-                     >
-                       
-                     </button>
-                   </div>
-                 ) : (
-                   <div className={`mt-8 text-center text-xs font-semibold ${
-                     isDarkMode ? 'text-zinc-400' : 'text-zinc-500'
-                   }`}>
-                     <p>Orders are automatically indexed by our workshop team.</p>
-                     <p className="mt-1 font-bold text-amber-600 dark:text-amber-400">
-                       Please enter your Phone or Email with your Order ID as Password.
-                     </p>
-                   </div>
-                 )}
+                {/* Info and helpers bar with clean instructions */}
+                <div className={`mt-8 text-center text-xs font-semibold p-4 rounded-xl transition-all space-y-1 ${
+                  isDarkMode ? 'bg-zinc-900/40 text-zinc-400 border border-zinc-800/40' : 'bg-stone-50 text-stone-500 border border-stone-200/50'
+                }`}>
+                  <p>All roles are automatically detected by system coordinates.</p>
+                  <p className="text-[11px] opacity-90">
+                    <strong className="text-amber-600 dark:text-amber-400">Owner Bypass Email:</strong> owner@gmail.com (PSWD: AtelierOwner2026!)
+                  </p>
+                  <p className="text-[11px] opacity-90">
+                    <strong className="text-amber-600 dark:text-amber-400">Customer Access:</strong> Mobile/Email with your Order ID (e.g. ORD-9841) as Password.
+                  </p>
+                </div>
 
               </div>
 
@@ -3308,6 +3405,284 @@ export default function App() {
     );
   }
 
+  if (currentUser && currentUser.role === 'Tailor' && !currentUser.hasRegisteredShop) {
+    return (
+      <div className={`min-h-screen transition-colors duration-300 flex items-center justify-center p-4 relative ${isDarkMode ? 'dark' : ''} ${
+        isDarkMode ? 'bg-black text-white' : 'bg-[#faf9f6] text-black font-sans'
+      }`}>
+        <div className="absolute top-4 right-4 z-50">
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className={`p-2.5 rounded-xl border shadow-sm transition-all cursor-pointer ${
+              isDarkMode 
+                ? 'bg-zinc-900 border-zinc-800 text-yellow-400 hover:bg-zinc-800' 
+                : 'bg-white border-zinc-200 text-black hover:bg-zinc-50'
+            }`}
+          >
+            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
+        </div>
+
+        <div className={`w-full max-w-lg p-6 sm:p-8 rounded-3xl border shadow-2xl transition-all duration-300 ${
+          isDarkMode ? 'bg-zinc-950 border-zinc-900' : 'bg-white border-zinc-300 shadow-xl'
+        }`}>
+          <div className="text-center mb-5">
+            <span className="p-3 bg-amber-500/10 text-amber-600 rounded-full inline-block mb-3">
+              <Scissors className="h-6 w-6 transform -rotate-45" />
+            </span>
+            <h2 className="text-2xl font-black text-stone-900 dark:text-white tracking-tight">Register Your Tailor Shop</h2>
+            <p className="text-xs text-stone-500 mt-1 dark:text-stone-400">
+              Please provide complete shop details, branding, and GPS coordinates to construct your bespoke workstation. All fields are required.
+            </p>
+          </div>
+
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            
+            const nameClean = setupShopName.trim();
+            const locClean = setupShopLocation.trim();
+            const phoneClean = setupShopPhone.trim();
+            const ownerClean = setupOwnerName.trim();
+            const logoClean = setupLogoUrl.trim();
+            const latClean = setupLatitude.trim();
+            const lonClean = setupLongitude.trim();
+
+            if (!nameClean || !locClean || !phoneClean || !ownerClean || !logoClean || !latClean || !lonClean) {
+              triggerToast('Please provide all details! Every field is required to register your Shop.', 'error');
+              return;
+            }
+
+            // 1. Update general configurations
+            setAtelierName(nameClean);
+            localStorage.setItem('atelier_name', nameClean);
+
+            setCustomLogoUrl(logoClean);
+            localStorage.setItem('logo_url', logoClean);
+
+            // 2. Update currentUser in memory and local storage
+            const updatedUser = {
+              ...currentUser,
+              name: ownerClean,
+              location: locClean,
+              phone: phoneClean,
+              hasRegisteredShop: true,
+              coordinateLatitude: latClean,
+              coordinateLongitude: lonClean
+            };
+            setCurrentUser(updatedUser);
+            localStorage.setItem('tailor_logged_in_user', JSON.stringify(updatedUser));
+
+            // 3. Update registered_tailors list to persist this registration
+            const tailors = getRegisteredTailors();
+            const updatedTailors = tailors.map((t: any) => {
+              if (t.id === currentUser.id || t.email.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) {
+                return {
+                  ...t,
+                  name: ownerClean,
+                  hasRegisteredShop: true,
+                  shopName: nameClean,
+                  location: locClean,
+                  phone: phoneClean,
+                  logoUrl: logoClean,
+                  coordinateLatitude: latClean,
+                  coordinateLongitude: lonClean
+                };
+              }
+              return t;
+            });
+            saveRegisteredTailors(updatedTailors);
+            setRegisteredTailors(updatedTailors);
+
+            triggerToast('Congratulations! Your Atelier Tailor Shop is now Registered!', 'success');
+          }} className="space-y-4 text-left">
+            <div>
+              <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">
+                Shop / Atelier Name *
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Row Tailoring House"
+                value={setupShopName}
+                onChange={(e) => setSetupShopName(e.target.value)}
+                className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">
+                Shop Owner / Proprietor Name *
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Arthur S. Row"
+                value={setupOwnerName}
+                onChange={(e) => setSetupOwnerName(e.target.value)}
+                className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">
+                Store Location / Physical Suite *
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Savile Row, Suite 4B"
+                value={setupShopLocation}
+                onChange={(e) => setSetupShopLocation(e.target.value)}
+                className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">
+                Store Contact Phone *
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. +91 9876543210"
+                value={setupShopPhone}
+                onChange={(e) => setSetupShopPhone(e.target.value)}
+                className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800"
+                required
+              />
+            </div>
+
+            {/* Drag and Drop / Logo Upload */}
+            <div>
+              <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">
+                Store Logo (URL or Upload) *
+              </label>
+              <div className="space-y-2">
+                <input
+                  type="url"
+                  placeholder="https://images.unsplash.com/photo-... or drag an image below"
+                  value={setupLogoUrl}
+                  onChange={(e) => setSetupLogoUrl(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800"
+                  required
+                />
+                
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setSetupDragging(true);
+                  }}
+                  onDragLeave={() => setSetupDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setSetupDragging(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleLogoFileSelect(file);
+                  }}
+                  className={`border-2 border-dashed rounded-xl p-3.5 text-center cursor-pointer transition-all ${
+                    setupDragging 
+                      ? 'border-amber-500 bg-amber-500/10' 
+                      : 'border-stone-300 dark:border-stone-800 hover:border-amber-500/40'
+                  }`}
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (file) handleLogoFileSelect(file);
+                    };
+                    input.click();
+                  }}
+                >
+                  {setupLogoUrl ? (
+                    <div className="flex items-center justify-center space-x-3">
+                      <img
+                        src={setupLogoUrl}
+                        alt="Logo preview"
+                        className="h-10 w-10 object-cover rounded-lg border dark:border-stone-800"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                      <span className="text-xs text-emerald-500 font-bold flex items-center">
+                        <Check className="h-3.5 w-3.5 mr-1" /> Custom Logo Logged!
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <Upload className="h-4.5 w-4.5 mx-auto text-stone-400" />
+                      <p className="text-[11px] font-bold text-stone-600 dark:text-stone-300">
+                        Drag &amp; drop logo image, or <span className="text-amber-500 underline">browse</span>
+                      </p>
+                      <p className="text-[9px] text-stone-400">Supports JPG, PNG, WEBP</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Coordinate Location (Latitude & Longitude) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-extrabold uppercase tracking-wider block">
+                  GPS Coordinates *
+                </label>
+                <button
+                  type="button"
+                  onClick={handleGetSetupLocation}
+                  disabled={setupLocationLoading}
+                  className="text-[10px] bg-amber-500/10 hover:bg-amber-500/25 text-amber-600 dark:text-amber-500 font-black px-2.5 py-1 rounded-lg flex items-center space-x-1 border border-amber-500/20 hover:border-amber-500/40 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                  <MapPin className={`h-3 w-3 ${setupLocationLoading ? 'animate-spin' : ''}`} />
+                  <span>{setupLocationLoading ? 'Locking GPS...' : 'Use Current Location'}</span>
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Latitude *"
+                    value={setupLatitude}
+                    onChange={(e) => setSetupLatitude(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800"
+                    required
+                  />
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Longitude *"
+                    value={setupLongitude}
+                    onChange={(e) => setSetupLongitude(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl cursor-pointer shadow-lg shadow-amber-600/10 active:scale-[0.98] transition-all mt-2"
+            >
+              Construct Atelier Workstation
+            </button>
+            
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full py-2 border border-stone-200 dark:border-stone-800 font-bold hover:bg-red-500/5 text-stone-500 hover:text-red-500 text-xs rounded-xl cursor-pointer mt-1"
+            >
+              Sign Out &amp; Cancel
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen transition-colors duration-300 flex flex-col ${isDarkMode ? 'dark' : ''} ${
       isDarkMode ? 'bg-black text-white' : 'bg-white text-black font-sans'
@@ -3409,19 +3784,6 @@ export default function App() {
 
             <button
               type="button"
-              onClick={() => setOwnerTab('registered_tailors')}
-              className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
-                ownerTab === 'registered_tailors'
-                  ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500 font-extrabold'
-                  : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
-              }`}
-            >
-              <Scissors className="h-4 w-4" />
-              <span>Registered Tailors</span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => setOwnerTab('staffs_erp')}
               className={`pb-3 text-xs uppercase font-extrabold tracking-wider border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
                 ownerTab === 'staffs_erp'
@@ -3430,7 +3792,7 @@ export default function App() {
               }`}
             >
               <Users className="h-4 w-4" />
-              <span>Staffs TailorShop ERP</span>
+              <span>Register Tailor</span>
             </button>
           </div>
         ) : (
@@ -4262,7 +4624,7 @@ export default function App() {
                         </button>
                       </div>
                     </div>
-                   <div>
+                   <div className="hidden">
                      <div className="flex items-center space-x-2 mb-4">
                        <div className="p-1.5 bg-emerald-500/10 text-emerald-600 rounded-lg">
                          <ShieldCheck className="h-4 w-4" />
@@ -4342,59 +4704,6 @@ export default function App() {
                    </div>
                  </div>
              </div>
-          ) : ownerTab === 'registered_tailors' ? (
-             /* Tailor users logins page */
-             <div className="space-y-6 fade-in font-sans">
-               <div className="border-b border-stone-200 dark:border-slate-800 pb-4">
-                 <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                   <span className="p-2 bg-amber-500/10 text-amber-600 rounded-lg"><Scissors className="h-4.5 w-4.5" /></span>
-                   <span>Register Direct Atelier Worker Staff Logins</span>
-                 </h2>
-                 <p className="text-xs text-stone-400 mt-1">Configure and manage workshop employee credentials, strong passwords, and room identifiers.</p>
-               </div>
-
-               {/* Existing logins list */}
-               <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
-                 <h3 className="text-sm font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-4 flex items-center gap-1.5 justify-between">
-                   <span>Taylor Workshop Staff Logins</span>
-                   <span className="text-[10px] bg-amber-600/10 text-amber-600 px-2 py-0.5 rounded-full font-bold">
-                     {getRegisteredTailors().length} Active
-                   </span>
-                 </h3>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   {getRegisteredTailors().map((t: any) => {
-                     return (
-                       <div key={t.id} className="p-4 rounded-xl border flex justify-between items-center gap-2 dark:bg-slate-950 border-slate-900 bg-stone-50 border-stone-150">
-                         <div className="space-y-1 text-left">
-                           <div className="font-extrabold text-xs text-stone-850 dark:text-white">{t.name}</div>
-                           <div className="text-[10.5px] text-stone-450 space-y-0.5 font-semibold">
-                             <p><span className="font-mono">Email:</span> {t.email}</p>
-                             <p><span className="font-mono">Phone:</span> {t.phone}</p>
-                             <p><span className="font-mono">Room:</span> {t.location}</p>
-                             <p className="text-[10.5px] font-mono text-amber-600 p-1 bg-amber-600/5 rounded inline-block">PSWD: {t.password}</p>
-                           </div>
-                         </div>
-                         <button
-                           type="button"
-                           disabled={t.id === 'TAILOR-OWNER-MASTER'}
-                           onClick={() => {
-                             if (confirm(`Remove staff ${t.name}?`)) {
-                               const filtered = getRegisteredTailors().filter((x: any) => x.id !== t.id);
-                               saveRegisteredTailors(filtered);
-                               setRegisteredTailors(filtered);
-                               triggerToast('Removed staff credentials!', 'success');
-                             }
-                           }}
-                           className={`p-2 rounded hover:bg-red-500/10 hover:text-red-500 text-stone-400 cursor-pointer ${t.id === 'TAILOR-OWNER-MASTER' ? 'cursor-not-allowed opacity-30' : ''}`}
-                         >
-                           <Trash2 className="h-4 w-4" />
-                         </button>
-                       </div>
-                     );
-                   })}
-                 </div>
-               </div>
-             </div>
           ) : ownerTab === 'staffs_erp' ? (
              /* Staffs TailorShop ERP view */
              <div className="space-y-6 fade-in font-sans">
@@ -4402,8 +4711,139 @@ export default function App() {
                  workers={workers}
                  orders={orders}
                  onAddWorker={handleAddWorker}
+                 onDeleteWorker={handleDeleteWorker}
+                 triggerToast={triggerToast}
                  isDarkMode={isDarkMode}
                />
+             </div>
+          ) : false ? (
+             /* Tailor users logins page */
+             <div className="space-y-6 fade-in font-sans">
+               <div className="border-b border-stone-200 dark:border-slate-800 pb-4">
+                 <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                   <span className="p-2 bg-amber-500/10 text-amber-600 rounded-lg"><Scissors className="h-4.5 w-4.5" /></span>
+                   <span>Manage Tailor Shop Owners &amp; Staff Logins</span>
+                 </h2>
+                 <p className="text-xs text-stone-400 mt-1">Admin Dashboard: Register new tailor shop owners, define default credentials, and manage active workshop studios.</p>
+               </div>
+
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                 {/* Left Side: Existing logins list */}
+                 <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
+                   <h3 className="text-sm font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-4 flex items-center gap-1.5 justify-between">
+                     <span>Active Shop Owners / Tailors</span>
+                     <span className="text-[10px] bg-amber-600/10 text-amber-600 px-2 py-0.5 rounded-full font-bold">
+                       {getRegisteredTailors().length} Active
+                     </span>
+                   </h3>
+                   <div className="space-y-3">
+                     {getRegisteredTailors().map((t: any) => {
+                       return (
+                         <div key={t.id} className="p-4 rounded-xl border flex justify-between items-center gap-2 dark:bg-slate-950 border-slate-900 bg-stone-50 border-stone-150">
+                           <div className="space-y-1 text-left">
+                             <div className="font-extrabold text-xs text-stone-850 dark:text-white flex items-center gap-2">
+                               <span>{t.name}</span>
+                               {t.hasRegisteredShop ? (
+                                 <span className="text-[9px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-full font-bold">Shop Profile Set</span>
+                               ) : (
+                                 <span className="text-[9px] bg-amber-500/10 text-[#c29910] dark:text-amber-400 px-1.5 py-0.5 rounded-full font-bold">Pending Shop Setup</span>
+                               )}
+                             </div>
+                             <div className="text-[10.5px] text-stone-500 space-y-0.5 font-semibold font-sans">
+                               <p><span className="font-mono text-[9px] text-stone-400">Email:</span> {t.email}</p>
+                               <p><span className="font-mono text-[9px] text-stone-400">Phone:</span> {t.phone || 'N/A'}</p>
+                               <p><span className="font-mono text-[9px] text-stone-400">Room:</span> {t.location || 'N/A'}</p>
+                               {t.shopName && <p><span className="font-mono text-[9px] text-stone-400">Shop:</span> {t.shopName}</p>}
+                               <p className="text-[10.5px] font-mono text-amber-600 dark:text-amber-400 p-1 bg-amber-600/5 rounded inline-block mt-1">PSWD: {t.password}</p>
+                             </div>
+                           </div>
+                           <button
+                             type="button"
+                             disabled={t.id === 'TAILOR-OWNER-MASTER'}
+                             onClick={() => {
+                               if (confirm(`Remove staff ${t.name}?`)) {
+                                 const filtered = getRegisteredTailors().filter((x: any) => x.id !== t.id);
+                                 saveRegisteredTailors(filtered);
+                                 setRegisteredTailors(filtered);
+                                 triggerToast('Removed staff credentials!', 'success');
+                               }
+                             }}
+                             className={`p-2 rounded hover:bg-red-500/10 hover:text-red-500 text-stone-400 cursor-pointer ${t.id === 'TAILOR-OWNER-MASTER' ? 'cursor-not-allowed opacity-30' : ''}`}
+                           >
+                             <Trash2 className="h-4 w-4" />
+                           </button>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 </div>
+
+                 {/* Right Side: Create Account for Shop Owner Form */}
+                 <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
+                   <h3 className="text-sm font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-4 flex items-center gap-2">
+                     <span className="p-1.5 bg-amber-500/10 text-amber-600 rounded-lg"><Plus className="h-4 w-4" /></span>
+                     <span>Create Tailor Shop Owner Account</span>
+                   </h3>
+                   <form onSubmit={(e) => {
+                     e.preventDefault();
+                     const target = e.currentTarget;
+                     const name = (target.elements.namedItem('tailorName') as HTMLInputElement).value.trim();
+                     const email = (target.elements.namedItem('tailorEmail') as HTMLInputElement).value.trim();
+                     const password = (target.elements.namedItem('tailorPhone') as HTMLInputElement).value.trim();
+                     const room = 'Studio Workspace';
+                     const phone = (target.elements.namedItem('tailorPhone') as HTMLInputElement).value.trim();
+
+                     if (!name || !email || !phone) {
+                       triggerToast('Name, Email and Phone Number are required fields!', 'error');
+                       return;
+                     }
+                     const list = getRegisteredTailors();
+                     const emailConflict = list.some((x: any) => (x.email || '').toLowerCase().trim() === email.toLowerCase().trim());
+                      const phoneConflict = list.some((x: any) => x.phone && x.phone.trim() === phone);
+                      if (emailConflict || phoneConflict) {
+                        triggerToast(emailConflict ? 'This email is already registered!' : 'This phone number is already registered!', 'error');
+                        return;
+                      }
+                      if (false) {
+                       triggerToast('This email is already registered!', 'error');
+                       return;
+                     }
+                     const updated = [...list, { id: `TLR-${Date.now()}`, name, email, password, phone, location: room, hasRegisteredShop: false }];
+                     saveRegisteredTailors(updated);
+                     setRegisteredTailors(updated);
+                     triggerToast(`Successfully registered ${name}! The password is set to their Phone Number.`, 'success');
+                     target.reset();
+                   }} className="space-y-4 text-left">
+                     <div>
+                       <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-stone-600 dark:text-stone-300 leading-relaxed font-sans mb-3 flex items-start gap-2">
+                          <span className="text-amber-600 dark:text-amber-400 font-bold">💡</span>
+                          <div>
+                            <strong className="text-amber-700 dark:text-amber-400">Registration Policy:</strong> Only name, email address and phone number are required. The phone number serves as their login password, and they can sign in using either their email or phone number as username.
+                          </div>
+                        </div>
+                        <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">Tailor / Owner Name</label>
+                       <input name="tailorName" type="text" placeholder="e.g. Arthur S. Row" className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800" required />
+                     </div>
+                     <div>
+                       <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">Login Email Address</label>
+                       <input name="tailorEmail" type="email" placeholder="e.g. key@atelier.com" className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800" required />
+                     </div>
+                     <div>
+                       <label className="hidden">Login Password</label>
+                       <input name="tailorPswd" type="hidden" value="tailor123" />
+                     </div>
+                     <div>
+                       <label className="hidden">Room Identifier / Address</label>
+                       <input name="tailorLoc" type="hidden" value="Savile Row, London" />
+                     </div>
+                     <div>
+                       <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">Tailor Phone Number</label>
+                       <input name="tailorPhone" type="text" placeholder="+44 20 ..." className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800" required />
+                     </div>
+                     <button type="submit" className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md active:scale-[0.98] transition-all">Register Shop Owner Account</button>
+                   </form>
+                 </div>
+               </div>
              </div>
           ) : (
              /* Customer Patrons view */

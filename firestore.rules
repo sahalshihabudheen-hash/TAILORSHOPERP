@@ -122,5 +122,10 @@ service cloud.firestore {
       allow update: if isValidActivity(incoming());
       allow delete: if false; // Audit logs should never be deleted
     }
+
+    // Test collection for boot validation
+    match /test_connection/{id} {
+      allow read, write: if true;
+    }
   }
 }

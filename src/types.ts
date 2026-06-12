@@ -73,6 +73,7 @@ export interface Worker {
   baseSalary: number;
   perOrderBonus: number;
   avatar: string;
+  location?: string;
 }
 
 export interface PaymentInvoice {

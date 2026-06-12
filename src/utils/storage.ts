@@ -57,8 +57,8 @@ const setupSync = <T extends { id: string }>(
         const isFake = 
           ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(custId) ||
           ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(customerId) ||
-          (typeof email === 'string' && email.toLowerCase().includes('@example.com')) ||
-          (typeof customerEmail === 'string' && customerEmail.toLowerCase().includes('@example.com'));
+          (typeof email === 'string' && (email.toLowerCase().includes('@example.com') || email.toLowerCase().includes('@tailorshop.com'))) ||
+          (typeof customerEmail === 'string' && (customerEmail.toLowerCase().includes('@example.com') || customerEmail.toLowerCase().includes('@tailorshop.com')));
 
         if (isFake) {
           deleteDoc(doc(db, collectionName, docSnap.id)).catch((err) => {

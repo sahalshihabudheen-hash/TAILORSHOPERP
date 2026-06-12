@@ -1,6 +1,6 @@
 {
   "name": "Tailor Shop ERP",
   "description": "A highly streamlined, professional tailor workshop application designed for shop owners to instantly record sizing patterns, capture customer contacts (phone and email), schedule completion dates, and manage continuous measurement sessions with ease.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
