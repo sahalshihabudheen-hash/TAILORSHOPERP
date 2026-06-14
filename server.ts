@@ -18,6 +18,137 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
+  // API: Client IP Geolocation Proxy
+  app.get("/api/geolocation", async (req, res) => {
+    try {
+      const ipHeader = req.headers["x-forwarded-for"];
+      let clientIp = "";
+      if (typeof ipHeader === "string") {
+        clientIp = ipHeader.split(",")[0].trim();
+      } else if (Array.isArray(ipHeader)) {
+        clientIp = ipHeader[0].trim();
+      } else {
+        clientIp = (req.headers["x-real-ip"] as string) || req.socket.remoteAddress || "";
+      }
+
+      // Clean up IPv6 loopback or wrapped IPv4
+      if (clientIp.startsWith("::ffff:")) {
+        clientIp = clientIp.substring(7);
+      }
+
+      console.log(`[GeoProxy] Client IP parsed: "${clientIp}"`);
+
+      const isPublicIp = (ip: string) => {
+        if (!ip) return false;
+        const clean = ip.trim().toLowerCase();
+        if (clean === "::1" || clean === "127.0.0.1" || clean === "localhost") return false;
+        if (clean.startsWith("10.") || clean.startsWith("192.168.") || clean.startsWith("169.254.")) return false;
+        if (clean.startsWith("172.")) {
+          const parts = clean.split(".");
+          if (parts.length >= 2) {
+            const second = parseInt(parts[1], 10);
+            if (!isNaN(second) && second >= 16 && second <= 31) return false;
+          }
+        }
+        return true;
+      };
+
+      const targetIp = isPublicIp(clientIp) ? clientIp : "";
+      const errors: string[] = [];
+
+      // Provider 1: freeipapi.com
+      try {
+        const url = targetIp ? `https://freeipapi.com/api/json/${targetIp}` : "https://freeipapi.com/api/json";
+        const apiRes = await fetch(url);
+        if (apiRes.ok) {
+          const data = await apiRes.json() as any;
+          if (data && data.latitude != null && data.longitude != null) {
+            return res.json({
+              latitude: parseFloat(data.latitude).toFixed(6),
+              longitude: parseFloat(data.longitude).toFixed(6),
+              country: data.countryName || "India",
+              region: data.regionName || "",
+              city: data.cityName || "",
+              postal: data.zipCode || "",
+              area: data.cityName || "Central Area"
+            });
+          }
+        }
+        errors.push(`freeipapi responded with status ${apiRes.status}`);
+      } catch (err: any) {
+        errors.push(`freeipapi error: ${err.message}`);
+      }
+
+      // Provider 2: ipwho.is
+      try {
+        const url = targetIp ? `https://ipwho.is/${targetIp}` : "https://ipwho.is/";
+        const apiRes = await fetch(url);
+        if (apiRes.ok) {
+          const data = await apiRes.json() as any;
+          if (data && data.success && data.latitude != null && data.longitude != null) {
+            return res.json({
+              latitude: parseFloat(data.latitude).toFixed(6),
+              longitude: parseFloat(data.longitude).toFixed(6),
+              country: data.country || "India",
+              region: data.region || "",
+              city: data.city || "",
+              postal: data.postal || "",
+              area: data.city || "Central Area"
+            });
+          }
+        }
+        errors.push(`ipwho.is bad response state`);
+      } catch (err: any) {
+        errors.push(`ipwho.is error: ${err.message}`);
+      }
+
+      // Provider 3: ipapi.co
+      try {
+        const url = targetIp ? `https://ipapi.co/${targetIp}/json/` : "https://ipapi.co/json/";
+        const apiRes = await fetch(url);
+        if (apiRes.ok) {
+          const data = await apiRes.json() as any;
+          if (data && data.latitude != null && data.longitude != null) {
+            return res.json({
+              latitude: parseFloat(data.latitude).toFixed(6),
+              longitude: parseFloat(data.longitude).toFixed(6),
+              country: data.country_name || "India",
+              region: data.region || "",
+              city: data.city || "",
+              postal: data.postal || "",
+              area: data.org || data.city || "Central Area"
+            });
+          }
+        }
+        errors.push(`ipapi.co responded with status ${apiRes.status}`);
+      } catch (err: any) {
+        errors.push(`ipapi.co error: ${err.message}`);
+      }
+
+      console.warn(`[GeoProxy] Geolocation providers failed: ${errors.join(", ")}. Using standard Kerala backup.`);
+      return res.json({
+        latitude: "11.132300",
+        longitude: "75.882200",
+        country: "India",
+        region: "Kerala",
+        city: "Kozhikode",
+        postal: "673636",
+        area: "Central Kozhikode"
+      });
+    } catch (topErr: any) {
+      console.error("[GeoProxy] Top-level handler crash:", topErr);
+      return res.json({
+        latitude: "11.132300",
+        longitude: "75.882200",
+        country: "India",
+        region: "Kerala",
+        city: "Kozhikode",
+        postal: "673636",
+        area: "Central Kozhikode"
+      });
+    }
+  });
+
   // API: Send SMS OTP
   app.post("/api/send-otp", async (req, res) => {
     try {

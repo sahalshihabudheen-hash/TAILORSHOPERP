@@ -61,6 +61,7 @@ export interface Order {
   remainingBalance: number;
   paymentStatus: 'Unpaid' | 'Partially Paid' | 'Fully Paid';
   createdAt: string;
+  shopName?: string;
 }
 
 export interface Worker {
@@ -74,6 +75,14 @@ export interface Worker {
   perOrderBonus: number;
   avatar: string;
   location?: string;
+  hasRegisteredShop?: boolean;
+  shopName?: string;
+  logoUrl?: string;
+  coordinateLatitude?: string;
+  coordinateLongitude?: string;
+  shopOwnerId?: string;
+  shopOwnerEmail?: string;
+  shopLogoUrl?: string;
 }
 
 export interface PaymentInvoice {

@@ -37,7 +37,8 @@ import {
   IndianRupee,
   Users,
   Upload,
-  Image
+  Image,
+  RotateCcw
 } from 'lucide-react';
 import {
   getCustomers,
@@ -56,6 +57,7 @@ import {
 } from './utils/storage';
 import { Customer, MeasurementRecord, Order, OrderStatus, Worker } from './types';
 import WorkerManagementView from './components/WorkerManagementView';
+import { fetchIPLocation } from './utils/geolocation';
 import CustomerManagementView from './components/CustomerManagementView';
 
 // Custom elegant vector icon components for clothing categories
@@ -124,6 +126,125 @@ const DEFAULT_FIELDS_BY_TYPE: Record<string, Record<string, string>> = {
   Suit: { Shoulder: '18.5', Chest: '42', Waist: '38', Hips: '43', Sleeve: '25', JacketLength: '31', Collar: '16', Inseam: '32' },
   Kurta: { Shoulder: '18', Chest: '41', Waist: '38', Seat: '44', Sleeve: '24.5', Length: '42', Collar: '15.5' },
   Custom: { Length: '36', Width: '20' }
+};
+
+// Location structure helpers
+const COUNTRY_LIST = [
+  'India',
+  'United States',
+  'United Kingdom',
+  'United Arab Emirates',
+  'Saudi Arabia',
+  'Canada',
+  'Australia',
+  'Singapore',
+  'Qatar',
+  'Oman',
+  'Bahrain',
+  'Kuwait'
+];
+
+const INDIA_STATES_MAP: Record<string, string[]> = {
+  'Andhra Pradesh': ['Visakhapatnam', 'Vijayawada', 'Guntur', 'Nellore', 'Tirupati'],
+  'Arunachal Pradesh': ['Itanagar', 'Tawang', 'Ziro'],
+  'Assam': ['Guwahati', 'Dibrugarh', 'Silchar', 'Jorhat'],
+  'Bihar': ['Patna', 'Gaya', 'Bhagalpur', 'Muzaffarpur'],
+  'Chhattisgarh': ['Raipur', 'Bhilai', 'Bilaspur'],
+  'Delhi': ['New Delhi', 'North Delhi', 'South Delhi', 'East Delhi', 'West Delhi'],
+  'Goa': ['Panaji', 'Margao', 'Vasco da Gama'],
+  'Gujarat': ['Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Gandhinagar'],
+  'Haryana': ['Gurugram', 'Faridabad', 'Panipat', 'Ambala'],
+  'Himachal Pradesh': ['Shimla', 'Dharamshala', 'Manali'],
+  'Jharkhand': ['Ranchi', 'Jamshedpur', 'Dhanbad'],
+  'Karnataka': ['Bangalore', 'Mysore', 'Mangalore', 'Hubli-Dharwad', 'Belgaum'],
+  'Kerala': ['Malappuram', 'Kozhikode', 'Ernakulam', 'Trivandrum', 'Thrissur', 'Palakkad', 'Kannur', 'Kollam', 'Kottayam', 'Alappuzha', 'Idukki', 'Wayanad', 'Kasaragod', 'Pathanamthitta'],
+  'Madhya Pradesh': ['Indore', 'Bhopal', 'Jabalpur', 'Gwalior'],
+  'Maharashtra': ['Mumbai', 'Pune', 'Nagpur', 'Thane', 'Nashik', 'Aurangabad'],
+  'Manipur': ['Imphal'],
+  'Meghalaya': ['Shillong'],
+  'Mizoram': ['Aizawl'],
+  'Nagaland': ['Kohima', 'Dimapur'],
+  'Odisha': ['Bhubaneswar', 'Cuttack', 'Rourkela', 'Puri'],
+  'Punjab': ['Ludhiana', 'Amritsar', 'Jalandhar', 'Patiala'],
+  'Rajasthan': ['Jaipur', 'Jodhpur', 'Udaipur', 'Kota', 'Ajmer'],
+  'Sikkim': ['Gangtok'],
+  'Tamil Nadu': ['Chennai', 'Coimbatore', 'Madurai', 'Trichy', 'Salem', 'Tirunelveli', 'Vellore', 'Erode', 'Thanjavur'],
+  'Telangana': ['Hyderabad', 'Warangal', 'Nizamabad', 'Karimnagar'],
+  'Tripura': ['Agartala'],
+  'Uttar Pradesh': ['Lucknow', 'Kanpur', 'Noida', 'Ghaziabad', 'Agra', 'Varanasi', 'Prayagraj', 'Meerut'],
+  'Uttarakhand': ['Dehradun', 'Haridwar', 'Nainital'],
+  'West Bengal': ['Kolkata', 'Howrah', 'Darjeeling', 'Siliguri', 'Durgapur']
+};
+
+// Robust helper to match phone numbers with or without country codes, spaces, or formatting robustly
+const isPhoneMatch = (phone1: string, phone2: string): boolean => {
+  const c1 = (phone1 || '').replace(/\D/g, '');
+  const c2 = (phone2 || '').replace(/\D/g, '');
+  if (!c1 || !c2) return false;
+  if (c1 === c2) return true;
+  if (c1.length >= 8 && c2.length >= 8) {
+    if (c1.endsWith(c2) || c2.endsWith(c1)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+// Helper to compute a pleasant responsive font-size for any length/style of emoji input
+const getFavorableEmojiSize = (emojiStr: string): string => {
+  if (!emojiStr) return '16px';
+  const charArray = Array.from(emojiStr); 
+  const len = charArray.length;
+  if (len <= 1) return '20px'; // standard single emoji: 20px (large and beautiful)
+  if (len === 2) return '15px'; // pair of emojis or small text: 15px
+  if (len === 3) return '12px'; // triple: 12px
+  if (len === 4) return '10px'; // quad: 10px
+  return '8px'; // long string: 8px to fit completely inside
+};
+
+// Global category/genre icon renderer helper supporting both text/emoji and base64 uploaded custom images
+const renderGenreIcon = (
+  genre: string, 
+  clothingCategoryEmojis: Record<string, string>, 
+  iconSizeClass = "h-3.5 w-3.5", 
+  base64SizeClass = "w-3.5 h-3.5"
+) => {
+  const custom = clothingCategoryEmojis[genre];
+  if (custom) {
+    if (custom.startsWith('data:image/')) {
+      return (
+        <img 
+          src={custom} 
+          alt={genre} 
+          className={`${base64SizeClass} object-contain rounded-md shrink-0`} 
+        />
+      );
+    } else {
+      return (
+        <span 
+          className="select-none leading-none shrink-0"
+          style={{ fontSize: getFavorableEmojiSize(custom) }}
+        >
+          {custom}
+        </span>
+      );
+    }
+  }
+  // fallback defaults
+  switch (genre) {
+    case 'Shirt':
+      return <Shirt className={iconSizeClass} />;
+    case 'Pant':
+      return <PantIcon className={iconSizeClass} />;
+    case 'Suit':
+      return <SuitIcon className={iconSizeClass} />;
+    case 'Kurta':
+      return <KurtaIcon className={iconSizeClass} />;
+    case 'Custom':
+      return <Ruler className={iconSizeClass} />;
+    default:
+      return <Scissors className={iconSizeClass} />;
+  }
 };
 
 // Seeding registered tailors database helper
@@ -297,6 +418,94 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [registeredTailors, setRegisteredTailors] = useState<any[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
+
+  const getCurrentUserShopInfo = () => {
+    if (!currentUser) return null;
+    if (currentUser.role === 'Owner') return null;
+    if (!registeredTailors || registeredTailors.length === 0) return null;
+
+    // 1. Check if currentUser is a registered tailor (meaning they are the Shop Owner)
+    const userEmail = (currentUser.email || '').toLowerCase().trim();
+    const userPhone = (currentUser.phone || '').trim();
+    const userName = (currentUser.name || '').toLowerCase().trim();
+
+    const tailorMatch = registeredTailors.find((t: any) => {
+      const tEmail = (t.email || '').toLowerCase().trim();
+      const tPhone = (t.phone || '').trim();
+      const tName = (t.name || '').toLowerCase().trim();
+
+      return (userEmail && tEmail === userEmail) || 
+             (userPhone && isPhoneMatch(userPhone, tPhone)) ||
+             (userName && tName === userName);
+    });
+
+    if (tailorMatch && tailorMatch.hasRegisteredShop) {
+      return {
+        logoUrl: tailorMatch.logoUrl,
+        shopName: tailorMatch.shopName,
+        hasShop: true
+      };
+    }
+
+    // 2. Check if currentUser is a worker listed in the workers table
+    const workerMatch = workers.find((w: any) => {
+      const wEmail = (w.email || '').toLowerCase().trim();
+      const wPhone = (w.phone || '').trim();
+      const wName = (w.name || '').toLowerCase().trim();
+
+      return (userEmail && wEmail === userEmail) ||
+             (userPhone && isPhoneMatch(userPhone, wPhone)) ||
+             (userName && wName === userName);
+    });
+
+    if (workerMatch) {
+      // If worker object has direct shop linkage
+      if (workerMatch.hasRegisteredShop && workerMatch.shopName) {
+        return {
+          logoUrl: workerMatch.logoUrl || 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=200&auto=format&fit=crop',
+          shopName: workerMatch.shopName,
+          hasShop: true
+        };
+      }
+
+      // Look up by owner email, owner id, or shop name
+      const ownerMatch = registeredTailors.find((t: any) => {
+        const tEmail = (t.email || '').toLowerCase().trim();
+        const tPhone = (t.phone || '').trim();
+        const tName = (t.name || '').toLowerCase().trim();
+        
+        return (workerMatch.shopOwnerId && t.id === workerMatch.shopOwnerId) ||
+               (workerMatch.shopOwnerEmail && tEmail === workerMatch.shopOwnerEmail.toLowerCase().trim()) ||
+               (workerMatch.shopName && t.shopName && t.shopName.toLowerCase().trim() === workerMatch.shopName.toLowerCase().trim()) ||
+               (tEmail && workerMatch.email && tEmail === workerMatch.email.toLowerCase().trim()) ||
+               (tPhone && workerMatch.phone && isPhoneMatch(tPhone, workerMatch.phone)) ||
+               (tName && workerMatch.name && tName === workerMatch.name.toLowerCase().trim());
+      });
+
+      if (ownerMatch && ownerMatch.hasRegisteredShop) {
+        return {
+          logoUrl: ownerMatch.logoUrl,
+          shopName: ownerMatch.shopName,
+          hasShop: true
+        };
+      }
+    }
+
+    return null;
+  };
+
+  const visibleOrders = React.useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'Owner') {
+      return orders;
+    }
+    const shopInfo = getCurrentUserShopInfo();
+    if (shopInfo && shopInfo.shopName) {
+      return orders.filter(o => o.shopName && o.shopName.toLowerCase().trim() === shopInfo.shopName.toLowerCase().trim());
+    }
+    return orders;
+  }, [orders, currentUser, registeredTailors, workers]);
+
   const [ownerTab, setOwnerTab] = useState<'branding' | 'staffs_erp' | 'customer_patrons'>('branding');
   const [logoInputType, setLogoInputType] = useState<'url' | 'upload'>('url');
 
@@ -335,9 +544,67 @@ export default function App() {
   const [setupDragging, setSetupDragging] = useState(false);
   const [setupLocationLoading, setSetupLocationLoading] = useState(false);
 
+  // Structured location fields
+  const [setupShopCountry, setSetupShopCountry] = useState('India');
+  const [setupShopState, setSetupShopState] = useState('');
+  const [setupShopDistrict, setSetupShopDistrict] = useState('');
+  const [setupShopArea, setSetupShopArea] = useState('');
+  const [setupShopPincode, setSetupShopPincode] = useState('');
+
+  // Synchronize structured address into main location string
+  useEffect(() => {
+    const parts = [
+      setupShopArea.trim(),
+      setupShopDistrict.trim(),
+      setupShopState.trim(),
+      setupShopCountry.trim(),
+      setupShopPincode.trim() ? `PIN: ${setupShopPincode.trim()}` : ''
+    ].filter(Boolean);
+    setSetupShopLocation(parts.join(', '));
+  }, [setupShopCountry, setupShopState, setupShopDistrict, setupShopArea, setupShopPincode]);
+
+  // Admin shop configuration states for configuring tailor shops directly from Admin panel
+  const [adminConfiguringTailorId, setAdminConfiguringTailorId] = useState<string | null>(null);
+  const [adminShopName, setAdminShopName] = useState('');
+  const [adminOwnerName, setAdminOwnerName] = useState('');
+  const [adminShopCountry, setAdminShopCountry] = useState('India');
+  const [adminShopState, setAdminShopState] = useState('');
+  const [adminShopDistrict, setAdminShopDistrict] = useState('');
+  const [adminShopArea, setAdminShopArea] = useState('');
+  const [adminShopPincode, setAdminShopPincode] = useState('');
+  const [adminShopPhone, setAdminShopPhone] = useState('');
+  const [adminLogoUrl, setAdminLogoUrl] = useState('');
+  const [adminLatitude, setAdminLatitude] = useState('');
+  const [adminLongitude, setAdminLongitude] = useState('');
+  const [adminLocationLoading, setAdminLocationLoading] = useState(false);
+
+  const cleanImageUrl = (url: string): string => {
+    if (!url) return '';
+    const trimmed = url.trim();
+    try {
+      if (trimmed.includes('google.') && (trimmed.includes('/imgres') || trimmed.includes('&imgurl=') || trimmed.includes('?imgurl='))) {
+        const urlObj = new URL(trimmed);
+        const imgurl = urlObj.searchParams.get('imgurl');
+        if (imgurl) {
+          return decodeURIComponent(imgurl);
+        }
+      }
+    } catch {
+      const match = trimmed.match(/[?&]imgurl=([^&]+)/);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+      }
+    }
+    return trimmed;
+  };
+
   const handleLogoFileSelect = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      triggerToast('Please upload an image file.', 'error');
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+    const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    
+    if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+      triggerToast('Please upload only JPG, PNG, or WEBP image files.', 'error');
       return;
     }
     const reader = new FileReader();
@@ -350,25 +617,196 @@ export default function App() {
   };
 
   const handleGetSetupLocation = () => {
+    const fallbackToIp = async (errMsg?: string) => {
+      triggerToast('GPS failed. Falling back to Network IP Geolocation...', 'info');
+      try {
+        const ipData = await fetchIPLocation();
+        setSetupLatitude(ipData.latitude);
+        setSetupLongitude(ipData.longitude);
+        if (ipData.country) setSetupShopCountry(ipData.country);
+        
+        let detectedState = '';
+        if (ipData.region) {
+          const findState = Object.keys(INDIA_STATES_MAP).find(
+            (s) => s.toLowerCase() === ipData.region.toLowerCase() || ipData.region.toLowerCase().includes(s.toLowerCase())
+          );
+          if (findState) {
+            setSetupShopState(findState);
+            detectedState = findState;
+          } else {
+            setSetupShopState(ipData.region);
+            detectedState = ipData.region;
+          }
+        }
+        if (detectedState && INDIA_STATES_MAP[detectedState] && ipData.city) {
+          const distList = INDIA_STATES_MAP[detectedState];
+          const match = distList.find(d => 
+            d.toLowerCase() === ipData.city.toLowerCase() || 
+            ipData.city.toLowerCase().includes(d.toLowerCase()) ||
+            d.toLowerCase().includes(ipData.city.toLowerCase())
+          );
+          if (match) {
+            setSetupShopDistrict(match);
+          } else {
+            setSetupShopDistrict(ipData.city);
+          }
+        } else if (ipData.city) {
+          setSetupShopDistrict(ipData.city);
+        }
+
+        if (ipData.postal) setSetupShopPincode(ipData.postal);
+        setSetupShopArea(ipData.area || 'Central Area');
+        triggerToast('Location auto-loaded via IP successfully!', 'success');
+      } catch (fError: any) {
+        console.error("IP fallback error:", fError);
+        triggerToast(errMsg || fError?.message || 'Network Geolocation failed.', 'error');
+      } finally {
+        setSetupLocationLoading(false);
+      }
+    };
+
     if (!navigator.geolocation) {
-      triggerToast('Geolocation is not supported by your browser.', 'error');
+      fallbackToIp('Geolocation is not supported by your browser.');
       return;
     }
     setSetupLocationLoading(true);
     triggerToast('Requesting GPS coordinates...', 'info');
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setSetupLatitude(position.coords.latitude.toFixed(6));
-        setSetupLongitude(position.coords.longitude.toFixed(6));
-        setSetupLocationLoading(false);
-        triggerToast('Current location coordinates retrieved successfully!', 'success');
+      async (position) => {
+        const lat = position.coords.latitude.toFixed(6);
+        const lon = position.coords.longitude.toFixed(6);
+        setSetupLatitude(lat);
+        setSetupLongitude(lon);
+        
+        triggerToast('GPS Locked! Fetching address details...', 'info');
+        
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`, {
+            headers: {
+              'Accept-Language': 'en'
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.address) {
+              const addr = data.address;
+              
+              if (addr.country) {
+                setSetupShopCountry(addr.country);
+              }
+              
+              // Robust State determination
+              let detectedState = '';
+              const stateCandidates = [
+                addr.state,
+                addr.region,
+                addr.province,
+                addr.state_district
+              ].filter(Boolean).map(v => String(v).trim());
+
+              let foundStateKey = '';
+              for (const sc of stateCandidates) {
+                const match = Object.keys(INDIA_STATES_MAP).find(
+                  (s) => s.toLowerCase() === sc.toLowerCase() || 
+                         sc.toLowerCase().includes(s.toLowerCase()) || 
+                         s.toLowerCase().includes(sc.toLowerCase())
+                );
+                if (match) {
+                  foundStateKey = match;
+                  break;
+                }
+              }
+
+              if (foundStateKey) {
+                setSetupShopState(foundStateKey);
+                detectedState = foundStateKey;
+              } else if (addr.state) {
+                setSetupShopState(addr.state);
+                detectedState = addr.state;
+              }
+              
+              // Smart district matching within INDIA_STATES_MAP for the selected state
+              let matchedDistrict = '';
+              if (detectedState && INDIA_STATES_MAP[detectedState]) {
+                const distList = INDIA_STATES_MAP[detectedState];
+                
+                // Construct a text corpus with all parts of the address for comprehensive searching
+                const fullTextSearchSource = [
+                  data.display_name || '',
+                  addr.state_district || '',
+                  addr.district || '',
+                  addr.county || '',
+                  addr.city || '',
+                  addr.town || '',
+                  addr.city_district || '',
+                  addr.suburb || '',
+                  addr.village || '',
+                  addr.neighbourhood || '',
+                  addr.municipality || '',
+                  addr.subdistrict || ''
+                ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
+                // 1. Direct EXACT / SUBSTRING MATCH in any specific fields:
+                for (const text of fullTextSearchSource) {
+                  const match = distList.find(d => {
+                    const dl = d.toLowerCase();
+                    return dl === text || text.includes(dl) || dl.includes(text);
+                  });
+                  if (match) {
+                    matchedDistrict = match;
+                    break;
+                  }
+                }
+                
+                // 2. If not matched, try searching inside the complete display_name if display_name mentions the district
+                if (!matchedDistrict && data.display_name) {
+                  const dispLower = data.display_name.toLowerCase();
+                  const match = distList.find(d => dispLower.includes(d.toLowerCase()));
+                  if (match) {
+                    matchedDistrict = match;
+                  }
+                }
+              }
+
+              if (matchedDistrict) {
+                setSetupShopDistrict(matchedDistrict);
+              } else {
+                const districtOrCity = addr.state_district || addr.county || addr.district || addr.city_district || addr.city || addr.town || addr.suburb || '';
+                setSetupShopDistrict(districtOrCity);
+              }
+              
+              if (addr.postcode) {
+                setSetupShopPincode(addr.postcode);
+              }
+              
+              const street = addr.road || addr.suburb || addr.neighbourhood || addr.village || addr.hamlet || '';
+              const areaParts = [street, addr.quarter || ''].filter(Boolean).join(', ');
+              if (areaParts) {
+                setSetupShopArea(areaParts);
+              } else if (data.display_name) {
+                const dispParts = data.display_name.split(',');
+                setSetupShopArea(dispParts.slice(0, 2).join(',').trim());
+              }
+              
+              triggerToast('Address fields & district auto-loaded successfully!', 'success');
+            } else {
+              triggerToast('Current location coordinates retrieved successfully!', 'success');
+            }
+          } else {
+            triggerToast('Current location coordinates retrieved successfully!', 'success');
+          }
+        } catch (err) {
+          console.error("Reverse geocoding error:", err);
+          triggerToast('Current location coordinates retrieved successfully!', 'success');
+        } finally {
+          setSetupLocationLoading(false);
+        }
       },
       (error) => {
         console.error("Geolocation error:", error);
-        setSetupLocationLoading(false);
-        triggerToast(`Location access failed: ${error.message}`, 'error');
+        fallbackToIp(`Location access failed: ${error.message}`);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 6000 }
     );
   };
   const [welcomeBannerDesc, setWelcomeBannerDesc] = useState(() => localStorage.getItem('welcome_banner_desc') || 'Manage your fine tailoring workshops, track measurements, and generate bespoke delivery packages cleanly.');
@@ -438,6 +876,12 @@ export default function App() {
   const [settingsNewCatEmoji, setSettingsNewCatEmoji] = useState<string>('');
   const [settingsNewCatPrice, setSettingsNewCatPrice] = useState<number>(250);
 
+  // Non-blocking confirmation states to circumvent iframe modal restrictions
+  const [confirmDeleteGenre, setConfirmDeleteGenre] = useState<string | null>(null);
+  const [confirmRemoveTailorId, setConfirmRemoveTailorId] = useState<string | null>(null);
+  const [confirmResetConfigs, setConfirmResetConfigs] = useState(false);
+  const [confirmPurgeDatabase, setConfirmPurgeDatabase] = useState(false);
+
   // Workflow stages: 'active' (taking measurements) or 'completed' (viewing receipt voucher)
   const [sessionStage, setSessionStage] = useState<'active' | 'completed'>('active');
   const [activeStep, setActiveStep] = useState<1 | 2>(1);
@@ -504,8 +948,169 @@ export default function App() {
   const [unitSystem, setUnitSystem] = useState<'Inches' | 'Centimeters'>('Inches');
   const [tailorPage, setTailorPage] = useState<'sizing' | 'orders' | 'settings' | 'tailors'>('sizing');
 
+  const [tailorShopNameInput, setTailorShopNameInput] = useState('');
+  const [tailorLogoUrlInput, setTailorLogoUrlInput] = useState('');
+  const [selectedSettingsSubTab, setSelectedSettingsSubTab] = useState<'general' | 'shop_profile'>('general');
+  const [tailorOwnerNameInput, setTailorOwnerNameInput] = useState('');
+  const [tailorPhoneInput, setTailorPhoneInput] = useState('');
+  const [tailorCountryInput, setTailorCountryInput] = useState('India');
+  const [tailorStateInput, setTailorStateInput] = useState('');
+  const [tailorDistrictInput, setTailorDistrictInput] = useState('');
+  const [tailorAreaInput, setTailorAreaInput] = useState('');
+  const [tailorPincodeInput, setTailorPincodeInput] = useState('');
+  const [tailorLatitudeInput, setTailorLatitudeInput] = useState('');
+  const [tailorLongitudeInput, setTailorLongitudeInput] = useState('');
+  const [tailorLocationLoading, setTailorLocationLoading] = useState(false);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const userEmail = (currentUser.email || '').toLowerCase().trim();
+    const userPhone = (currentUser.phone || '').trim();
+    const userName = (currentUser.name || '').toLowerCase().trim();
+
+    const tailorMatch = (registeredTailors || []).find((t: any) => {
+      const tEmail = (t.email || '').toLowerCase().trim();
+      const tPhone = (t.phone || '').trim();
+      const tName = (t.name || '').toLowerCase().trim();
+
+      return (userEmail && tEmail === userEmail) || 
+             (userPhone && isPhoneMatch(userPhone, tPhone)) ||
+             (userName && tName === userName);
+    });
+
+    const activeShop = tailorMatch || currentUser;
+
+    if (activeShop) {
+      setTailorShopNameInput(activeShop.shopName || '');
+      setTailorLogoUrlInput(activeShop.logoUrl || activeShop.shopLogoUrl || '');
+      setTailorOwnerNameInput(activeShop.name || '');
+      setTailorPhoneInput(activeShop.phone || '');
+      
+      const loc = activeShop.location || '';
+      if (loc && loc !== 'Studio Workspace') {
+        const parts = loc.split(',');
+        setTailorAreaInput((activeShop.coordinateLatitude || activeShop.location) ? (parts[0]?.trim() || '') : loc);
+        setTailorDistrictInput(parts[1] ? parts[1].trim() : '');
+        setTailorStateInput(parts[2] ? parts[2].trim() : '');
+        setTailorCountryInput(parts[3] ? parts[3].trim() : 'India');
+        const pinMatch = loc.match(/PIN:\s*(\w+)/);
+        setTailorPincodeInput(pinMatch ? pinMatch[1] : '');
+      } else {
+        setTailorAreaInput('');
+        setTailorDistrictInput('');
+        setTailorStateInput('');
+        setTailorCountryInput('India');
+        setTailorPincodeInput('');
+      }
+
+      setTailorLatitudeInput(activeShop.coordinateLatitude || '');
+      setTailorLongitudeInput(activeShop.coordinateLongitude || '');
+    }
+  }, [currentUser, registeredTailors]);
+
+  const handleUpdateTailorShop = (
+    newShopName: string,
+    newLogoUrl: string,
+    newOwnerName?: string,
+    newPhone?: string,
+    newLocation?: string,
+    newLat?: string,
+    newLon?: string
+  ) => {
+    if (!currentUser) return;
+    
+    const finalOwnerName = newOwnerName !== undefined ? newOwnerName : (currentUser.name || '');
+    const finalPhone = newPhone !== undefined ? newPhone : (currentUser.phone || '');
+    const finalLocation = newLocation !== undefined ? newLocation : (currentUser.location || '');
+    const finalLat = newLat !== undefined ? newLat : (currentUser.coordinateLatitude || '');
+    const finalLon = newLon !== undefined ? newLon : (currentUser.coordinateLongitude || '');
+
+    const updatedUser = {
+      ...currentUser,
+      name: finalOwnerName,
+      shopName: newShopName,
+      logoUrl: newLogoUrl,
+      shopLogoUrl: newLogoUrl,
+      phone: finalPhone,
+      location: finalLocation,
+      coordinateLatitude: finalLat,
+      coordinateLongitude: finalLon,
+      hasRegisteredShop: true
+    };
+    setCurrentUser(updatedUser);
+    localStorage.setItem('tailor_logged_in_user', JSON.stringify(updatedUser));
+
+    const tailors = getRegisteredTailors();
+    const updatedTailors = tailors.map((t: any) => {
+      const tEmail = (t.email || '').toLowerCase().trim();
+      const tPhone = (t.phone || '').trim();
+      const tName = (t.name || '').toLowerCase().trim();
+      const uEmail = (currentUser.email || '').toLowerCase().trim();
+      const uPhone = (currentUser.phone || '').trim();
+      const uName = (currentUser.name || '').toLowerCase().trim();
+
+      if (t.id === currentUser.id || 
+          (uEmail && tEmail === uEmail) || 
+          (uPhone && isPhoneMatch(uPhone, tPhone)) ||
+          (uName && tName === uName)) {
+        return {
+          ...t,
+          name: finalOwnerName,
+          shopName: newShopName,
+          logoUrl: newLogoUrl,
+          phone: finalPhone,
+          location: finalLocation,
+          coordinateLatitude: finalLat,
+          coordinateLongitude: finalLon,
+          hasRegisteredShop: true
+        };
+      }
+      return t;
+    });
+    saveRegisteredTailors(updatedTailors);
+    setRegisteredTailors(updatedTailors);
+
+    const updatedWorkers = workers.map((w: any) => {
+      const wEmail = (w.email || '').toLowerCase().trim();
+      const wPhone = (w.phone || '').trim();
+      const wName = (w.name || '').toLowerCase().trim();
+      const uEmail = (currentUser.email || '').toLowerCase().trim();
+      const uPhone = (currentUser.phone || '').trim();
+      const uName = (currentUser.name || '').toLowerCase().trim();
+
+      if (w.id === currentUser.id || 
+          (uEmail && wEmail === uEmail) || 
+          (uPhone && isPhoneMatch(uPhone, wPhone)) ||
+          (uName && wName === uName)) {
+        return {
+          ...w,
+          name: finalOwnerName,
+          shopName: newShopName,
+          logoUrl: newLogoUrl,
+          logo_url: newLogoUrl,
+          phone: finalPhone,
+          location: finalLocation,
+          coordinateLatitude: finalLat,
+          coordinateLongitude: finalLon,
+          hasRegisteredShop: true
+        };
+      }
+      return w;
+    });
+    setWorkers(updatedWorkers);
+    saveWorkers(updatedWorkers);
+
+    triggerToast("Your Tailor Shop profile updated successfully!", "success");
+  };
+
   // Groundbreaking Admin Landing & Brand Customization states (persistent in LocalStorage)
   const [customLogoUrl, setCustomLogoUrl] = useState(() => localStorage.getItem('logo_url') || '');
+  const [logoLoadError, setLogoLoadError] = useState(false);
+  
+  useEffect(() => {
+    setLogoLoadError(false);
+  }, [customLogoUrl]);
+
   const [customLandingTitle, setCustomLandingTitle] = useState(() => {
     const saved = localStorage.getItem('landing_title');
     return (!saved || saved === 'Welcome to Sartorial Atelier') ? 'Welcome to tailorSHOP ERP' : saved;
@@ -707,9 +1312,19 @@ export default function App() {
 
   const handleAddWorker = (newWorker: Omit<Worker, "id">) => {
     const nextId = `WRK-${Date.now()}`;
+    const shopInfo = getCurrentUserShopInfo();
+    
     const workerWithId: Worker = {
       ...newWorker,
-      id: nextId
+      id: nextId,
+      ...(shopInfo ? {
+        shopOwnerId: currentUser?.id,
+        shopOwnerEmail: currentUser?.email,
+        shopName: shopInfo.shopName,
+        shopLogoUrl: shopInfo.logoUrl,
+        hasRegisteredShop: true,
+        logoUrl: shopInfo.logoUrl
+      } : {})
     };
     const updated = [...workers, workerWithId];
     setWorkers(updated);
@@ -725,6 +1340,90 @@ export default function App() {
     saveWorkers(updated);
     addActivity('Staff Erased', `Pruned tailor profile for ${worker?.name || id}`, currentUser?.role || 'Owner', currentUser?.name || 'Owner');
     triggerToast(`Tailor erased successfully from ERP!`, 'success');
+  };
+
+  const handleAdminSetupTailorShop = (worker: Worker, shopDetails: any) => {
+    // 1. Get the current list of registered tailors
+    const tailorsList = getRegisteredTailors();
+    
+    // 2. Find if they have a matching profile in registered_tailors
+    const workerEmail = (worker.email || '').toLowerCase().trim();
+    const workerPhone = (worker.phone || '').trim();
+    const workerName = (worker.name || '').toLowerCase().trim();
+    
+    let matchIndex = tailorsList.findIndex((t: any) => {
+      const tEmail = (t.email || '').toLowerCase().trim();
+      const tPhone = (t.phone || '').trim();
+      const tName = (t.name || '').toLowerCase().trim();
+      
+      return (workerEmail && tEmail === workerEmail) || 
+             (workerPhone && isPhoneMatch(workerPhone, tPhone)) ||
+             (workerName && tName === workerName);
+    });
+
+    let updatedList = [...tailorsList];
+
+    if (matchIndex >= 0) {
+      // Exist: Update their profile with setup details
+      updatedList[matchIndex] = {
+        ...updatedList[matchIndex],
+        hasRegisteredShop: true,
+        shopName: shopDetails.shopName,
+        location: shopDetails.location,
+        phone: shopDetails.phone,
+        logoUrl: shopDetails.logoUrl || 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=200&auto=format&fit=crop',
+        coordinateLatitude: shopDetails.coordinateLatitude,
+        coordinateLongitude: shopDetails.coordinateLongitude,
+        name: shopDetails.name || updatedList[matchIndex].name
+      };
+    } else {
+      // Doesn't exist: Auto-register a login account in registered_tailors so they can login and use the shop!
+      const newTailorAccount = {
+        id: `TAILOR-${Date.now()}`,
+        name: shopDetails.name || worker.name,
+        email: worker.email || `${worker.name.toLowerCase().replace(/\s+/g, '')}@gmail.com`,
+        phone: shopDetails.phone || worker.phone,
+        password: (worker.phone || 'password123').replace(/\D/g, '') || 'password123',
+        createdAt: new Date().toISOString(),
+        hasRegisteredShop: true,
+        shopName: shopDetails.shopName,
+        location: shopDetails.location,
+        logoUrl: shopDetails.logoUrl || 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=200&auto=format&fit=crop',
+        coordinateLatitude: shopDetails.coordinateLatitude,
+        coordinateLongitude: shopDetails.coordinateLongitude
+      };
+      updatedList.push(newTailorAccount);
+    }
+
+    saveRegisteredTailors(updatedList);
+    setRegisteredTailors(updatedList);
+
+    // Also update this worker in the master workers list so they are synced over Firestore/Local Database with active shop parameters!
+    const targetOwnerAccount = matchIndex >= 0 ? updatedList[matchIndex] : updatedList[updatedList.length - 1];
+    const updatedWorkers = workers.map((w: any) => {
+      const isEmailEqual = w.email && worker.email && w.email.toLowerCase().trim() === worker.email.toLowerCase().trim();
+      const isPhoneEqual = w.phone && worker.phone && isPhoneMatch(w.phone, worker.phone);
+      const isNameEqual = w.name && worker.name && w.name.toLowerCase().trim() === worker.name.toLowerCase().trim();
+      
+      if (w.id === worker.id || isEmailEqual || isPhoneEqual || isNameEqual) {
+        return {
+          ...w,
+          hasRegisteredShop: true,
+          shopName: shopDetails.shopName,
+          logoUrl: shopDetails.logoUrl || 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=200&auto=format&fit=crop',
+          location: shopDetails.location,
+          coordinateLatitude: shopDetails.coordinateLatitude,
+          coordinateLongitude: shopDetails.coordinateLongitude,
+          shopOwnerId: targetOwnerAccount.id,
+          shopOwnerEmail: targetOwnerAccount.email
+        };
+      }
+      return w;
+    });
+    setWorkers(updatedWorkers);
+    saveWorkers(updatedWorkers);
+
+    triggerToast(`Successfully activated "${shopDetails.shopName}" shop workstation in the atelier database!`, 'success');
   };
 
   // Sign In event trigger
@@ -776,15 +1475,30 @@ export default function App() {
     const registeredTailorsList = getRegisteredTailors();
     const combinedTailors = [
       ...registeredTailorsList,
-      ...workers.map((w: any) => ({
-        id: w.id,
-        name: w.name,
-        email: w.email || '',
-        phone: w.phone || '',
-        location: w.location || 'Studio Workspace',
-        password: w.phone || w.name, // Setup phone or name as fallback passwords
-        hasRegisteredShop: false
-      }))
+      ...workers.map((w: any) => {
+        // Find if this worker has registered shop status in registeredTailorsList as well
+        const matchInTailors = registeredTailorsList.find((t: any) => {
+          const tEmail = (t.email || '').toLowerCase().trim();
+          const tPhone = (t.phone || '').trim();
+          const tName = (t.name || '').toLowerCase().trim();
+          const wEmail = (w.email || '').toLowerCase().trim();
+          const wPhone = (w.phone || '').trim();
+          const wName = (w.name || '').toLowerCase().trim();
+          return (wEmail && tEmail === wEmail) || 
+                 (wPhone && isPhoneMatch(wPhone, tPhone)) || 
+                 (wName && tName === wName);
+        });
+        
+        return {
+          id: w.id,
+          name: w.name,
+          email: w.email || '',
+          phone: w.phone || '',
+          location: w.location || 'Studio Workspace',
+          password: w.phone || w.name, // Setup phone or name as fallback passwords
+          hasRegisteredShop: !!(w.hasRegisteredShop || (matchInTailors && matchInTailors.hasRegisteredShop))
+        };
+      })
     ];
 
     // Find all potential matching tailors (we'll check password for all matching tailors to be robust)
@@ -1399,6 +2113,7 @@ export default function App() {
     setMeasurements(updatedMeasurements);
 
     // 3. Register Commission Order representing the delivery timelines
+    const orderShopInfo = getCurrentUserShopInfo();
     const newOrder: Order = {
       id: `ORD-${orders.length + 9841}`,
       customerId: currentCust.id,
@@ -1418,7 +2133,8 @@ export default function App() {
         tailorNotes: 'Pattern indices locked successfully',
         privateNotes: 'Bespoke client session logged'
       },
-      images: { reference: [], fabric: [], finished: [] }
+      images: { reference: [], fabric: [], finished: [] },
+      shopName: orderShopInfo?.shopName || undefined
     };
     const updatedOrders = [newOrder, ...orders];
     saveOrders(updatedOrders);
@@ -2041,13 +2757,20 @@ export default function App() {
 
   // Factory reset everything
   const handleResetAtelierConfig = () => {
-    if (!window.confirm("Are you sure you want to restore original default genres, templates and pricing? This will overwrite your current settings edits.")) return;
-    
     localStorage.removeItem('custom_clothing_categories');
     localStorage.removeItem('custom_clothing_templates');
     localStorage.removeItem('custom_clothing_emojis');
     localStorage.removeItem('custom_clothing_prices');
     localStorage.removeItem('atelier_name');
+    localStorage.removeItem('logo_url');
+    localStorage.removeItem('landing_title');
+    localStorage.removeItem('landing_description');
+    localStorage.removeItem('tailor_title');
+    localStorage.removeItem('tailor_description');
+    localStorage.removeItem('tailor_image');
+    localStorage.removeItem('customer_title');
+    localStorage.removeItem('customer_description');
+    localStorage.removeItem('customer_image');
 
     setClothingCategories(['Shirt', 'Pant', 'Suit', 'Kurta']);
     setClothingTemplates({
@@ -2072,14 +2795,22 @@ export default function App() {
       Custom: 290
     });
     setAtelierName('tailorSHOP ERP');
+    setCustomLogoUrl('');
+    setLogoLoadError(false);
+    setCustomLandingTitle('Welcome to tailorSHOP ERP');
+    setCustomLandingDescription('The ultimate bespoke artisan suite. Seamlessly track customer measurement blueprints, pattern designs, active stitching timelines, and automated billing ledgers.');
+    setCustomTailorTitle('Tailor Workplace');
+    setCustomTailorDescription('Manage measurement patterns, log customized customer fields, coordinate stitching/pickup timetables, and issue beautiful vouchers.');
+    setCustomTailorImage('https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=600');
+    setCustomCustomerTitle('Customer Portal');
+    setCustomCustomerDescription('Lookup personalized body dimensions, confirm current clothing milestones, print measurement vouchers, and review physical fitting alerts.');
+    setCustomCustomerImage('https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=600');
     
-    triggerToast("Atelier configurations returned to original defaults!", "success");
+    triggerToast("Atelier configurations, branding, and layouts returned to original defaults!", "success");
   };
 
   // Permanently purge all database records
   const handlePurgeAllDatabase = async () => {
-    if (!window.confirm("CRITICAL WARNING: Are you sure you want to permanently delete all customers, measurements, orders, workers, notifications, and edit logs from both local storage AND Firestore? This will completely empty the database for a fully clean start and cannot be undone.")) return;
-    
     try {
       triggerToast("Purging database... please wait.", "info");
       await purgeAllDatabaseRecords();
@@ -3452,14 +4183,7 @@ export default function App() {
               return;
             }
 
-            // 1. Update general configurations
-            setAtelierName(nameClean);
-            localStorage.setItem('atelier_name', nameClean);
-
-            setCustomLogoUrl(logoClean);
-            localStorage.setItem('logo_url', logoClean);
-
-            // 2. Update currentUser in memory and local storage
+            // 1. Update currentUser in memory and local storage
             const updatedUser = {
               ...currentUser,
               name: ownerClean,
@@ -3472,7 +4196,7 @@ export default function App() {
             setCurrentUser(updatedUser);
             localStorage.setItem('tailor_logged_in_user', JSON.stringify(updatedUser));
 
-            // 3. Update registered_tailors list to persist this registration
+            // 2. Update registered_tailors list to persist this registration
             const tailors = getRegisteredTailors();
             const updatedTailors = tailors.map((t: any) => {
               if (t.id === currentUser.id || t.email.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) {
@@ -3492,6 +4216,30 @@ export default function App() {
             });
             saveRegisteredTailors(updatedTailors);
             setRegisteredTailors(updatedTailors);
+
+            // 3. Also update this tailor/worker in the master workers list so they are synced over Firestore/Local Database with active shop parameters!
+            const updatedWorkers = workers.map((w: any) => {
+              const isEmailEqual = w.email && currentUser.email && w.email.toLowerCase().trim() === currentUser.email.toLowerCase().trim();
+              const isPhoneEqual = w.phone && currentUser.phone && isPhoneMatch(w.phone, currentUser.phone);
+              const isNameEqual = w.name && currentUser.name && w.name.toLowerCase().trim() === currentUser.name.toLowerCase().trim();
+              
+              if (w.id === currentUser.id || isEmailEqual || isPhoneEqual || isNameEqual) {
+                return {
+                  ...w,
+                  hasRegisteredShop: true,
+                  shopName: nameClean,
+                  logoUrl: logoClean,
+                  location: locClean,
+                  coordinateLatitude: latClean,
+                  coordinateLongitude: lonClean,
+                  shopOwnerId: currentUser.id,
+                  shopOwnerEmail: currentUser.email
+                };
+              }
+              return w;
+            });
+            setWorkers(updatedWorkers);
+            saveWorkers(updatedWorkers);
 
             triggerToast('Congratulations! Your Atelier Tailor Shop is now Registered!', 'success');
           }} className="space-y-4 text-left">
@@ -3523,18 +4271,189 @@ export default function App() {
               />
             </div>
 
-            <div>
-              <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">
-                Store Location / Physical Suite *
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Savile Row, Suite 4B"
-                value={setupShopLocation}
-                onChange={(e) => setSetupShopLocation(e.target.value)}
-                className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800"
-                required
-              />
+            {/* Country, State, District, Area & Pincode Selection */}
+            <div className="space-y-4 bg-stone-55 dark:bg-stone-900/30 p-3.5 rounded-2xl border border-stone-200 dark:border-stone-800">
+              <div className="flex justify-between items-center border-b border-stone-200 dark:border-stone-800/80 pb-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-500 flex items-center gap-1.5 font-sans">
+                  <MapPin className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
+                  Location Details
+                </span>
+                <button
+                  type="button"
+                  onClick={handleGetSetupLocation}
+                  disabled={setupLocationLoading}
+                  className="text-[9.5px] bg-amber-500/10 hover:bg-amber-500/25 text-amber-600 dark:text-amber-500 font-extrabold px-2.5 py-1.5 rounded-lg flex items-center space-x-1.5 border border-amber-500/20 active:scale-95 transition cursor-pointer disabled:opacity-50"
+                >
+                  <MapPin className={`h-3 w-3 ${setupLocationLoading ? 'animate-spin' : ''}`} />
+                  <span>{setupLocationLoading ? 'Locking...' : 'Use Current Location'}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[9px] font-extrabold uppercase tracking-wider text-stone-500 block mb-1">
+                    Country *
+                  </label>
+                  <select
+                    value={setupShopCountry}
+                    onChange={(e) => {
+                      setSetupShopCountry(e.target.value);
+                      setSetupShopState('');
+                      setSetupShopDistrict('');
+                    }}
+                    className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-850 bg-white dark:text-white"
+                    required
+                  >
+                    {COUNTRY_LIST.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[9px] font-extrabold uppercase tracking-wider text-stone-500 block mb-1">
+                    State *
+                  </label>
+                  {setupShopCountry === 'India' ? (
+                    <select
+                      value={setupShopState}
+                      onChange={(e) => {
+                        setSetupShopState(e.target.value);
+                        setSetupShopDistrict('');
+                      }}
+                      className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-850 bg-white dark:text-white"
+                      required
+                    >
+                      <option value="">-- Choose State --</option>
+                      {Object.keys(INDIA_STATES_MAP).map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Enter State/Region"
+                      value={setupShopState}
+                      onChange={(e) => setSetupShopState(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-850 bg-white"
+                      required
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[9px] font-extrabold uppercase tracking-wider text-stone-500 block mb-1">
+                    District *
+                  </label>
+                  {setupShopCountry === 'India' && setupShopState && INDIA_STATES_MAP[setupShopState] ? (
+                    <select
+                      value={setupShopDistrict}
+                      onChange={(e) => setSetupShopDistrict(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-850 bg-white dark:text-white"
+                      required
+                    >
+                      <option value="">-- Choose District --</option>
+                      {INDIA_STATES_MAP[setupShopState].map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Enter District"
+                      value={setupShopDistrict}
+                      onChange={(e) => setSetupShopDistrict(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-850 bg-white"
+                      required
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-[9px] font-extrabold uppercase tracking-wider text-stone-500 block mb-1">
+                    Pincode / ZIP *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 679576 or 90210"
+                    value={setupShopPincode}
+                    onChange={(e) => setSetupShopPincode(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-850 bg-white"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[9px] font-extrabold uppercase tracking-wider text-stone-500 block mb-1">
+                  Area / Street Address of Shop *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Edappal Junction or Suite 4B"
+                  value={setupShopArea}
+                  onChange={(e) => setSetupShopArea(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-850 bg-white"
+                  required
+                />
+              </div>
+
+              {/* GPS Coordinates & Dynamic Map inside Location Details Card */}
+              <div className="pt-3 border-t border-stone-200 dark:border-stone-800/60 space-y-2">
+                <div>
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider block text-stone-600 dark:text-stone-300">
+                    GPS Coordinates *
+                  </label>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Latitude *"
+                      value={setupLatitude}
+                      onChange={(e) => setSetupLatitude(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Longitude *"
+                      value={setupLongitude}
+                      onChange={(e) => setSetupLongitude(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Live Interactive Map Preview inside Location Details Card with retrieved badge */}
+                {setupLatitude && setupLongitude && (
+                  <div className="mt-2.5 overflow-hidden rounded-xl border border-stone-200 dark:border-stone-800 shadow-sm h-[180px] w-full relative">
+                    <iframe
+                      title="Location Details Google Map"
+                      width="100%"
+                      height="100%"
+                      style={{ border: 0 }}
+                      allowFullScreen={false}
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                      src={`https://maps.google.com/maps?q=${setupLatitude},${setupLongitude}&z=16&output=embed`}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {setupShopLocation && (
+                <div className="text-[10px] text-stone-600 dark:text-stone-350 bg-stone-100 dark:bg-stone-950 p-2 rounded-lg border border-stone-200 dark:border-stone-800 font-mono break-all leading-relaxed">
+                  <span className="font-sans font-bold text-stone-400 mr-2 text-[9px] uppercase">ADDRESS PREVIEW:</span>
+                  {setupShopLocation}
+                </div>
+              )}
             </div>
 
             <div>
@@ -3561,7 +4480,7 @@ export default function App() {
                   type="url"
                   placeholder="https://images.unsplash.com/photo-... or drag an image below"
                   value={setupLogoUrl}
-                  onChange={(e) => setSetupLogoUrl(e.target.value)}
+                  onChange={(e) => setSetupLogoUrl(cleanImageUrl(e.target.value))}
                   className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800"
                   required
                 />
@@ -3586,7 +4505,7 @@ export default function App() {
                   onClick={() => {
                     const input = document.createElement('input');
                     input.type = 'file';
-                    input.accept = 'image/*';
+                    input.accept = '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp';
                     input.onchange = (e) => {
                       const file = (e.target as HTMLInputElement).files?.[0];
                       if (file) handleLogoFileSelect(file);
@@ -3622,52 +4541,11 @@ export default function App() {
               </div>
             </div>
 
-            {/* Coordinate Location (Latitude & Longitude) */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[10px] font-extrabold uppercase tracking-wider block">
-                  GPS Coordinates *
-                </label>
-                <button
-                  type="button"
-                  onClick={handleGetSetupLocation}
-                  disabled={setupLocationLoading}
-                  className="text-[10px] bg-amber-500/10 hover:bg-amber-500/25 text-amber-600 dark:text-amber-500 font-black px-2.5 py-1 rounded-lg flex items-center space-x-1 border border-amber-500/20 hover:border-amber-500/40 transition active:scale-95 cursor-pointer disabled:opacity-50"
-                >
-                  <MapPin className={`h-3 w-3 ${setupLocationLoading ? 'animate-spin' : ''}`} />
-                  <span>{setupLocationLoading ? 'Locking GPS...' : 'Use Current Location'}</span>
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <input
-                    type="text"
-                    placeholder="Latitude *"
-                    value={setupLatitude}
-                    onChange={(e) => setSetupLatitude(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800"
-                    required
-                  />
-                </div>
-                <div>
-                  <input
-                    type="text"
-                    placeholder="Longitude *"
-                    value={setupLongitude}
-                    onChange={(e) => setSetupLongitude(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-900 dark:border-stone-800"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
             <button
               type="submit"
               className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl cursor-pointer shadow-lg shadow-amber-600/10 active:scale-[0.98] transition-all mt-2"
             >
-              Construct Atelier Workstation
+              Construct Shop
             </button>
             
             <button
@@ -3683,6 +4561,10 @@ export default function App() {
     );
   }
 
+  const userShopInfo = getCurrentUserShopInfo();
+  const displayNavbarLogo = (currentUser && currentUser.role !== 'Owner' && userShopInfo) ? userShopInfo.logoUrl : customLogoUrl;
+  const displayNavbarName = (currentUser && currentUser.role !== 'Owner' && userShopInfo) ? userShopInfo.shopName : (atelierName || 'STYLUS');
+
   return (
     <div className={`min-h-screen transition-colors duration-300 flex flex-col ${isDarkMode ? 'dark' : ''} ${
       isDarkMode ? 'bg-black text-white' : 'bg-white text-black font-sans'
@@ -3694,12 +4576,13 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
           <div className="flex items-center space-x-3 min-w-0">
             <div className="relative flex items-center justify-center shrink-0">
-              {customLogoUrl ? (
+              {(displayNavbarLogo && !logoLoadError) ? (
                 <img
-                  src={customLogoUrl}
+                  src={displayNavbarLogo}
                   alt="Atelier Logo"
                   className="h-10 w-10 sm:h-12 sm:w-12 object-contain rounded-lg"
                   referrerPolicy="no-referrer"
+                  onError={() => setLogoLoadError(true)}
                 />
               ) : (
                 <>
@@ -3712,7 +4595,7 @@ export default function App() {
             </div>
             <div className="min-w-0">
               <h1 className="font-sans font-black text-sm sm:text-2xl tracking-wider uppercase text-transparent bg-clip-text bg-gradient-to-r from-stone-900 via-amber-600 to-stone-800 dark:from-white dark:via-amber-550 dark:to-stone-100 whitespace-nowrap transition-all">
-                {atelierName.toUpperCase()}
+                {displayNavbarName.toUpperCase()}
               </h1>
             </div>
           </div>
@@ -3820,9 +4703,9 @@ export default function App() {
             >
               <Briefcase className="h-4 w-4" />
               <span>Orders</span>
-              {orders.length > 0 && (
+              {visibleOrders.length > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
-                  {orders.length}
+                  {visibleOrders.length}
                 </span>
               )}
             </button>
@@ -4027,18 +4910,34 @@ export default function App() {
                           <h4 className="text-[11px] font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wide">Save Configuration Changes</h4>
                           <p className="text-[10px] text-stone-400">Lock your custom app name and auto-resized logo globally.</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            localStorage.setItem('logo_url', customLogoUrl);
-                            localStorage.setItem('atelier_name', atelierName);
-                            triggerToast("Brand configuration applied & saved successfully!", "success");
-                          }}
-                          className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center space-x-1.5 shadow-sm cursor-pointer whitespace-nowrap"
-                        >
-                          <CheckCircle className="h-3.5 w-3.5" />
-                          <span>Save &amp; Apply Changes</span>
-                        </button>
+                        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAtelierName('tailorSHOP ERP');
+                              setCustomLogoUrl('');
+                              localStorage.setItem('atelier_name', 'tailorSHOP ERP');
+                              localStorage.setItem('logo_url', '');
+                              triggerToast("Branding configuration reset to system default!", "success");
+                            }}
+                            className="px-4 py-2 border border-stone-200 dark:border-stone-850 hover:bg-stone-50 dark:hover:bg-slate-800 text-stone-600 dark:text-stone-300 rounded-lg text-[10px] font-bold transition flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            <span>Reset to Default</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              localStorage.setItem('logo_url', customLogoUrl);
+                              localStorage.setItem('atelier_name', atelierName);
+                              triggerToast("Brand configuration applied & saved successfully!", "success");
+                            }}
+                            className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center space-x-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                          >
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            <span>Save &amp; Apply Changes</span>
+                          </button>
+                        </div>
                       </div>
 
                       <h4 className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider mb-3">Or choose a professional Tailor Logo Preset:</h4>
@@ -4700,6 +5599,42 @@ export default function App() {
                          <span>Lock &amp; Apply Branding Layout</span>
                        </button>
                        <p className="text-[9px] text-stone-400 mt-2.5 text-center">Your branding settings are securely written database objects. If you ever wish to return to original templates, click the Reset button in other tabs.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* FACTORY RESET ALL CONFIGURATIONS CARD */}
+                  <div className={`p-6 rounded-2xl border text-left mt-6 ${isDarkMode ? 'bg-red-950/10 border-red-950/30' : 'bg-red-50/20 border-red-100 shadow-3xs'}`}>
+                    <div className="flex items-center space-x-2.5 pb-2 border-b border-red-100/50 dark:border-red-950/30">
+                      <div className="p-2 bg-red-500/10 text-red-600 dark:text-red-500 rounded-xl">
+                        <RotateCcw className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-xs uppercase tracking-wider text-red-650 dark:text-red-500">System Reset Controls (Clean Slate)</h3>
+                        <p className="text-[10px] text-stone-400">Safely restore all custom system titles, logos, price rates, garment templates, and login card text back to pristine defaults.</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <p className="text-[10.5px] text-stone-500 dark:text-stone-400 max-w-xl font-sans">
+                        Are you experiencing sizing discrepancies or logo overlap issues? Triggering a factory reset will instantly clear any custom branding overrides and restore your global workspace settings back to their factory original layouts.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm("Are you sure you want to restore all custom branding, text, prices, and configurations back to factory defaults?")) {
+                            handleResetAtelierConfig();
+                          }
+                        }}
+                        className="w-full sm:w-auto px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-[10px] font-bold transition flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer whitespace-nowrap"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        <span>Reset to System Defaults</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <div>
+                      <div>
                      </div>
                    </div>
                  </div>
@@ -4709,9 +5644,11 @@ export default function App() {
              <div className="space-y-6 fade-in font-sans">
                <WorkerManagementView
                  workers={workers}
-                 orders={orders}
+                 orders={visibleOrders}
                  onAddWorker={handleAddWorker}
                  onDeleteWorker={handleDeleteWorker}
+                 onSetupTailorShop={handleAdminSetupTailorShop}
+                  registeredTailors={registeredTailors}
                  triggerToast={triggerToast}
                  isDarkMode={isDarkMode}
                />
@@ -4737,44 +5674,555 @@ export default function App() {
                      </span>
                    </h3>
                    <div className="space-y-3">
-                     {getRegisteredTailors().map((t: any) => {
-                       return (
-                         <div key={t.id} className="p-4 rounded-xl border flex justify-between items-center gap-2 dark:bg-slate-950 border-slate-900 bg-stone-50 border-stone-150">
-                           <div className="space-y-1 text-left">
-                             <div className="font-extrabold text-xs text-stone-850 dark:text-white flex items-center gap-2">
-                               <span>{t.name}</span>
-                               {t.hasRegisteredShop ? (
-                                 <span className="text-[9px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-full font-bold">Shop Profile Set</span>
-                               ) : (
-                                 <span className="text-[9px] bg-amber-500/10 text-[#c29910] dark:text-amber-400 px-1.5 py-0.5 rounded-full font-bold">Pending Shop Setup</span>
-                               )}
-                             </div>
-                             <div className="text-[10.5px] text-stone-500 space-y-0.5 font-semibold font-sans">
-                               <p><span className="font-mono text-[9px] text-stone-400">Email:</span> {t.email}</p>
-                               <p><span className="font-mono text-[9px] text-stone-400">Phone:</span> {t.phone || 'N/A'}</p>
-                               <p><span className="font-mono text-[9px] text-stone-400">Room:</span> {t.location || 'N/A'}</p>
-                               {t.shopName && <p><span className="font-mono text-[9px] text-stone-400">Shop:</span> {t.shopName}</p>}
-                               <p className="text-[10.5px] font-mono text-amber-600 dark:text-amber-400 p-1 bg-amber-600/5 rounded inline-block mt-1">PSWD: {t.password}</p>
-                             </div>
-                           </div>
-                           <button
-                             type="button"
-                             disabled={t.id === 'TAILOR-OWNER-MASTER'}
-                             onClick={() => {
-                               if (confirm(`Remove staff ${t.name}?`)) {
-                                 const filtered = getRegisteredTailors().filter((x: any) => x.id !== t.id);
-                                 saveRegisteredTailors(filtered);
-                                 setRegisteredTailors(filtered);
-                                 triggerToast('Removed staff credentials!', 'success');
-                               }
-                             }}
-                             className={`p-2 rounded hover:bg-red-500/10 hover:text-red-500 text-stone-400 cursor-pointer ${t.id === 'TAILOR-OWNER-MASTER' ? 'cursor-not-allowed opacity-30' : ''}`}
-                           >
-                             <Trash2 className="h-4 w-4" />
-                           </button>
-                         </div>
-                       );
-                     })}
+                      {getRegisteredTailors().map((t: any) => {
+                        const isConfiguringThisTailor = adminConfiguringTailorId === t.id;
+                        return (
+                          <div key={t.id} className="p-4 rounded-xl border flex flex-col gap-3 dark:bg-slate-950 border-slate-900 bg-stone-50 border-stone-150 text-left">
+                            <div className="flex justify-between items-start gap-2 w-full">
+                              <div className="space-y-1 text-left">
+                                <div className="font-extrabold text-xs text-stone-850 dark:text-white flex items-center gap-2">
+                                  <span>{t.name}</span>
+                                  {t.hasRegisteredShop ? (
+                                    <span className="text-[9px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-full font-bold">Shop Profile Set</span>
+                                  ) : (
+                                    <span className="text-[9px] bg-amber-500/10 text-[#c29910] dark:text-amber-400 px-1.5 py-0.5 rounded-full font-bold">Pending Shop Setup</span>
+                                  )}
+                                </div>
+                                <div className="text-[10.5px] text-stone-500 space-y-0.5 font-semibold font-sans font-medium">
+                                  <p><span className="font-mono text-[9px] text-stone-400">Email:</span> {t.email}</p>
+                                  <p><span className="font-mono text-[9px] text-stone-400">Phone:</span> {t.phone || 'N/A'}</p>
+                                  <p><span className="font-mono text-[9px] text-stone-400">Room:</span> {t.location || 'N/A'}</p>
+                                  {t.shopName && <p><span className="font-mono text-[9px] text-stone-400">Shop:</span> {t.shopName}</p>}
+                                  <p className="text-[10.5px] font-mono text-amber-600 dark:text-amber-400 p-1 bg-amber-600/5 rounded inline-block mt-1">PSWD: {t.password}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-1.5 shrink-0">
+                                {!t.hasRegisteredShop && !isConfiguringThisTailor && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAdminConfiguringTailorId(t.id);
+                                      setAdminShopName(`${t.name}'s Bespoke Atelier`);
+                                      setAdminOwnerName(t.name);
+                                      setAdminShopPhone(t.phone || '');
+                                      setAdminShopCountry('India');
+                                      setAdminShopState('');
+                                      setAdminShopDistrict('');
+                                      setAdminShopArea('');
+                                      setAdminShopPincode('');
+                                      setAdminLatitude('');
+                                      setAdminLongitude('');
+                                      setAdminLogoUrl('https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=200&auto=format&fit=crop');
+                                    }}
+                                    className="text-[10px] bg-amber-500/10 hover:bg-amber-500/25 text-[#cf9b00] dark:text-amber-400 font-extrabold px-2.5 py-1.5 rounded-lg border border-amber-500/20 hover:border-amber-500/40 transition active:scale-95 cursor-pointer flex items-center space-x-1 shadow-sm"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                    <span>Create Shop</span>
+                                  </button>
+                                )}
+                                {confirmRemoveTailorId === t.id ? (
+                                  <div className="flex items-center gap-1 bg-red-500/10 border border-red-500/25 rounded-lg p-1 animate-fadeIn">
+                                    <span className="text-[9px] text-red-500 font-extrabold px-1.5 select-none">Remove Staff?</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const filtered = getRegisteredTailors().filter((x) => x.id !== t.id);
+                                        saveRegisteredTailors(filtered);
+                                        setRegisteredTailors(filtered);
+                                        triggerToast('Removed staff credentials!', 'success');
+                                        setConfirmRemoveTailorId(null);
+                                      }}
+                                      className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-700 text-white text-[9px] font-bold cursor-pointer"
+                                    >
+                                      Yes
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmRemoveTailorId(null)}
+                                      className="px-2 py-0.5 rounded bg-stone-500 dark:bg-stone-750 hover:bg-stone-600 text-white dark:text-stone-200 text-[9px] font-bold cursor-pointer"
+                                    >
+                                      No
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={t.id === 'TAILOR-OWNER-MASTER'}
+                                    onClick={() => setConfirmRemoveTailorId(t.id)}
+                                    className={`p-2 rounded hover:bg-red-500/10 hover:text-red-500 text-stone-400 cursor-pointer ${t.id === 'TAILOR-OWNER-MASTER' ? 'cursor-not-allowed opacity-30' : ''}`}
+                                    title={`Remove ${t.name}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* EXCLUSIVE EMBEDDED CONFIGURE SHOP FORM */}
+                            {isConfiguringThisTailor && (
+                              <form
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  if (!adminShopName.trim() || !adminOwnerName.trim() || !adminShopPhone.trim() || !adminShopArea.trim() || !adminShopPincode.trim() || !adminLatitude.trim() || !adminLongitude.trim()) {
+                                    triggerToast('All fields (including GPS coordinates) are required to register this tailor shop!', 'error');
+                                    return;
+                                  }
+                                  const formattedAddr = [
+                                    adminShopArea.trim(),
+                                    adminShopDistrict.trim(),
+                                    adminShopState.trim(),
+                                    adminShopCountry.trim(),
+                                    adminShopPincode.trim() ? `PIN: ${adminShopPincode.trim()}` : ''
+                                  ].filter(Boolean).join(', ');
+
+                                  const updated = getRegisteredTailors().map((item) => {
+                                    if (item.id === t.id) {
+                                      return {
+                                        ...item,
+                                        name: adminOwnerName.trim(),
+                                        hasRegisteredShop: true,
+                                        shopName: adminShopName.trim(),
+                                        location: formattedAddr,
+                                        phone: adminShopPhone.trim(),
+                                        logoUrl: adminLogoUrl.trim() || 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=200&auto=format&fit=crop',
+                                        coordinateLatitude: adminLatitude.trim(),
+                                        coordinateLongitude: adminLongitude.trim()
+                                      };
+                                    }
+                                    return item;
+                                  });
+
+                                  saveRegisteredTailors(updated);
+                                  setRegisteredTailors(updated);
+                                  setAdminConfiguringTailorId(null);
+                                  triggerToast(`Atelier Shop Workstation "${adminShopName.trim()}" activated successfully!`, 'success');
+                                  addActivity('Admin Register Shop', `Admin registered shop "${adminShopName.trim()}" for tailor ${adminOwnerName.trim()}`, 'Owner', 'Atelier Master Admin');
+                                }}
+                                className="w-full mt-2 p-3 bg-stone-150 dark:bg-stone-900 border border-stone-200 dark:border-stone-850 rounded-xl space-y-3 block text-left transition-all"
+                              >
+                                <div className="flex items-center justify-between border-b border-stone-200 dark:border-zinc-800 pb-2">
+                                  <span className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-500 font-sans">
+                                    Setup Shop Workstation for {t.name}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAdminConfiguringTailorId(null)}
+                                    className="text-stone-400 hover:text-stone-600 text-xs font-bold font-mono"
+                                  >
+                                    [Cancel]
+                                  </button>
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-extrabold uppercase block mb-1">
+                                    Shop / Atelier Name *
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={adminShopName}
+                                    onChange={(e) => setAdminShopName(e.target.value)}
+                                    className="w-full p-2 rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-950 dark:border-stone-800 bg-white dark:text-white"
+                                    required
+                                  />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-[9px] font-extrabold uppercase block mb-1">
+                                      Owner Name *
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={adminOwnerName}
+                                      onChange={(e) => setAdminOwnerName(e.target.value)}
+                                      className="w-full p-2 rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-950 dark:border-stone-800 bg-white dark:text-white"
+                                      required
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-extrabold uppercase block mb-1">
+                                      Store Phone *
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={adminShopPhone}
+                                      onChange={(e) => setAdminShopPhone(e.target.value)}
+                                      className="w-full p-2 rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-950 dark:border-stone-800 bg-white dark:text-white"
+                                      required
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Geolocation with dynamic dropdowns */}
+                                <div className="p-3 bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-xl space-y-2">
+                                  <div className="text-[9px] font-extrabold uppercase tracking-widest text-stone-400">
+                                    Address Coordinates
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="text-[9px] font-extrabold block mb-1 text-stone-500 uppercase">Country *</label>
+                                      <select
+                                        value={adminShopCountry}
+                                        onChange={(e) => {
+                                          setAdminShopCountry(e.target.value);
+                                          setAdminShopState('');
+                                          setAdminShopDistrict('');
+                                        }}
+                                        className="w-full p-1.5 rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-950 dark:border-stone-804 bg-white dark:text-white"
+                                        required
+                                      >
+                                        {COUNTRY_LIST.map((c) => (
+                                          <option key={c} value={c}>{c}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="text-[9px] font-extrabold block mb-1 text-stone-500 uppercase">State *</label>
+                                      {adminShopCountry === 'India' ? (
+                                        <select
+                                          value={adminShopState}
+                                          onChange={(e) => {
+                                            setAdminShopState(e.target.value);
+                                            setAdminShopDistrict('');
+                                          }}
+                                          className="w-full p-1.5 rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-950 dark:border-stone-804 bg-white dark:text-white"
+                                          required
+                                        >
+                                          <option value="">-- Choose State --</option>
+                                          {Object.keys(INDIA_STATES_MAP).map((s) => (
+                                            <option key={s} value={s}>{s}</option>
+                                          ))}
+                                        </select>
+                                      ) : (
+                                        <input
+                                          type="text"
+                                          placeholder="Enter State"
+                                          value={adminShopState}
+                                          onChange={(e) => setAdminShopState(e.target.value)}
+                                          className="w-full p-1.5 rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-950 dark:border-stone-804 bg-white dark:text-white"
+                                          required
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="text-[9px] font-extrabold block mb-1 text-stone-500 uppercase">District *</label>
+                                      {adminShopCountry === 'India' && adminShopState && INDIA_STATES_MAP[adminShopState] ? (
+                                        <select
+                                          value={adminShopDistrict}
+                                          onChange={(e) => setAdminShopDistrict(e.target.value)}
+                                          className="w-full p-1.5 rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-950 dark:border-stone-804 bg-white dark:text-white"
+                                          required
+                                        >
+                                          <option value="">-- Choose District --</option>
+                                          {INDIA_STATES_MAP[adminShopState].map((d) => (
+                                            <option key={d} value={d}>{d}</option>
+                                          ))}
+                                        </select>
+                                      ) : (
+                                        <input
+                                          type="text"
+                                          placeholder="Enter District"
+                                          value={adminShopDistrict}
+                                          onChange={(e) => setAdminShopDistrict(e.target.value)}
+                                          className="w-full p-1.5 rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-950 dark:border-stone-840 bg-white dark:text-white"
+                                          required
+                                        />
+                                      )}
+                                    </div>
+                                    <div>
+                                      <label className="text-[9px] font-extrabold block mb-1 text-stone-500 uppercase">Pincode *</label>
+                                      <input
+                                        type="text"
+                                        placeholder="e.g. 679576"
+                                        value={adminShopPincode}
+                                        onChange={(e) => setAdminShopPincode(e.target.value)}
+                                        className="w-full p-1.5 rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-950 dark:border-stone-840 bg-white dark:text-white"
+                                        required
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[9px] font-extrabold block mb-1 text-stone-500 uppercase">Area of Shop *</label>
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. Edappal Bypass"
+                                      value={adminShopArea}
+                                      onChange={(e) => setAdminShopArea(e.target.value)}
+                                      className="w-full p-1.5 rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-950 dark:border-stone-840 bg-white dark:text-white"
+                                      required
+                                    />
+                                  </div>
+
+                                  <div className="flex items-center justify-between mt-2 pt-1 border-t border-stone-200/50 dark:border-stone-800">
+                                    <span className="text-[9px] font-extrabold text-stone-500">GPS Coordinates *</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const fallbackToIp = async (errMsg?: string) => {
+                                          triggerToast('GPS failed. Falling back to Network IP Geolocation...', 'info');
+                                          try {
+                                            const ipData = await fetchIPLocation();
+                                            setAdminLatitude(ipData.latitude);
+                                            setAdminLongitude(ipData.longitude);
+                                            if (ipData.country) setAdminShopCountry(ipData.country);
+                                            
+                                            let detectedState = '';
+                                            if (ipData.region) {
+                                              const findState = Object.keys(INDIA_STATES_MAP).find(
+                                                (s) => s.toLowerCase() === ipData.region.toLowerCase() || ipData.region.toLowerCase().includes(s.toLowerCase())
+                                              );
+                                              if (findState) {
+                                                setAdminShopState(findState);
+                                                detectedState = findState;
+                                              } else {
+                                                setAdminShopState(ipData.region);
+                                                detectedState = ipData.region;
+                                              }
+                                            }
+                                            if (detectedState && INDIA_STATES_MAP[detectedState] && ipData.city) {
+                                              const distList = INDIA_STATES_MAP[detectedState];
+                                              const match = distList.find(d => 
+                                                d.toLowerCase() === ipData.city.toLowerCase() || 
+                                                ipData.city.toLowerCase().includes(d.toLowerCase()) ||
+                                                d.toLowerCase().includes(ipData.city.toLowerCase())
+                                              );
+                                              if (match) {
+                                                setAdminShopDistrict(match);
+                                              } else {
+                                                setAdminShopDistrict(ipData.city);
+                                              }
+                                            } else if (ipData.city) {
+                                              setAdminShopDistrict(ipData.city);
+                                            }
+
+                                            if (ipData.postal) setAdminShopPincode(ipData.postal);
+                                            setAdminShopArea(ipData.area || 'Central Area');
+                                            triggerToast('Admin shop location loaded via IP successfully!', 'success');
+                                          } catch (fError: any) {
+                                            console.error("IP fallback error:", fError);
+                                            triggerToast(errMsg || fError?.message || 'Network Geolocation failed.', 'error');
+                                          } finally {
+                                            setAdminLocationLoading(false);
+                                          }
+                                        };
+
+                                        if (!navigator.geolocation) {
+                                          fallbackToIp('Geolocation not supported.');
+                                          return;
+                                        }
+                                        setAdminLocationLoading(true);
+                                        triggerToast('Requesting GPS coordinates...', 'info');
+                                        navigator.geolocation.getCurrentPosition(
+                                          async (pos) => {
+                                            const lat = pos.coords.latitude.toFixed(6);
+                                            const lon = pos.coords.longitude.toFixed(6);
+                                            setAdminLatitude(lat);
+                                            setAdminLongitude(lon);
+                                            
+                                            triggerToast('GPS Locked! Fetching shop address details...', 'info');
+                                            
+                                            try {
+                                              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`, {
+                                                headers: {
+                                                  'Accept-Language': 'en'
+                                                }
+                                              });
+                                              if (res.ok) {
+                                                const data = await res.json();
+                                                if (data && data.address) {
+                                                  const addr = data.address;
+                                                  
+                                                  if (addr.country) {
+                                                    setAdminShopCountry(addr.country);
+                                                  }
+                                                  
+                                                  // Robust State determination
+                                                  let detectedState = '';
+                                                  const stateCandidates = [
+                                                    addr.state,
+                                                    addr.region,
+                                                    addr.province,
+                                                    addr.state_district
+                                                  ].filter(Boolean).map(v => String(v).trim());
+
+                                                  let foundStateKey = '';
+                                                  for (const sc of stateCandidates) {
+                                                    const match = Object.keys(INDIA_STATES_MAP).find(
+                                                      (s) => s.toLowerCase() === sc.toLowerCase() || 
+                                                             sc.toLowerCase().includes(s.toLowerCase()) || 
+                                                             s.toLowerCase().includes(sc.toLowerCase())
+                                                    );
+                                                    if (match) {
+                                                      foundStateKey = match;
+                                                      break;
+                                                    }
+                                                  }
+
+                                                  if (foundStateKey) {
+                                                    setAdminShopState(foundStateKey);
+                                                    detectedState = foundStateKey;
+                                                  } else if (addr.state) {
+                                                    setAdminShopState(addr.state);
+                                                    detectedState = addr.state;
+                                                  }
+                                                  
+                                                  // Smart district matching within INDIA_STATES_MAP for the selected state
+                                                  let matchedDistrict = '';
+                                                  if (detectedState && INDIA_STATES_MAP[detectedState]) {
+                                                    const distList = INDIA_STATES_MAP[detectedState];
+                                                    
+                                                    // Construct a text corpus with all parts of the address for comprehensive searching
+                                                    const fullTextSearchSource = [
+                                                      data.display_name || '',
+                                                      addr.state_district || '',
+                                                      addr.district || '',
+                                                      addr.county || '',
+                                                      addr.city || '',
+                                                      addr.town || '',
+                                                      addr.city_district || '',
+                                                      addr.suburb || '',
+                                                      addr.village || '',
+                                                      addr.neighbourhood || '',
+                                                      addr.municipality || '',
+                                                      addr.subdistrict || ''
+                                                    ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
+                                                    // 1. Direct EXACT / SUBSTRING MATCH in any specific fields:
+                                                    for (const text of fullTextSearchSource) {
+                                                      const match = distList.find(d => {
+                                                        const dl = d.toLowerCase();
+                                                        return dl === text || text.includes(dl) || dl.includes(text);
+                                                      });
+                                                      if (match) {
+                                                        matchedDistrict = match;
+                                                        break;
+                                                      }
+                                                    }
+                                                    
+                                                    // 2. If not matched, try searching inside the complete display_name if display_name mentions the district
+                                                    if (!matchedDistrict && data.display_name) {
+                                                      const dispLower = data.display_name.toLowerCase();
+                                                      const match = distList.find(d => dispLower.includes(d.toLowerCase()));
+                                                      if (match) {
+                                                        matchedDistrict = match;
+                                                      }
+                                                    }
+                                                  }
+
+                                                  if (matchedDistrict) {
+                                                    setAdminShopDistrict(matchedDistrict);
+                                                  } else {
+                                                    const districtOrCity = addr.state_district || addr.county || addr.district || addr.city_district || addr.city || addr.town || addr.suburb || '';
+                                                    setAdminShopDistrict(districtOrCity);
+                                                  }
+                                                  
+                                                  if (addr.postcode) {
+                                                    setAdminShopPincode(addr.postcode);
+                                                  }
+                                                  
+                                                  const street = addr.road || addr.suburb || addr.neighbourhood || addr.village || addr.hamlet || '';
+                                                  const areaParts = [street, addr.quarter || ''].filter(Boolean).join(', ');
+                                                  if (areaParts) {
+                                                    setAdminShopArea(areaParts);
+                                                  } else if (data.display_name) {
+                                                    const dispParts = data.display_name.split(',');
+                                                    setAdminShopArea(dispParts.slice(0, 2).join(',').trim());
+                                                  }
+                                                  
+                                                  triggerToast('Admin shop address & district auto-loaded successfully!', 'success');
+                                                } else {
+                                                  triggerToast('GPS Locked successfully!', 'success');
+                                                }
+                                              } else {
+                                                triggerToast('GPS Locked successfully!', 'success');
+                                              }
+                                            } catch (err) {
+                                              console.error("Reverse geocoding error:", err);
+                                              triggerToast('GPS Locked successfully!', 'success');
+                                            } finally {
+                                              setAdminLocationLoading(false);
+                                            }
+                                          },
+                                          (err) => {
+                                            console.error(err);
+                                            setAdminLocationLoading(false);
+                                            fallbackToIp(`Geolocation failed: ${err.message}`);
+                                          },
+                                          { enableHighAccuracy: true, timeout: 6000 }
+                                        );
+                                      }}
+                                      disabled={adminLocationLoading}
+                                      className="text-[9px] bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 px-2 py-1 rounded-lg border border-amber-500/20 active:scale-95 disabled:opacity-50 cursor-pointer text-amber-500"
+                                    >
+                                      {adminLocationLoading ? 'Locking...' : 'Lock Current Admin Coordinates'}
+                                    </button>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                      type="text"
+                                      placeholder="Lat *"
+                                      value={adminLatitude}
+                                      onChange={(e) => setAdminLatitude(e.target.value)}
+                                      className="p-1.5 rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-950 dark:border-stone-800 bg-white dark:text-white"
+                                      required
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder="Lon *"
+                                      value={adminLongitude}
+                                      onChange={(e) => setAdminLongitude(e.target.value)}
+                                      className="p-1.5 rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-950 dark:border-stone-800 bg-white dark:text-white"
+                                      required
+                                    />
+                                  </div>
+
+                                  {/* Admin Live Map Preview */}
+                                  {adminLatitude && adminLongitude && (
+                                    <div className="mt-2 overflow-hidden rounded-xl border border-stone-200 dark:border-stone-800 shadow-sm h-[130px] w-full relative">
+                                      <iframe
+                                        title="Admin Google Map Preview"
+                                        width="100%"
+                                        height="100%"
+                                        style={{ border: 0 }}
+                                        allowFullScreen={false}
+                                        loading="lazy"
+                                        referrerPolicy="no-referrer"
+                                        src={`https://maps.google.com/maps?q=${adminLatitude},${adminLongitude}&z=15&output=embed`}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <label className="text-[9px] font-extrabold uppercase tracking-wider block mb-1">
+                                    Store Logo URL *
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={adminLogoUrl}
+                                    onChange={(e) => setAdminLogoUrl(cleanImageUrl(e.target.value))}
+                                    className="w-full p-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs font-semibold dark:bg-stone-950 dark:border-stone-850 bg-white dark:text-white"
+                                    required
+                                  />
+                                </div>
+
+                                <button
+                                  type="submit"
+                                  className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg shadow-md active:scale-[0.98] transition cursor-pointer font-sans"
+                                >
+                                  Register Shop &amp; Activate Workstation
+                                </button>
+                              </form>
+                            )}
+                          </div>
+                        );
+                      })}
                    </div>
                  </div>
 
@@ -4850,7 +6298,7 @@ export default function App() {
              <div className="space-y-6 fade-in font-sans">
                <CustomerManagementView
                  customers={customers}
-                 orders={orders}
+                 orders={visibleOrders}
                  onAddCustomer={handleAddNewCustomer}
                  onEditCustomer={handleEditExistingCustomer}
                  onDeleteCustomer={handleDeleteExistingCustomer}
@@ -4922,21 +6370,7 @@ export default function App() {
                                     : 'text-stone-600 hover:text-stone-900'
                                 }`}
                               >
-                                {type === 'Shirt' ? (
-                                  <Shirt className="h-3.5 w-3.5" />
-                                ) : type === 'Pant' ? (
-                                  <PantIcon className="h-3.5 w-3.5" />
-                                ) : type === 'Suit' ? (
-                                  <SuitIcon className="h-3.5 w-3.5" />
-                                ) : type === 'Kurta' ? (
-                                  <KurtaIcon className="h-3.5 w-3.5" />
-                                ) : type === 'Custom' ? (
-                                  <Ruler className="h-3.5 w-3.5" />
-                                ) : clothingCategoryEmojis[type] ? (
-                                  <span className="text-[13px] leading-none select-none">{clothingCategoryEmojis[type]}</span>
-                                ) : (
-                                  <Scissors className="h-3.5 w-3.5" />
-                                )}
+                                {renderGenreIcon(type, clothingCategoryEmojis, "h-3.5 w-3.5", "w-3.5 h-3.5")}
                                 <span>{type}</span>
                               </button>
                             );
@@ -5499,15 +6933,15 @@ export default function App() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6 font-sans">
               <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-stone-50 border-stone-150'}`}>
                 <span className="text-[10px] text-stone-450 dark:text-stone-400 font-bold uppercase tracking-wider block">Total Booked Jobs</span>
-                <span className="text-2xl font-sans font-black text-stone-900 dark:text-white mt-1 block">{orders.length}</span>
+                <span className="text-2xl font-sans font-black text-stone-900 dark:text-white mt-1 block">{visibleOrders.length}</span>
               </div>
               <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-amber-500/10 border-amber-500/20'}`}>
                 <span className="text-[10px] text-amber-700 dark:text-amber-400 font-bold uppercase tracking-wider block">Active Production</span>
-                <span className="text-2xl font-sans font-black text-amber-600 dark:text-amber-500 mt-1 block">{orders.filter(o => o.status !== 'Delivered').length} active</span>
+                <span className="text-2xl font-sans font-black text-amber-600 dark:text-amber-500 mt-1 block">{visibleOrders.filter(o => o.status !== 'Delivered').length} active</span>
               </div>
               <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
                 <span className="text-[10px] text-emerald-700 dark:text-emerald-500 font-bold uppercase tracking-wider block">Value Collected</span>
-                <span className="text-2xl font-sans font-black text-emerald-600 dark:text-emerald-500 mt-1 block">₹{orders.reduce((sum, o) => sum + o.advancePayment, 0).toLocaleString()}</span>
+                <span className="text-2xl font-sans font-black text-emerald-600 dark:text-emerald-500 mt-1 block">₹{visibleOrders.reduce((sum, o) => sum + o.advancePayment, 0).toLocaleString()}</span>
               </div>
             </div>
 
@@ -5574,7 +7008,7 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100 dark:divide-slate-850">
-                  {orders
+                  {visibleOrders
                     .filter((order) => {
                       const customer = customers.find((c) => c.id === order.customerId);
                       const searchStr = `${order.id} ${order.clothingType} ${customer?.name || ''} ${customer?.phone || ''}`.toLowerCase();
@@ -5754,7 +7188,7 @@ export default function App() {
                       );
                     })}
 
-                  {orders.length === 0 && (
+                  {visibleOrders.length === 0 && (
                     <tr>
                       <td colSpan={4} className="py-10 text-center text-stone-400 font-serif italic">
                         Zero orders booked in Atelier system yet. Set up client coordinates to log customized orders.
@@ -5779,54 +7213,133 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 font-sans">
-              {registeredTailors.map((t: any) => (
-                <div key={t.id} className={`p-5 rounded-2xl border text-left flex flex-col justify-between ${
-                  isDarkMode ? 'bg-slate-950 border-slate-900 text-white' : 'bg-stone-50 border-stone-150 text-stone-800'
-                }`}>
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-3 bg-amber-500/15 rounded-xl text-amber-600 font-black text-sm">
-                        {t.name ? t.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'TL'}
-                      </div>
-                      <div>
-                        <h3 className="font-extrabold text-sm text-stone-900 dark:text-white">{t.name}</h3>
-                        <span className="text-[9px] bg-amber-600/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                          Active Tailor
-                        </span>
-                      </div>
-                    </div>
+              {(() => {
+                const userShop = getCurrentUserShopInfo();
+                const userShopNameClean = userShop?.shopName?.toLowerCase().trim();
 
-                    <div className="text-xs space-y-1.5 pt-2 border-t border-dashed dark:border-slate-900 border-stone-200 text-stone-500 dark:text-stone-400">
-                      <p className="flex items-center justify-between">
-                        <span className="font-mono text-[10px] text-stone-400 font-bold">EMAIL:</span>
-                        <span className="font-semibold text-stone-800 dark:text-stone-200">{t.email}</span>
-                      </p>
-                      <p className="flex items-center justify-between">
-                        <span className="font-mono text-[10px] text-stone-400 font-bold">PHONE:</span>
-                        <span className="font-semibold text-stone-800 dark:text-stone-200">{t.phone || 'N/A'}</span>
-                      </p>
-                      <p className="flex items-center justify-between">
-                        <span className="font-mono text-[10px] text-stone-400 font-bold">ROOM / LOC:</span>
-                        <span className="font-semibold text-stone-800 dark:text-stone-200">{t.location || 'Central Desk'}</span>
-                      </p>
-                      <p className="flex items-center justify-between">
-                        <span className="font-mono text-[10px] text-stone-400 font-bold">JOINED:</span>
-                        <span className="font-semibold text-stone-800 dark:text-stone-200">{t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'Initial'}</span>
-                      </p>
+                const filteredTailors = registeredTailors.filter((t: any) => {
+                  if (currentUser?.role === 'Owner') return true;
+
+                  const userEmail = (currentUser?.email || '').toLowerCase().trim();
+                  const userPhone = (currentUser?.phone || '').trim();
+                  const userName = (currentUser?.name || '').toLowerCase().trim();
+
+                  const tEmail = (t.email || '').toLowerCase().trim();
+                  const tPhone = (t.phone || '').trim();
+                  const tName = (t.name || '').toLowerCase().trim();
+
+                  const isSelf = (userEmail && tEmail === userEmail) ||
+                                 (userPhone && isPhoneMatch(userPhone, tPhone)) ||
+                                 (userName && tName === userName);
+
+                  if (isSelf) return true;
+
+                  if (userShopNameClean && t.shopName && t.shopName.toLowerCase().trim() === userShopNameClean) {
+                    return true;
+                  }
+
+                  return false;
+                });
+
+                if (filteredTailors.length === 0) {
+                  return (
+                    <div className="col-span-full py-12 text-center text-stone-400 text-xs font-sans font-semibold">
+                      No matching registered tailors found for your shop workstation.
+                    </div>
+                  );
+                }
+
+                return filteredTailors.map((t: any) => (
+                  <div key={t.id} className={`p-5 rounded-2xl border text-left flex flex-col justify-between ${
+                    isDarkMode ? 'bg-slate-950 border-slate-900 text-white' : 'bg-stone-50 border-stone-150 text-stone-800'
+                  }`}>
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-3 bg-amber-500/15 rounded-xl text-amber-600 font-black text-sm">
+                          {t.name ? t.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'TL'}
+                        </div>
+                        <div>
+                          <h3 className="font-extrabold text-sm text-stone-900 dark:text-white">{t.name}</h3>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <span className="text-[9px] bg-amber-600/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                              Active Tailor
+                            </span>
+                            {t.hasRegisteredShop ? (
+                              <span className="text-[9px] bg-emerald-500/10 text-emerald-650 dark:text-emerald-400 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+                                <span className="h-1 w-1 rounded-full bg-emerald-500"></span>
+                                Shop Active
+                              </span>
+                            ) : (
+                              <span className="text-[9px] bg-rose-500/10 text-rose-600 dark:text-rose-450 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+                                <span className="h-1 w-1 rounded-full bg-rose-500"></span>
+                                Pending Setup
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-xs space-y-1.5 pt-2 border-t border-dashed dark:border-slate-900 border-stone-200 text-stone-500 dark:text-stone-400">
+                        <p className="flex items-center justify-between">
+                          <span className="font-mono text-[10px] text-stone-400 font-bold">EMAIL:</span>
+                          <span className="font-semibold text-stone-800 dark:text-stone-200">{t.email}</span>
+                        </p>
+                        <p className="flex items-center justify-between">
+                          <span className="font-mono text-[10px] text-stone-400 font-bold">PHONE:</span>
+                          <span className="font-semibold text-stone-800 dark:text-stone-200">{t.phone || 'N/A'}</span>
+                        </p>
+                        <p className="flex items-center justify-between">
+                          <span className="font-mono text-[10px] text-stone-400 font-bold">ROOM / LOC:</span>
+                          <span className="font-semibold text-stone-800 dark:text-stone-200">{t.location || 'Central Desk'}</span>
+                        </p>
+                        {t.hasRegisteredShop && t.shopName && (
+                          <p className="flex items-center justify-between">
+                            <span className="font-mono text-[10px] text-stone-400 font-bold">ATELIER SHOP:</span>
+                            <span className="font-bold text-amber-600 dark:text-amber-500">{t.shopName}</span>
+                          </p>
+                        )}
+                        <p className="flex items-center justify-between">
+                          <span className="font-mono text-[10px] text-stone-400 font-bold">JOINED:</span>
+                          <span className="font-semibold text-stone-800 dark:text-stone-200">{t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'Initial'}</span>
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-              {registeredTailors.length === 0 && (
-                <div className="col-span-full py-12 text-center text-stone-400 text-xs font-sans font-semibold">
-                  No registered tailors found in our database system.
-                </div>
-              )}
+                ));
+              })()}
             </div>
           </section>
         ) : (
           /* Settings Page Section */
           <div className="space-y-6 fade-in font-sans">
+            {/* Settings Sub-tabs (Rendered directly under the main tab switcher navigation bar) */}
+            <div className="flex border-b border-stone-200 dark:border-slate-800 space-x-6 pb-2">
+              <button
+                type="button"
+                onClick={() => setSelectedSettingsSubTab('general')}
+                className={`pb-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  selectedSettingsSubTab === 'general'
+                    ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500 font-extrabold'
+                    : 'border-transparent text-stone-400 hover:text-stone-600 dark:hover:text-stone-200'
+                }`}
+              >
+                <Settings className="h-3.5 w-3.5" />
+                <span>General Sizing &amp; Categories</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedSettingsSubTab('shop_profile')}
+                className={`pb-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  selectedSettingsSubTab === 'shop_profile'
+                    ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500 font-extrabold'
+                    : 'border-transparent text-stone-400 hover:text-stone-600 dark:hover:text-stone-200'
+                }`}
+              >
+                <User className="h-3.5 w-3.5" />
+                <span>Edit Shop Workstation Details</span>
+              </button>
+            </div>
+
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-slate-800 pb-4">
               <div>
                 <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
@@ -5836,202 +7349,108 @@ export default function App() {
                 <p className="text-xs text-stone-400 mt-1">Configure personalized garment templates, pricing, default measurements and workshop properties.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleResetAtelierConfig}
-                  className="px-3.5 py-1.5 border border-stone-300 dark:border-slate-700 bg-transparent hover:bg-yellow-500/10 text-stone-600 hover:text-yellow-700 dark:text-stone-300 dark:hover:text-yellow-400 rounded-xl text-xs font-bold transition duration-155 flex items-center space-x-1.5 cursor-pointer shadow-3xs"
-                  title="Reset Categories and Templates"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  <span>Restore Factory Defaults</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePurgeAllDatabase}
-                  className="px-3.5 py-1.5 border border-rose-350 dark:border-rose-900 bg-transparent hover:bg-rose-500/10 text-stone-600 hover:text-rose-700 dark:text-stone-300 dark:hover:text-rose-450 rounded-xl text-xs font-bold transition duration-155 flex items-center space-x-1.5 cursor-pointer shadow-3xs"
-                  title="Purge all customer list and order database"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span>Purge Database (Clean Slate)</span>
-                </button>
+                {confirmResetConfigs ? (
+                  <div className="flex items-center gap-1.5 bg-yellow-500/10 border border-yellow-500/25 rounded-xl p-1 animate-fadeIn">
+                    <span className="text-[10px] text-yellow-600 dark:text-yellow-500 font-extrabold px-1.5 select-none">Restore default setups?</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleResetAtelierConfig();
+                        setConfirmResetConfigs(false);
+                      }}
+                      className="px-2 py-1 rounded bg-yellow-600 hover:bg-yellow-700 text-white text-[10px] font-bold cursor-pointer"
+                    >
+                      Yes, Restore
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmResetConfigs(false)}
+                      className="px-2 py-1 rounded bg-stone-500 hover:bg-stone-600 text-white text-[10px] font-bold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmResetConfigs(true)}
+                    className="px-3.5 py-1.5 border border-stone-300 dark:border-slate-700 bg-transparent hover:bg-yellow-500/10 text-stone-600 hover:text-yellow-700 dark:text-stone-300 dark:hover:text-yellow-400 rounded-xl text-xs font-bold transition duration-155 flex items-center space-x-1.5 cursor-pointer shadow-3xs"
+                    title="Reset Categories and Templates"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    <span>Restore Factory Defaults</span>
+                  </button>
+                )}
+
+                {confirmPurgeDatabase ? (
+                  <div className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/25 rounded-xl p-1 animate-fadeIn">
+                    <span className="text-[10px] text-red-600 dark:text-red-500 font-extrabold px-1.5 select-none font-mono">PERMANENTLY PURGE ALL DATA?</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handlePurgeAllDatabase();
+                        setConfirmPurgeDatabase(false);
+                      }}
+                      className="px-2 py-1 rounded bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold cursor-pointer"
+                    >
+                      Yes, Purge
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmPurgeDatabase(false)}
+                      className="px-2 py-1 rounded bg-stone-500 hover:bg-stone-600 text-white text-[10px] font-bold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmPurgeDatabase(true)}
+                    className="px-3.5 py-1.5 border border-rose-350 dark:border-rose-900 bg-transparent hover:bg-rose-500/10 text-stone-600 hover:text-rose-700 dark:text-stone-300 dark:hover:text-rose-450 rounded-xl text-xs font-bold transition duration-155 flex items-center space-x-1.5 cursor-pointer shadow-3xs"
+                    title="Purge all customer list and order database"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Purge Database (Clean Slate)</span>
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            {selectedSettingsSubTab === 'general' ? (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
               
               {/* Left Column - General and Add Genre cards */}
               <div className="space-y-6">
                 
-                {/* General Settings Card */}
+                {/* Preferred Measurement System Selection Card */}
                 <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
-                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-4 flex items-center gap-1.5">
-                    <User className="h-4 w-4" />
-                    <span>Workshop Preferences</span>
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-3 flex items-center gap-1.5">
+                    <Scissors className="h-4 w-4" />
+                    <span>Preferred Measurement System</span>
                   </h3>
+                  <p className="text-[10.5px] text-stone-400 mb-4 leading-relaxed font-sans font-medium">
+                    Set the primary units (Inches or Centimeters) utilized across all custom garment templates and active workstation orders.
+                  </p>
                   
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-[10px] font-extrabold text-stone-440 dark:text-stone-300 uppercase tracking-wider block mb-1.5">Studio / Atelier Name</label>
-                      <input
-                        type="text"
-                        value={atelierName}
-                        onChange={(e) => setAtelierName(e.target.value)}
-                        placeholder="e.g. Sartorial Atelier"
-                        className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-250 text-stone-800 shadow-3xs'
-                        }`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-extrabold text-stone-440 dark:text-stone-300 uppercase tracking-wider block mb-1.5">Default Sizing System</label>
-                      <div className={`p-1 rounded-xl border flex gap-1 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-stone-100 border-stone-200'}`}>
-                        {(['Inches', 'Centimeters'] as const).map((unit) => {
-                          const active = unitSystem === unit;
-                          return (
-                            <button
-                              key={unit}
-                              type="button"
-                              onClick={() => setUnitSystem(unit)}
-                              className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer transition-all ${
-                                active
-                                  ? 'bg-amber-600 text-white shadow-xs'
-                                  : 'text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200'
-                              }`}
-                            >
-                              {unit} ({unit === 'Inches' ? 'in' : 'cm'})
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Brand Customization & White-Label Panel */}
-                <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
-                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-4 flex items-center gap-1.5">
-                    <Settings className="h-4 w-4" />
-                    <span>White-Label &amp; Landing Config</span>
-                  </h3>
-                  
-                  <div className="space-y-4 text-left">
-                    <div>
-                      <label className="text-[10px] font-extrabold text-stone-440 dark:text-stone-300 uppercase tracking-wider block mb-1">Brand Logo Image URL</label>
-                      <input
-                        type="text"
-                        value={customLogoUrl}
-                        onChange={(e) => setCustomLogoUrl(e.target.value)}
-                        placeholder="Paste image URL (e.g. https://...)"
-                        className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-250 text-stone-800 shadow-3xs'
-                        }`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-extrabold text-stone-440 dark:text-stone-300 uppercase tracking-wider block mb-1">Landing Title</label>
-                      <input
-                        type="text"
-                        value={customLandingTitle}
-                        onChange={(e) => setCustomLandingTitle(e.target.value)}
-                        placeholder="e.g. Welcome to Sartorial Atelier"
-                        className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-250'
-                        }`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-extrabold text-stone-440 dark:text-stone-300 uppercase tracking-wider block mb-1">Landing Sub-Description</label>
-                      <textarea
-                        value={customLandingDescription}
-                        onChange={(e) => setCustomLandingDescription(e.target.value)}
-                        rows={3}
-                        placeholder="Brief overview description..."
-                        className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-250'
-                        }`}
-                      />
-                    </div>
-
-                    <div className="border-t border-dashed border-stone-200 dark:border-slate-800 my-4 pt-3">
-                      <span className="text-[10.5px] font-extrabold text-amber-600 dark:text-amber-500 uppercase tracking-wider block mb-3 leading-none">Tailor Card Customization</span>
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-[9px] font-bold text-stone-500 block mb-1">Card Display Name</label>
-                          <input
-                            type="text"
-                            value={customTailorTitle}
-                            onChange={(e) => setCustomTailorTitle(e.target.value)}
-                            className={`w-full p-2 rounded-lg border text-xs ${
-                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                            }`}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-bold text-stone-500 block mb-1">Card Subtitle Description</label>
-                          <textarea
-                            value={customTailorDescription}
-                            onChange={(e) => setCustomTailorDescription(e.target.value)}
-                            rows={2}
-                            className={`w-full p-2 rounded-lg border text-xs ${
-                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                            }`}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-bold text-stone-500 block mb-1">Background Image URL</label>
-                          <input
-                            type="text"
-                            value={customTailorImage}
-                            onChange={(e) => setCustomTailorImage(e.target.value)}
-                            className={`w-full p-2 rounded-lg border text-xs ${
-                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                            }`}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-dashed border-stone-200 dark:border-slate-800 my-4 pt-3">
-                      <span className="text-[10.5px] font-extrabold text-amber-600 dark:text-amber-500 uppercase tracking-wider block mb-3 leading-none">Customer Card Customization</span>
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-[9px] font-bold text-stone-500 block mb-1">Card Display Name</label>
-                          <input
-                            type="text"
-                            value={customCustomerTitle}
-                            onChange={(e) => setCustomCustomerTitle(e.target.value)}
-                            className={`w-full p-2 rounded-lg border text-xs ${
-                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                            }`}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-bold text-stone-500 block mb-1">Card Subtitle Description</label>
-                          <textarea
-                            value={customCustomerDescription}
-                            onChange={(e) => setCustomCustomerDescription(e.target.value)}
-                            rows={2}
-                            className={`w-full p-2 rounded-lg border text-xs ${
-                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                            }`}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-bold text-stone-500 block mb-1">Background Image URL</label>
-                          <input
-                            type="text"
-                            value={customCustomerImage}
-                            onChange={(e) => setCustomCustomerImage(e.target.value)}
-                            className={`w-full p-2 rounded-lg border text-xs ${
-                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                            }`}
-                          />
-                        </div>
-                      </div>
-                    </div>
+                  <div className={`p-1 rounded-xl border flex gap-1 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-stone-100 border-stone-200'}`}>
+                    {(['Inches', 'Centimeters'] as const).map((unit) => {
+                      const active = unitSystem === unit;
+                      return (
+                        <button
+                          key={unit}
+                          type="button"
+                          onClick={() => setUnitSystem(unit)}
+                          className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer transition-all ${
+                            active
+                              ? 'bg-amber-600 text-white shadow-xs'
+                              : 'text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200'
+                          }`}
+                        >
+                          {unit} ({unit === 'Inches' ? 'in' : 'cm'})
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -6044,44 +7463,170 @@ export default function App() {
                   
                   <div className="space-y-4">
                     <div>
-                      <label className="text-[10px] font-extrabold text-stone-440 dark:text-stone-300 uppercase tracking-wider block mb-1.5">Genre Name</label>
+                      <label className="text-[10px] font-extrabold text-stone-500 dark:text-stone-300 uppercase tracking-wider block mb-1.5">Genre Name</label>
                       <input
                         type="text"
                         value={settingsNewCatName}
                         onChange={(e) => setSettingsNewCatName(e.target.value)}
                         placeholder="e.g. Waistcoat, Sherwani"
                         className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-250'
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200 shadow-sm'
                         }`}
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[10px] font-extrabold text-stone-440 dark:text-stone-300 uppercase tracking-wider block mb-1.5">Base Emoji</label>
-                        <input
-                          type="text"
-                          value={settingsNewCatEmoji}
-                          onChange={(e) => setSettingsNewCatEmoji(e.target.value)}
-                          placeholder="🧥"
-                          maxLength={4}
-                          className={`w-full p-2.5 rounded-xl border text-center text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                          }`}
-                        />
+                    {/* Custom Icon/Emoji/Upload block for new genre template creation */}
+                    <div className="p-4 rounded-xl border border-dashed text-left space-y-3 bg-stone-50/40 dark:bg-slate-950/20 border-stone-250 dark:border-slate-800">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border select-none transition-all text-base overflow-hidden ${
+                          isDarkMode ? 'bg-slate-950 border-slate-900 text-stone-200' : 'bg-stone-100 border-stone-200 text-stone-750'
+                        }`}>
+                          {renderGenreIcon(settingsNewCatName || 'Preview', { [settingsNewCatName || 'Preview']: settingsNewCatEmoji }, "h-4.5 w-4.5", "w-5 h-5")}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <label className="text-[9px] font-extrabold text-stone-500 dark:text-stone-300 uppercase tracking-wider block mb-0.5">
+                            Genre Icon
+                          </label>
+                          <p className="text-[8.5px] text-stone-400 leading-tight">
+                            Choose an outline preset, type an emoji, or upload a custom image.
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[10px] font-extrabold text-stone-440 dark:text-stone-300 uppercase tracking-wider block mb-1.5">Starting Price (₹)</label>
-                        <input
-                          type="number"
-                          value={settingsNewCatPrice || ''}
-                          onChange={(e) => setSettingsNewCatPrice(parseInt(e.target.value) || 0)}
-                          placeholder="e.g. 250"
-                          className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                            isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                          }`}
-                        />
+
+                      <div className="flex flex-col gap-2.5">
+                        <div className="flex items-center space-x-1.5">
+                          <input
+                            type="text"
+                            value={settingsNewCatEmoji && !settingsNewCatEmoji.startsWith('data:image/') ? settingsNewCatEmoji : ''}
+                            onChange={(e) => setSettingsNewCatEmoji(e.target.value)}
+                            placeholder="🔍 Type Emoji"
+                            className={`flex-1 p-2 text-xs rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono ${
+                              isDarkMode ? 'bg-slate-900 border-slate-850 text-white' : 'bg-white border-stone-250 shadow-3xs text-stone-850'
+                            }`}
+                          />
+
+                          {/* Image Uploader */}
+                          <div className="relative">
+                            <input
+                              type="file"
+                              id="file-upload-new-genre"
+                              className="hidden"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) {
+                                  const reader = new FileReader();
+                                  reader.onload = (event) => {
+                                    const base64Str = event.target?.result as string;
+                                    if (base64Str) {
+                                      const img = new Image();
+                                      img.src = base64Str;
+                                      img.onload = () => {
+                                        const canvas = document.createElement('canvas');
+                                        const ctx = canvas.getContext('2d');
+                                        const TARGET_SIZE = 64;
+                                        canvas.width = TARGET_SIZE;
+                                        canvas.height = TARGET_SIZE;
+                                        if (ctx) {
+                                          ctx.imageSmoothingEnabled = true;
+                                          ctx.imageSmoothingQuality = 'high';
+                                          const minDim = Math.min(img.width, img.height);
+                                          const sx = (img.width - minDim) / 2;
+                                          const sy = (img.height - minDim) / 2;
+                                          ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, TARGET_SIZE, TARGET_SIZE);
+                                          setSettingsNewCatEmoji(canvas.toDataURL('image/png'));
+                                          triggerToast("New genre icon uploaded & auto-resized beautifully!", "success");
+                                        } else {
+                                          setSettingsNewCatEmoji(base64Str);
+                                          triggerToast("New genre icon uploaded!", "success");
+                                        }
+                                      };
+                                    }
+                                  };
+                                  reader.readAsDataURL(f);
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor="file-upload-new-genre"
+                              className={`p-2 rounded-lg border text-stone-400 hover:text-amber-600 dark:hover:text-amber-400 cursor-pointer flex items-center justify-center transition-all ${
+                                isDarkMode ? 'bg-slate-900 border-slate-850 hover:bg-slate-800' : 'bg-white border-stone-250 shadow-3xs hover:bg-stone-50'
+                              }`}
+                              title="Upload custom icon image"
+                            >
+                              <Upload className="h-4 w-4" />
+                            </label>
+                          </div>
+
+                          {/* Reset Button */}
+                          {settingsNewCatEmoji && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSettingsNewCatEmoji('');
+                                triggerToast("Reset custom icon.", "info");
+                              }}
+                              className={`p-2 rounded-lg border text-stone-400 hover:text-rose-500 cursor-pointer flex items-center justify-center transition-all ${
+                                isDarkMode ? 'bg-slate-900 border-slate-850 hover:bg-slate-800' : 'bg-white border-stone-250 shadow-3xs hover:bg-stone-50'
+                              }`}
+                              title="Reset custom icon"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Line Icon Presets */}
+                        <div className="flex flex-col">
+                          <label className="text-[7.5px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider mb-1.5 block">
+                            Or Select Monochromatic Outline Preset
+                          </label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { key: 'svg:Shirt', label: 'Shirt' },
+                              { key: 'svg:Pant', label: 'Pant' },
+                              { key: 'svg:Suit', label: 'Suit' },
+                              { key: 'svg:Kurta', label: 'Kurta' },
+                              { key: 'svg:Custom', label: 'Ruler' },
+                              { key: 'svg:Scissors', label: 'Scissors' }
+                            ].map((preset) => (
+                              <button
+                                key={preset.key}
+                                type="button"
+                                onClick={() => {
+                                  setSettingsNewCatEmoji(preset.key);
+                                }}
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center border hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                  settingsNewCatEmoji === preset.key
+                                    ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400'
+                                    : isDarkMode ? 'bg-slate-900 border-slate-850 hover:bg-slate-800 text-stone-400' : 'bg-stone-100 border-stone-200 hover:bg-stone-200 text-stone-600'
+                                }`}
+                                title={`Set ${preset.label} line-icon as default`}
+                              >
+                                {preset.key === 'svg:Shirt' && <Shirt className="w-4 h-4" />}
+                                {preset.key === 'svg:Pant' && <PantIcon className="w-4 h-4" />}
+                                {preset.key === 'svg:Suit' && <SuitIcon className="w-4 h-4" />}
+                                {preset.key === 'svg:Kurta' && <KurtaIcon className="w-4 h-4" />}
+                                {preset.key === 'svg:Custom' && <Ruler className="w-4 h-4" />}
+                                {preset.key === 'svg:Scissors' && <Scissors className="w-4 h-4" />}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-extrabold text-stone-500 dark:text-stone-300 uppercase tracking-wider block mb-1.5">Starting Price (₹)</label>
+                      <input
+                        type="number"
+                        value={settingsNewCatPrice || ''}
+                        onChange={(e) => setSettingsNewCatPrice(parseInt(e.target.value) || 0)}
+                        placeholder="e.g. 250"
+                        className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 ${
+                          isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200 shadow-sm'
+                        }`}
+                      />
                     </div>
 
                     <button
@@ -6166,48 +7711,159 @@ export default function App() {
                             <div className="flex items-center space-x-3.5 min-w-0 flex-1">
                               
                               {/* Icon Preview */}
-                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border select-none transition-all text-base ${
-                                isDarkMode ? 'bg-slate-900 border-slate-850 text-stone-200' : 'bg-stone-100 border-stone-200 text-stone-750'
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border select-none transition-all text-base overflow-hidden ${
+                                isDarkMode ? 'bg-slate-950 border-slate-900 text-stone-200' : 'bg-stone-100 border-stone-200 text-stone-750'
                               }`}>
-                                {cat === 'Shirt' ? (
-                                  <Shirt className="h-4.5 w-4.5" />
-                                ) : cat === 'Pant' ? (
-                                  <PantIcon className="h-4.5 w-4.5" />
-                                ) : cat === 'Suit' ? (
-                                  <SuitIcon className="h-4.5 w-4.5" />
-                                ) : cat === 'Kurta' ? (
-                                  <KurtaIcon className="h-4.5 w-4.5" />
-                                ) : cat === 'Custom' ? (
-                                  <Ruler className="h-4.5 w-4.5" />
-                                ) : clothingCategoryEmojis[cat] ? (
-                                  <span className="text-[15px] select-none">{clothingCategoryEmojis[cat]}</span>
-                                ) : (
-                                  <Scissors className="h-4.5 w-4.5" />
-                                )}
+                                {renderGenreIcon(cat, clothingCategoryEmojis, "h-4.5 w-4.5", "w-5 h-5")}
                               </div>
 
-                              {!isDefaultCategoryChoice && cat !== 'Custom' && (
-                                <div className="flex flex-col ml-1 shrink-0">
-                                  <label className="text-[7.5px] font-extrabold text-stone-400 uppercase tracking-wider mb-0.5">Emoji</label>
-                                  <input
-                                    type="text"
-                                    value={clothingCategoryEmojis[cat] || ''}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      setClothingCategoryEmojis(prev => ({
-                                        ...prev,
-                                        [cat]: val
-                                      }));
-                                    }}
-                                    placeholder="📐"
-                                    title="Set a custom emoji for this custom genre"
-                                    className={`w-10 p-0.5 py-0.25 text-center text-[10.5px] rounded-md border focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono ${
-                                      isDarkMode ? 'bg-slate-900 border-slate-850 text-white' : 'bg-white border-stone-250 shadow-3xs text-stone-850'
-                                    }`}
-                                    maxLength={2}
-                                  />
+                              {/* Emoji / Icon Upload & Select Controller (For ALL genres) */}
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-3.5 flex-wrap text-left shrink-0 ml-1">
+                                <div className="flex items-center space-x-1.5">
+                                  <div className="flex flex-col">
+                                    <label className="text-[7.5px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider mb-0.5">Emoji / Custom Icon</label>
+                                    <div className="flex items-center space-x-1">
+                                      <input
+                                        type="text"
+                                        value={clothingCategoryEmojis[cat] && !clothingCategoryEmojis[cat].startsWith('data:image/') ? clothingCategoryEmojis[cat] : ''}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          setClothingCategoryEmojis(prev => ({
+                                            ...prev,
+                                            [cat]: val
+                                          }));
+                                        }}
+                                        placeholder="📐"
+                                        title="Type or paste any emoji"
+                                        className={`w-12 p-1 text-center text-[10.5px] rounded-lg border focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono ${
+                                          isDarkMode ? 'bg-slate-900 border-slate-850 text-white' : 'bg-white border-stone-250 shadow-3xs text-stone-850'
+                                        }`}
+                                        maxLength={10}
+                                      />
+                                      
+                                      {/* Image Uploader */}
+                                      <div className="relative">
+                                        <input
+                                          type="file"
+                                          id={`file-upload-genre-${cat}`}
+                                          className="hidden"
+                                          accept="image/*"
+                                          onChange={(e) => {
+                                            const f = e.target.files?.[0];
+                                            if (f) {
+                                              const reader = new FileReader();
+                                              reader.onload = (event) => {
+                                                const base64Str = event.target?.result as string;
+                                                if (base64Str) {
+                                                  const img = new Image();
+                                                  img.src = base64Str;
+                                                  img.onload = () => {
+                                                    const canvas = document.createElement('canvas');
+                                                    const ctx = canvas.getContext('2d');
+                                                    // Favorable small square size (64x64) keeps LocalStorage fast & lightweight
+                                                    const TARGET_SIZE = 64;
+                                                    canvas.width = TARGET_SIZE;
+                                                    canvas.height = TARGET_SIZE;
+                                                    if (ctx) {
+                                                      ctx.imageSmoothingEnabled = true;
+                                                      ctx.imageSmoothingQuality = 'high';
+                                                      const minDim = Math.min(img.width, img.height);
+                                                      const sx = (img.width - minDim) / 2;
+                                                      const sy = (img.height - minDim) / 2;
+                                                      ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, TARGET_SIZE, TARGET_SIZE);
+                                                      
+                                                      setClothingCategoryEmojis(prev => ({
+                                                        ...prev,
+                                                        [cat]: canvas.toDataURL('image/png')
+                                                      }));
+                                                      triggerToast(`Custom icon uploaded & auto-resized beautifully for ${cat}!`, "success");
+                                                    } else {
+                                                      setClothingCategoryEmojis(prev => ({
+                                                        ...prev,
+                                                        [cat]: base64Str
+                                                      }));
+                                                      triggerToast(`Icon uploaded for ${cat}!`, "success");
+                                                    }
+                                                  };
+                                                }
+                                              };
+                                              reader.readAsDataURL(f);
+                                            }
+                                          }}
+                                        />
+                                        <label 
+                                          htmlFor={`file-upload-genre-${cat}`}
+                                          className={`p-1.5 rounded-lg border text-stone-400 hover:text-amber-600 dark:hover:text-amber-400 cursor-pointer flex items-center justify-center transition-all ${
+                                            isDarkMode ? 'bg-slate-900 border-slate-850 hover:bg-slate-800' : 'bg-white border-stone-250 shadow-3xs hover:bg-stone-50'
+                                          }`}
+                                          title="Upload a custom icon or image of your choice"
+                                        >
+                                          <Upload className="h-3 w-3" />
+                                        </label>
+                                      </div>
+
+                                      {/* Clear/Reset Button if custom icon is active */}
+                                      {clothingCategoryEmojis[cat] && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setClothingCategoryEmojis(prev => ({
+                                              ...prev,
+                                              [cat]: ''
+                                            }));
+                                            triggerToast(`Reset custom icon/emoji for ${cat} to default.`, "info");
+                                          }}
+                                          className={`p-1.5 rounded-lg border text-stone-400 hover:text-rose-500 cursor-pointer flex items-center justify-center transition-all ${
+                                            isDarkMode ? 'bg-slate-900 border-slate-850 hover:bg-slate-800' : 'bg-white border-stone-250 shadow-3xs hover:bg-stone-50'
+                                          }`}
+                                          title="Reset to default icon"
+                                        >
+                                          <RotateCcw className="h-3 w-3" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                              )}
+                                
+                                {/* Quick Presets Grid */}
+                                <div className="flex flex-col pl-0 sm:pl-1">
+                                  <label className="text-[7.5px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider mb-1">Presets</label>
+                                  <div className="flex flex-wrap gap-1 max-w-[125px]">
+                                    {[
+                                      { key: 'svg:Shirt', label: 'Shirt' },
+                                      { key: 'svg:Pant', label: 'Pant' },
+                                      { key: 'svg:Suit', label: 'Suit' },
+                                      { key: 'svg:Kurta', label: 'Kurta' },
+                                      { key: 'svg:Custom', label: 'Ruler' },
+                                      { key: 'svg:Scissors', label: 'Scissors' }
+                                    ].map((preset) => (
+                                      <button
+                                        key={preset.key}
+                                        type="button"
+                                        onClick={() => {
+                                          setClothingCategoryEmojis(prev => ({
+                                            ...prev,
+                                            [cat]: preset.key
+                                          }));
+                                        }}
+                                        className={`w-5 h-5 rounded flex items-center justify-center border hover:scale-110 active:scale-95 transition-all cursor-pointer ${
+                                          clothingCategoryEmojis[cat] === preset.key
+                                            ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400'
+                                            : isDarkMode ? 'bg-slate-900 border-slate-850 hover:bg-slate-800 text-stone-400' : 'bg-stone-100 border-stone-200 hover:bg-stone-200 text-stone-600'
+                                        }`}
+                                        title={`Set ${preset.label} line-icon as default`}
+                                      >
+                                        {preset.key === 'svg:Shirt' && <Shirt className="w-3.5 h-3.5" />}
+                                        {preset.key === 'svg:Pant' && <PantIcon className="w-3.5 h-3.5" />}
+                                        {preset.key === 'svg:Suit' && <SuitIcon className="w-3.5 h-3.5" />}
+                                        {preset.key === 'svg:Kurta' && <KurtaIcon className="w-3.5 h-3.5" />}
+                                        {preset.key === 'svg:Custom' && <Ruler className="w-3.5 h-3.5" />}
+                                        {preset.key === 'svg:Scissors' && <Scissors className="w-3.5 h-3.5" />}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
 
                               <div className="min-w-0 flex-1">
                                 {isRenaming ? (
@@ -6282,18 +7938,37 @@ export default function App() {
                                 </div>
                               </div>
 
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (window.confirm(`Are you sure you want to completely delete the "${cat}" template genre from your atelier configs?`)) {
-                                    handleDeleteCategoryInSettings(cat);
-                                  }
-                                }}
-                                className={`p-1.5 text-stone-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-red-500/20`}
-                                title={`Delete ${cat} config`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
+                              {confirmDeleteGenre === cat ? (
+                                <div className="flex items-center gap-1 bg-red-500/10 border border-red-500/25 rounded-lg p-1 animate-fadeIn">
+                                  <span className="text-[9px] text-red-500 font-extrabold px-1.5 select-none">Delete {cat}?</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleDeleteCategoryInSettings(cat);
+                                      setConfirmDeleteGenre(null);
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-700 text-white text-[9px] font-bold cursor-pointer"
+                                  >
+                                    Yes
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteGenre(null)}
+                                    className="px-2 py-0.5 rounded bg-stone-500 dark:bg-stone-750 hover:bg-stone-600 text-white dark:text-stone-200 text-[9px] font-bold cursor-pointer"
+                                  >
+                                    No
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteGenre(cat)}
+                                  className={`p-1.5 text-stone-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-red-500/20`}
+                                  title={`Delete ${cat} config`}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                             </div>
 
                           </div>
@@ -6364,6 +8039,534 @@ export default function App() {
               </div>
 
             </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-fadeIn">
+                {/* Left Column - Shop Workstation details */}
+                <div className="lg:col-span-2 space-y-6">
+                  <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
+                    <div className="border-b border-stone-150 dark:border-slate-800 pb-3 mb-5">
+                      <h3 className="font-sans text-sm font-bold tracking-tight">Update Atelier Workstation Details</h3>
+                      <p className="text-[10.5px] text-stone-400 mt-0.5 font-medium">Configure contact details, physical address, logo and GPS coordinates representation.</p>
+                    </div>
+
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!tailorShopNameInput.trim()) {
+                          triggerToast("Shop Name is required!", "error");
+                          return;
+                        }
+                        if (!tailorOwnerNameInput.trim()) {
+                          triggerToast("Owner Name is required!", "error");
+                          return;
+                        }
+                        if (!tailorPhoneInput.trim()) {
+                          triggerToast("Phone is required!", "error");
+                          return;
+                        }
+
+                        const formattedAddr = [
+                          tailorAreaInput.trim(),
+                          tailorDistrictInput.trim(),
+                          tailorStateInput.trim(),
+                          tailorCountryInput.trim(),
+                          tailorPincodeInput.trim() ? `PIN: ${tailorPincodeInput.trim()}` : ''
+                        ].filter(Boolean).join(', ');
+
+                        handleUpdateTailorShop(
+                          tailorShopNameInput.trim(),
+                          tailorLogoUrlInput.trim(),
+                          tailorOwnerNameInput.trim(),
+                          tailorPhoneInput.trim(),
+                          formattedAddr,
+                          tailorLatitudeInput.trim(),
+                          tailorLongitudeInput.trim()
+                        );
+                      }}
+                      className="space-y-4 text-left"
+                    >
+                      {/* Identity Details Row */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-extrabold text-stone-500 dark:text-stone-300 uppercase tracking-wider block mb-1.5 font-sans">Shop Name *</label>
+                          <input
+                            type="text"
+                            value={tailorShopNameInput}
+                            onChange={(e) => setTailorShopNameInput(e.target.value)}
+                            placeholder="e.g. My Bespoke Row"
+                            className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200 text-stone-800 shadow-sm'
+                            }`}
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-extrabold text-stone-500 dark:text-stone-300 uppercase tracking-wider block mb-1.5 font-sans">Owner / Master Artisan Name *</label>
+                          <input
+                            type="text"
+                            value={tailorOwnerNameInput}
+                            onChange={(e) => setTailorOwnerNameInput(e.target.value)}
+                            placeholder="e.g. Jean Laurent"
+                            className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200 text-stone-800 shadow-sm'
+                            }`}
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      {/* Contact & Logo URLs Row */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
+                        <div>
+                          <label className="text-[10px] font-extrabold text-stone-500 dark:text-stone-300 uppercase tracking-wider block mb-1.5">Contact Phone *</label>
+                          <input
+                            type="text"
+                            value={tailorPhoneInput}
+                            onChange={(e) => setTailorPhoneInput(e.target.value)}
+                            placeholder="e.g. +91 94567 12345"
+                            className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200 text-stone-800 shadow-sm'
+                            }`}
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-extrabold text-stone-500 dark:text-stone-300 uppercase tracking-wider block mb-1.5">Shop Logo URL</label>
+                          <input
+                            type="text"
+                            value={tailorLogoUrlInput}
+                            onChange={(e) => setTailorLogoUrlInput(e.target.value)}
+                            placeholder="e.g. https://example.com/logo.png"
+                            className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200 text-stone-800 shadow-sm'
+                            }`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Address Geography */}
+                      <div className="border-t border-stone-150 dark:border-slate-800 pt-3 mt-4 space-y-3 font-sans">
+                        <h4 className="text-[10px] font-extrabold text-amber-600 dark:text-amber-500 uppercase tracking-widest">Physical Studio Location</h4>
+                        
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          <div>
+                            <label className="text-[9px] font-extrabold block mb-1 text-stone-500 uppercase font-sans font-medium">Country</label>
+                            <select
+                              value={tailorCountryInput}
+                              onChange={(e) => {
+                                setTailorCountryInput(e.target.value);
+                                if (e.target.value !== 'India') {
+                                  setTailorStateInput('');
+                                  setTailorDistrictInput('');
+                                }
+                              }}
+                              className={`w-full p-2 rounded-lg border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans ${
+                                isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-800 shadow-sm'
+                              }`}
+                            >
+                              <option value="India">India</option>
+                              <option value="United States">United States</option>
+                              <option value="United Kingdom">United Kingdom</option>
+                              <option value="UAE">UAE</option>
+                              <option value="Singapore">Singapore</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[9px] font-extrabold block mb-1 text-stone-500 uppercase font-sans font-medium">State</label>
+                            {tailorCountryInput === 'India' ? (
+                              <select
+                                value={tailorStateInput}
+                                onChange={(e) => {
+                                  setTailorStateInput(e.target.value);
+                                  setTailorDistrictInput('');
+                                }}
+                                className={`w-full p-2 rounded-lg border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans ${
+                                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-800 shadow-sm'
+                                }`}
+                              >
+                                <option value="">-- Choose State --</option>
+                                {Object.keys(INDIA_STATES_MAP).map((s) => (
+                                  <option key={s} value={s}>{s}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                placeholder="State Province"
+                                value={tailorStateInput}
+                                onChange={(e) => setTailorStateInput(e.target.value)}
+                                className={`w-full p-2 rounded-lg border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans ${
+                                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200 shadow-sm'
+                                }`}
+                              />
+                            )}
+                          </div>
+
+                          <div className="col-span-2 md:col-span-1">
+                            <label className="text-[9px] font-extrabold block mb-1 text-stone-500 uppercase font-sans font-medium">District</label>
+                            {tailorCountryInput === 'India' && tailorStateInput && INDIA_STATES_MAP[tailorStateInput] ? (
+                              <select
+                                value={tailorDistrictInput}
+                                onChange={(e) => setTailorDistrictInput(e.target.value)}
+                                className={`w-full p-2 rounded-lg border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans ${
+                                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-800 shadow-sm'
+                                }`}
+                              >
+                                <option value="">-- Choose District --</option>
+                                {INDIA_STATES_MAP[tailorStateInput].map((d) => (
+                                  <option key={d} value={d}>{d}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                placeholder="District Town"
+                                value={tailorDistrictInput}
+                                onChange={(e) => setTailorDistrictInput(e.target.value)}
+                                className={`w-full p-2 rounded-lg border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans ${
+                                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-800 shadow-sm'
+                                }`}
+                              />
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="md:col-span-2">
+                            <label className="text-[9px] font-extrabold block mb-1 text-stone-500 uppercase font-sans">Area / Landmark *</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. Edappal Bypass Road"
+                              value={tailorAreaInput}
+                              onChange={(e) => setTailorAreaInput(e.target.value)}
+                              className={`w-full p-2 rounded-lg border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans ${
+                                isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-800 shadow-sm'
+                              }`}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-extrabold block mb-1 text-stone-500 uppercase font-sans">PIN / Pincode *</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="Pincode / ZIP"
+                              value={tailorPincodeInput}
+                              onChange={(e) => setTailorPincodeInput(e.target.value)}
+                              className={`w-full p-2 rounded-lg border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans ${
+                                isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-800 shadow-sm'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* GPS coordinates & autofill */}
+                      <div className="border-t border-stone-150 dark:border-slate-800 pt-3 mt-4 space-y-3 font-sans">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-[10px] font-extrabold text-amber-600 dark:text-amber-500 uppercase tracking-wider font-sans">GPS Geolocation Mapping</h4>
+                          <button
+                            type="button"
+                            disabled={tailorLocationLoading}
+                            onClick={async () => {
+                              const fallbackToIp = async (errMsg?: string) => {
+                                triggerToast('GPS failed. Falling back to Network IP Geolocation...', 'info');
+                                try {
+                                  const ipData = await fetchIPLocation();
+                                  setTailorLatitudeInput(ipData.latitude);
+                                  setTailorLongitudeInput(ipData.longitude);
+                                  if (ipData.country) setTailorCountryInput(ipData.country);
+                                  
+                                  let detectedState = '';
+                                  if (ipData.region) {
+                                    const findState = Object.keys(INDIA_STATES_MAP).find(
+                                      (s) => s.toLowerCase() === ipData.region.toLowerCase() || ipData.region.toLowerCase().includes(s.toLowerCase())
+                                    );
+                                    if (findState) {
+                                      setTailorStateInput(findState);
+                                      detectedState = findState;
+                                    } else {
+                                      setTailorStateInput(ipData.region);
+                                      detectedState = ipData.region;
+                                    }
+                                  }
+                                  if (detectedState && INDIA_STATES_MAP[detectedState] && ipData.city) {
+                                    const distList = INDIA_STATES_MAP[detectedState];
+                                    const match = distList.find(d => 
+                                      d.toLowerCase() === ipData.city.toLowerCase() || 
+                                      ipData.city.toLowerCase().includes(d.toLowerCase()) ||
+                                      d.toLowerCase().includes(ipData.city.toLowerCase())
+                                    );
+                                    if (match) {
+                                      setTailorDistrictInput(match);
+                                    } else {
+                                      setTailorDistrictInput(ipData.city);
+                                    }
+                                  } else if (ipData.city) {
+                                    setTailorDistrictInput(ipData.city);
+                                  }
+
+                                  if (ipData.postal) setTailorPincodeInput(ipData.postal);
+                                  setTailorAreaInput(ipData.area || 'Central Area');
+                                  triggerToast('Workstation coordinates loaded via IP successfully!', 'success');
+                                } catch (fError: any) {
+                                  console.error("IP fallback error:", fError);
+                                  triggerToast(errMsg || fError?.message || 'Network Geolocation failed.', 'error');
+                                } finally {
+                                  setTailorLocationLoading(false);
+                                }
+                              };
+
+                              if (!navigator.geolocation) {
+                                fallbackToIp('Geolocation not supported by search framework.');
+                                return;
+                              }
+                              setTailorLocationLoading(true);
+                              triggerToast('Querying active GPS telemetry...', 'info');
+                              navigator.geolocation.getCurrentPosition(
+                                async (pos) => {
+                                  const lat = pos.coords.latitude.toFixed(6);
+                                  const lon = pos.coords.longitude.toFixed(6);
+                                  setTailorLatitudeInput(lat);
+                                  setTailorLongitudeInput(lon);
+                                  
+                                  triggerToast('GPS Locked! Georeferencing address attributes...', 'info');
+                                  
+                                  try {
+                                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`, {
+                                      headers: {
+                                        'Accept-Language': 'en'
+                                      }
+                                    });
+                                    if (res.ok) {
+                                      const data = await res.json();
+                                      if (data && data.address) {
+                                        const addr = data.address;
+                                        if (addr.country) setTailorCountryInput(addr.country);
+                                        
+                                        let detectedState = '';
+                                        const stateCandidates = [
+                                          addr.state,
+                                          addr.region,
+                                          addr.province,
+                                          addr.state_district
+                                        ].filter(Boolean).map(v => String(v).trim());
+
+                                        let foundStateKey = '';
+                                        for (const sc of stateCandidates) {
+                                          const match = Object.keys(INDIA_STATES_MAP).find(
+                                            (s) => s.toLowerCase() === sc.toLowerCase() || 
+                                                   sc.toLowerCase().includes(s.toLowerCase()) || 
+                                                   s.toLowerCase().includes(sc.toLowerCase())
+                                          );
+                                          if (match) {
+                                            foundStateKey = match;
+                                            break;
+                                          }
+                                        }
+
+                                        if (foundStateKey) {
+                                          setTailorStateInput(foundStateKey);
+                                          detectedState = foundStateKey;
+                                        } else if (addr.state) {
+                                          setTailorStateInput(addr.state);
+                                          detectedState = addr.state;
+                                        }
+                                        
+                                        let matchedDistrict = '';
+                                        if (detectedState && INDIA_STATES_MAP[detectedState]) {
+                                          const distList = INDIA_STATES_MAP[detectedState];
+                                          const fullTextSearchSource = [
+                                            data.display_name || '',
+                                            addr.state_district || '',
+                                            addr.district || '',
+                                            addr.county || '',
+                                            addr.city || '',
+                                            addr.town || '',
+                                            addr.city_district || '',
+                                            addr.suburb || '',
+                                            addr.village || '',
+                                            addr.neighbourhood || '',
+                                            addr.municipality || '',
+                                            addr.subdistrict || ''
+                                          ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
+                                          for (const text of fullTextSearchSource) {
+                                            const match = distList.find(d => {
+                                              const dl = d.toLowerCase();
+                                              return dl === text || text.includes(dl) || dl.includes(text);
+                                            });
+                                            if (match) {
+                                              matchedDistrict = match;
+                                              break;
+                                            }
+                                          }
+                                          if (!matchedDistrict && data.display_name) {
+                                            const dispLower = data.display_name.toLowerCase();
+                                            const match = distList.find(d => dispLower.includes(d.toLowerCase()));
+                                            if (match) matchedDistrict = match;
+                                          }
+                                        }
+
+                                        if (matchedDistrict) {
+                                          setTailorDistrictInput(matchedDistrict);
+                                        } else if (addr.state_district || addr.district || addr.county) {
+                                          const rawD = addr.state_district || addr.district || addr.county || '';
+                                          setTailorDistrictInput(rawD.replace(/\s+(District|Taluk|County)$/i, '').trim());
+                                        }
+
+                                        if (addr.postcode) setTailorPincodeInput(addr.postcode);
+                                        
+                                        const str = addr.road || addr.suburb || addr.neighbourhood || addr.village || '';
+                                        const areaVal = [str, addr.quarter || ''].filter(Boolean).join(', ');
+                                        if (areaVal) {
+                                          setTailorAreaInput(areaVal);
+                                        } else if (data.display_name) {
+                                          setTailorAreaInput(data.display_name.split(',').slice(0, 2).join(',').trim());
+                                        }
+                                        triggerToast('Workstation details mapped beautifully!', 'success');
+                                      } else {
+                                        triggerToast('Coordinates fetched successfully!', 'success');
+                                      }
+                                    }
+                                  } catch (geError) {
+                                    console.error("OSM error in Settings:", geError);
+                                  } finally {
+                                    setTailorLocationLoading(false);
+                                  }
+                                },
+                                (err) => {
+                                  console.error("Geolocation error:", err);
+                                  fallbackToIp(`Geolocation error code ${err.code}: ${err.message}`);
+                                }
+                              );
+                            }}
+                            className="text-[10px] text-amber-600 dark:text-amber-500 font-extrabold hover:underline uppercase tracking-wider flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          >
+                            <MapPin className="h-3 w-3" />
+                            <span>{tailorLocationLoading ? 'Loading Coordinate Geodata...' : 'Acquire Current GPS Location'}</span>
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[9px] font-extrabold block mb-1 text-stone-500 uppercase font-sans">Latitude</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. 10.785421"
+                              value={tailorLatitudeInput}
+                              onChange={(e) => setTailorLatitudeInput(e.target.value)}
+                              className={`w-full p-2 rounded-lg border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono ${
+                                isDarkMode ? 'bg-slate-950 border-slate-800 text-amber-500' : 'bg-white border-stone-200 text-amber-600 shadow-sm'
+                              }`}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-extrabold block mb-1 text-stone-500 uppercase font-sans font-medium">Longitude</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. 76.124578"
+                              value={tailorLongitudeInput}
+                              onChange={(e) => setTailorLongitudeInput(e.target.value)}
+                              className={`w-full p-2 rounded-lg border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono ${
+                                isDarkMode ? 'bg-slate-950 border-slate-800 text-amber-500' : 'bg-white border-stone-200 text-amber-600 shadow-sm'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action save profile button */}
+                      <div className="pt-4 border-t border-stone-150 dark:border-slate-800 mt-4 font-sans">
+                        <button
+                          type="submit"
+                          className="w-full py-3 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 shadow-md shadow-amber-500/10 cursor-pointer animate-pulse"
+                        >
+                          <CheckCircle className="h-4.5 w-4.5" />
+                          <span>Apply &amp; Lock Workstation Details</span>
+                        </button>
+                      </div>
+
+                    </form>
+                  </div>
+                </div>
+
+                {/* Right Column - Map Satellite Overlay representation */}
+                <div className="space-y-6">
+                  {tailorLogoUrlInput && (
+                    <div className={`p-5 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
+                      <h4 className="text-[10px] font-extrabold text-stone-500 dark:text-stone-300 uppercase tracking-wider mb-3">Atelier Logo Outlook</h4>
+                      <div className="mx-auto h-24 w-24 rounded-full border border-stone-150 dark:border-slate-800 bg-stone-50 dark:bg-slate-950 overflow-hidden flex items-center justify-center p-2">
+                        <img
+                          src={tailorLogoUrlInput}
+                          alt="Atelier Logo preview"
+                          referrerPolicy="no-referrer"
+                          className="max-h-full max-w-full object-contain"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=200&auto=format&fit=crop';
+                          }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-stone-500 mt-2 font-mono break-all font-sans">{tailorShopNameInput || 'Unconfigured Studio'}</p>
+                    </div>
+                  )}
+
+                  <div className={`p-5 rounded-2xl border text-left ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
+                    <h4 className="text-[10px] font-extrabold text-stone-500 dark:text-stone-300 uppercase tracking-wider mb-3 flex items-center gap-1 font-sans">
+                      <MapPin className="h-3.5 w-3.5 text-amber-500" />
+                      <span>GIS Satellite Workstation Map</span>
+                    </h4>
+                    
+                    <div className="h-44 rounded-xl relative overflow-hidden bg-stone-100 dark:bg-slate-950 border border-stone-200 dark:border-slate-800 shadow-inner flex flex-col items-center justify-center text-center">
+                      {tailorLatitudeInput && tailorLongitudeInput ? (
+                        <iframe
+                          title="Workstation Details Google Map"
+                          width="100%"
+                          height="100%"
+                          style={{ border: 0 }}
+                          allowFullScreen={false}
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          src={`https://maps.google.com/maps?q=${tailorLatitudeInput},${tailorLongitudeInput}&z=16&output=embed`}
+                        />
+                      ) : (
+                        <>
+                          {/* Leaflet/Static representation */}
+                          <div className="absolute inset-0 opacity-40 mix-blend-multiply dark:mix-blend-overlay dark:opacity-30" style={{
+                            backgroundImage: `radial-gradient(#d97706 1px, transparent 1px), radial-gradient(#d97706 1px, transparent 1px)`,
+                            backgroundSize: '20px 20px',
+                            backgroundPosition: '0 0, 10px 10px'
+                          }}></div>
+                          
+                          <div className="relative z-10 flex flex-col items-center space-y-2 p-4">
+                            <div className="h-8 w-8 bg-amber-500/25 animate-ping absolute rounded-full font-sans"></div>
+                            <MapPin className="h-9 w-9 text-amber-600 animate-bounce relative z-10" />
+                            <span className="text-[10px] font-extrabold text-stone-750 dark:text-stone-350 bg-white/90 dark:bg-slate-900/90 px-2 py-1 rounded-md shadow-3xs font-mono font-sans">
+                              GPS Target Unacquired
+                            </span>
+                            <p className="text-[9px] text-stone-400 max-w-[180px] font-medium leading-normal">
+                              {tailorAreaInput || 'Acquire or enter geo address values to plot coordinate mapping on OpenStreetMap GIS framework.'}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    
+                    <div className="mt-3.5 space-y-1.5 text-[10px] text-stone-500 dark:text-stone-400 font-sans font-medium">
+                      <p className="flex justify-between border-b border-stone-100 dark:border-slate-850 pb-1"><span>Target Country:</span> <span className="font-bold text-stone-850 dark:text-stone-200">{tailorCountryInput}</span></p>
+                      <p className="flex justify-between border-b border-stone-100 dark:border-slate-850 pb-1"><span>Province State:</span> <span className="font-bold text-stone-850 dark:text-stone-200">{tailorStateInput || 'N/A'}</span></p>
+                      <p className="flex justify-between border-b border-stone-100 dark:border-slate-850 pb-1"><span>Taluk District:</span> <span className="font-bold text-stone-850 dark:text-stone-200">{tailorDistrictInput || 'N/A'}</span></p>
+                      <p className="flex justify-between"><span>Registry Pincode:</span> <span className="font-bold text-stone-850 dark:text-stone-200">{tailorPincodeInput || 'N/A'}</span></p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

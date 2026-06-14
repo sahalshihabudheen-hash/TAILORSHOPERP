@@ -36,7 +36,7 @@ const setupSync = <T extends { id: string }>(
         batch.set(docRef, item);
       });
       batch.commit().catch((err) => {
-        console.error(`Failed to seed ${collectionName}:`, err);
+        handleFirestoreError(err, OperationType.WRITE, collectionName);
       });
 
       const prev = localStorage.getItem(localStorageKey);
@@ -62,7 +62,7 @@ const setupSync = <T extends { id: string }>(
 
         if (isFake) {
           deleteDoc(doc(db, collectionName, docSnap.id)).catch((err) => {
-            console.error(`Failed to delete fake record ${docSnap.id} from ${collectionName}:`, err);
+            handleFirestoreError(err, OperationType.DELETE, `${collectionName}/${docSnap.id}`);
           });
         } else {
           items.push(data);
@@ -77,11 +77,10 @@ const setupSync = <T extends { id: string }>(
       }
     }
   }, (err) => {
-    console.error(`Error in onSnapshot for ${collectionName}:`, err);
     try {
       handleFirestoreError(err, OperationType.LIST, collectionName);
     } catch (e) {
-      // Keep running and maintain state propagation/logging
+      console.warn(`Firestore sync for ${collectionName} is currently offline or waiting for permissions. Sync will retry automatically.`);
     }
   });
 };
@@ -116,13 +115,17 @@ const syncListToFirestore = async <T extends { id: string }>(
   try {
     const colRef = collection(db, collectionName);
     const snapshot = await getDocs(colRef);
-    snapshot.forEach(async (docSnap) => {
+    for (const docSnap of snapshot.docs) {
       if (!ids.has(docSnap.id)) {
-        await deleteDoc(docSnap.ref);
+        try {
+          await deleteDoc(docSnap.ref);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.DELETE, `${collectionName}/${docSnap.id}`);
+        }
       }
-    });
+    }
   } catch (err) {
-    console.error(`Failed to dry-clean deleted documents from Firestore for ${collectionName}:`, err);
+    handleFirestoreError(err, OperationType.LIST, collectionName);
   }
 };
 
@@ -225,13 +228,13 @@ export const purgeAllDatabaseRecords = async () => {
         batch.delete(docSnap.ref);
       });
     } catch (err) {
-      console.error(`Failed to stage purge for ${colName}:`, err);
+      handleFirestoreError(err, OperationType.LIST, colName);
     }
   }
   try {
     await batch.commit();
   } catch (err) {
-    console.error(`Failed to commit purge batch:`, err);
+    handleFirestoreError(err, OperationType.WRITE, 'purge_batch');
   }
 
   // Clear local storage keys

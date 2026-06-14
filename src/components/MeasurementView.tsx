@@ -114,6 +114,24 @@ export default function MeasurementView({
   const [compareOldId, setCompareOldId] = useState('');
   const [compareNewId, setCompareNewId] = useState('');
 
+  const [clothingCategoryEmojis] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem('custom_clothing_emojis');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const getFavorableEmojiSize = (emojiStr: string): string => {
+    if (!emojiStr) return '11px';
+    const charArray = Array.from(emojiStr); 
+    const len = charArray.length;
+    if (len <= 1) return '14px';
+    if (len === 2) return '11px';
+    return '8px';
+  };
+
   // Active Customer item
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
@@ -304,17 +322,35 @@ export default function MeasurementView({
                         : 'text-stone-600 hover:text-stone-950'
                     }`}
                   >
-                    {type === 'Shirt' ? (
-                      <Shirt className="h-3.5 w-3.5" />
-                    ) : type === 'Pant' ? (
-                      <PantIcon className="h-3.5 w-3.5" />
-                    ) : type === 'Suit' ? (
-                      <SuitIcon className="h-3.5 w-3.5" />
-                    ) : type === 'Kurta' ? (
-                      <KurtaIcon className="h-3.5 w-3.5" />
-                    ) : (
-                      <Ruler className="h-3.5 w-3.5" />
-                    )}
+                    {(() => {
+                      const custom = clothingCategoryEmojis[type];
+                      if (custom) {
+                        if (custom.startsWith('data:image/')) {
+                          return (
+                            <img 
+                              src={custom} 
+                              alt={type} 
+                              className="w-3.5 h-3.5 object-contain rounded-xs shrink-0" 
+                            />
+                          );
+                        } else {
+                          return (
+                            <span 
+                              className="select-none leading-none shrink-0"
+                              style={{ fontSize: getFavorableEmojiSize(custom) }}
+                            >
+                              {custom}
+                            </span>
+                          );
+                        }
+                      }
+                      
+                      if (type === 'Shirt') return <Shirt className="h-3.5 w-3.5" />;
+                      if (type === 'Pant') return <PantIcon className="h-3.5 w-3.5" />;
+                      if (type === 'Suit') return <SuitIcon className="h-3.5 w-3.5" />;
+                      if (type === 'Kurta') return <KurtaIcon className="h-3.5 w-3.5" />;
+                      return <Ruler className="h-3.5 w-3.5" />;
+                    })()}
                     <span>{type}</span>
                   </button>
                 );

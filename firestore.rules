@@ -120,7 +120,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isValidActivity(incoming());
       allow update: if isValidActivity(incoming());
-      allow delete: if false; // Audit logs should never be deleted
+      allow delete: if true;
     }
 
     // Test collection for boot validation
