@@ -90,7 +90,7 @@ export default function PaymentManagementView({
             <div class="invoice-card">
               <div style="display: flex; justify-content: space-between; align-items: start; border-bottom: 2px solid #f5f5f5; padding-bottom: 20px;">
                 <div>
-                  <div class="brand">Sartorial Atelier</div>
+                  <div class="brand">Sartorial TAILORSHOP ERP</div>
                   <div class="tagline">Luxury Bespoke Outfitters</div>
                 </div>
                 <div style="text-align: right; font-size: 13px; line-height: 1.5;">
@@ -109,9 +109,9 @@ export default function PaymentManagementView({
                 </div>
                 <div style="text-align: right;">
                   <p style="font-weight: bold; margin-bottom: 5px; color: #777; font-size: 11px; text-transform: uppercase;">Service Workshop Location:</p>
-                  <p style="margin: 0; font-weight: bold;">Atelier Midtown Central</p>
+                  <p style="margin: 0; font-weight: bold;">TAILORSHOP ERP Midtown Central</p>
                   <p style="margin: 3px 0;">5th Ave, New York, NY</p>
-                  <p style="margin: 0;">support@sartorialatelier.com</p>
+                  <p style="margin: 0;">support@sartorialtailorshop-erp.com</p>
                 </div>
               </div>
 
@@ -171,7 +171,7 @@ export default function PaymentManagementView({
       {/* Visual Welcome Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 border-b border-stone-250 gap-4">
         <div>
-          <h2 className="font-serif text-2xl font-bold tracking-tight">Atelier Payments & Ledgers</h2>
+          <h2 className="font-serif text-2xl font-bold tracking-tight">TAILORSHOP ERP Payments & Ledgers</h2>
           <p className="text-stone-400 text-xs">Verify advance payments, balances, outstanding lines, and issue printable invoice slips</p>
         </div>
       </div>

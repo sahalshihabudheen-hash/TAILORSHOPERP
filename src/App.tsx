@@ -211,6 +211,25 @@ const renderGenreIcon = (
 ) => {
   const custom = clothingCategoryEmojis[genre];
   if (custom) {
+    if (custom.startsWith('svg:')) {
+      const iconKey = custom.slice(4);
+      switch (iconKey) {
+        case 'Shirt':
+          return <Shirt className={iconSizeClass} />;
+        case 'Pant':
+          return <PantIcon className={iconSizeClass} />;
+        case 'Suit':
+          return <SuitIcon className={iconSizeClass} />;
+        case 'Kurta':
+          return <KurtaIcon className={iconSizeClass} />;
+        case 'Custom':
+          return <Ruler className={iconSizeClass} />;
+        case 'Scissors':
+          return <Scissors className={iconSizeClass} />;
+        default:
+          return <Scissors className={iconSizeClass} />;
+      }
+    }
     if (custom.startsWith('data:image/')) {
       return (
         <img 
@@ -255,7 +274,7 @@ const getRegisteredTailors = () => {
       {
         id: 'TAILOR-101',
         name: 'Arthur S. Row',
-        email: 'owner@atelier.com',
+        email: 'owner@tailorshoperp.com',
         phone: '+44 20 7123 4567',
         location: 'Savile Row, London',
         password: 'password123',
@@ -813,10 +832,10 @@ export default function App() {
 
   const [voucherMainTitle, setVoucherMainTitle] = useState(() => {
     const saved = localStorage.getItem('voucher_main_title');
-    return (!saved || saved === 'Sartorial Atelier') ? 'tailorSHOP ERP' : saved;
+    return (!saved || saved === 'Sartorial Atelier' || saved === 'tailorSHOP ERP') ? 'TAILORSHOP ERP' : saved;
   });
   const [voucherSubtitle, setVoucherSubtitle] = useState(() => localStorage.getItem('voucher_subtitle') || 'Bespoke Fitting Voucher');
-  const [voucherFooterNotes, setVoucherFooterNotes] = useState(() => localStorage.getItem('voucher_footer_notes') || 'Thank you for trusting tailorSHOP ERP. All sizing blueprints are saved securely in our central index database.');
+  const [voucherFooterNotes, setVoucherFooterNotes] = useState(() => localStorage.getItem('voucher_footer_notes') || 'Thank you for trusting TAILORSHOP ERP. All sizing blueprints are saved securely in our central index database.');
   const [voucherBgColor, setVoucherBgColor] = useState(() => localStorage.getItem('voucher_bg_color') || '#ffffff');
   const [voucherTextColor, setVoucherTextColor] = useState(() => localStorage.getItem('voucher_text_color') || '#1c1917');
   const [voucherAccentColor, setVoucherAccentColor] = useState(() => localStorage.getItem('voucher_accent_color') || '#d97706');
@@ -908,6 +927,7 @@ export default function App() {
   });
   const [showAddCategoryForm, setShowAddCategoryForm] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryPrice, setNewCategoryPrice] = useState<number>(300);
   const [newCategoryBase, setNewCategoryBase] = useState('Custom');
 
   useEffect(() => {
@@ -925,7 +945,7 @@ export default function App() {
   
   // Custom sizing parameter addition
   const [customFieldName, setCustomFieldName] = useState('');
-  const [notes, setNotes] = useState(() => localStorage.getItem('atelier_draft_notes') || '');
+  const [notes, setNotes] = useState(() => localStorage.getItem('tailorshop_draft_notes') || '');
   const [price, setPrice] = useState<number>(350);
 
   // Ready schedule - Defaulting to exactly 10 days from today formatted as YYYY-MM-DD
@@ -950,7 +970,7 @@ export default function App() {
 
   const [tailorShopNameInput, setTailorShopNameInput] = useState('');
   const [tailorLogoUrlInput, setTailorLogoUrlInput] = useState('');
-  const [selectedSettingsSubTab, setSelectedSettingsSubTab] = useState<'general' | 'shop_profile'>('general');
+  const [selectedSettingsSubTab, setSelectedSettingsSubTab] = useState<'general' | 'shop_profile' | 'add_worker'>('general');
   const [tailorOwnerNameInput, setTailorOwnerNameInput] = useState('');
   const [tailorPhoneInput, setTailorPhoneInput] = useState('');
   const [tailorCountryInput, setTailorCountryInput] = useState('India');
@@ -1113,7 +1133,7 @@ export default function App() {
 
   const [customLandingTitle, setCustomLandingTitle] = useState(() => {
     const saved = localStorage.getItem('landing_title');
-    return (!saved || saved === 'Welcome to Sartorial Atelier') ? 'Welcome to tailorSHOP ERP' : saved;
+    return (!saved || saved === 'Welcome to Sartorial Atelier' || saved === 'Welcome to tailorSHOP ERP') ? 'Welcome to TAILORSHOP ERP' : saved;
   });
   const [customLandingDescription, setCustomLandingDescription] = useState(() => localStorage.getItem('landing_description') || 'The ultimate bespoke artisan suite. Seamlessly track customer measurement blueprints, pattern designs, active stitching timelines, and automated billing ledgers.');
   
@@ -1155,7 +1175,7 @@ export default function App() {
 
   useEffect(() => {
     if (currentUser && currentUser.role === 'Tailor' && !currentUser.hasRegisteredShop) {
-      setSetupShopName(atelierName || '');
+      setSetupShopName(tailorshopName || '');
       setSetupShopPhone(currentUser.phone || '');
       setSetupOwnerName(currentUser.name || '');
       setSetupShopLocation(currentUser.location || '');
@@ -1177,14 +1197,12 @@ export default function App() {
         const parsed = JSON.parse(saved);
         const restored: Record<string, string> = {};
         for (const key of Object.keys(defaults)) {
-          let val = parsed[key];
-          if (val === undefined || ['👔', '👕', '👖', '🧥', '🥻', '📐', '📏'].includes(val)) {
-            val = '';
-          }
-          restored[key] = val;
+          // Force defaults to be empty string so they always fall back to beautiful monochromatic SVG outlines!
+          restored[key] = '';
         }
         for (const key of Object.keys(parsed)) {
-          if (!restored[key]) {
+          if (defaults[key] === undefined) {
+            // Only keep custom user-created categories' icons/emojis
             restored[key] = parsed[key] || '';
           }
         }
@@ -1207,9 +1225,9 @@ export default function App() {
     };
   });
 
-  const [atelierName, setAtelierName] = useState(() => {
-    const saved = localStorage.getItem('atelier_name');
-    return (!saved || saved === 'Sartorial Atelier') ? 'tailorSHOP ERP' : saved;
+  const [tailorshopName, setTailorshopName] = useState(() => {
+    const saved = localStorage.getItem('tailorshop_name');
+    return (!saved || saved === 'Sartorial Atelier' || saved === 'tailorSHOP ERP') ? 'TAILORSHOP ERP' : saved;
   });
 
   useEffect(() => {
@@ -1221,8 +1239,8 @@ export default function App() {
   }, [clothingPrices]);
 
   useEffect(() => {
-    localStorage.setItem('atelier_name', atelierName);
-  }, [atelierName]);
+    localStorage.setItem('tailorshop_name', tailorshopName);
+  }, [tailorshopName]);
 
   // Search and filter states for Master Orders Book
   const [orderSearch, setOrderSearch] = useState('');
@@ -1423,7 +1441,7 @@ export default function App() {
     setWorkers(updatedWorkers);
     saveWorkers(updatedWorkers);
 
-    triggerToast(`Successfully activated "${shopDetails.shopName}" shop workstation in the atelier database!`, 'success');
+    triggerToast(`Successfully activated "${shopDetails.shopName}" shop workstation in the TAILORSHOP ERP database!`, 'success');
   };
 
   // Sign In event trigger
@@ -1453,10 +1471,10 @@ export default function App() {
     };
 
     // 1. Check Master Admin/Owner Bypass
-    if (emailClean === 'owner@gmail.com' && passwordClean === 'AtelierOwner2026!') {
+    if (emailClean === 'owner@gmail.com' && passwordClean === 'TAILORSHOP_ERPOwner2026!') {
       const user = {
         id: 'TAILOR-OWNER-MASTER',
-        name: 'Atelier Master Admin',
+        name: 'TAILORSHOP ERP Master Admin',
         email: 'owner@gmail.com',
         phone: '+91 9876543210',
         location: 'HQ Central Suite',
@@ -1466,7 +1484,7 @@ export default function App() {
       if (rememberMe) {
         localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
       }
-      addActivity('Sign In', 'Atelier Master logged in via secure bypass credentials', 'Owner', user.name);
+      addActivity('Sign In', 'TAILORSHOP ERP Master logged in via secure bypass credentials', 'Owner', user.name);
       triggerToast(`Master Executive Access Granted. Welcome, Admin Owner!`, 'success');
       return;
     }
@@ -1541,7 +1559,7 @@ export default function App() {
          if (rememberMe) {
            localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
          }
-         addActivity('Sign In', `Atelier Owner / Tailor logged in successfully`, 'Owner', tailor.name);
+         addActivity('Sign In', `TAILORSHOP ERP Owner / Tailor logged in successfully`, 'Owner', tailor.name);
          triggerToast(`Welcome back to the studio, ${tailor.name}!`, 'success');
          return;
       }
@@ -1782,7 +1800,7 @@ export default function App() {
               whatsapp: phoneVal,
               email: emailVal,
               address: locVal,
-              qrCodeData: `https://sartorial-atelier.net/customer/${newId}`,
+              qrCodeData: `https://tailorshop-erp.net/customer/${newId}`,
               avatar: `https://images.unsplash.com/photo-${1534528741775 - Math.floor(Math.random() * 50000)}?auto=format&fit=crop&q=80&w=120`,
               createdAt: new Date().toISOString(),
               passwordChanged: true,
@@ -1867,7 +1885,7 @@ export default function App() {
               whatsapp: phoneVal,
               email: emailVal,
               address: locVal,
-              qrCodeData: `https://sartorial-atelier.net/customer/${newId}`,
+              qrCodeData: `https://tailorshop-erp.net/customer/${newId}`,
               avatar: `https://images.unsplash.com/photo-${1534528741775 - Math.floor(Math.random() * 50000)}?auto=format&fit=crop&q=80&w=120`,
               createdAt: new Date().toISOString(),
               passwordChanged: true,
@@ -1952,7 +1970,7 @@ export default function App() {
     setPendingSignUpData(null);
     setEnteredOtp('');
     setOtpVerificationError(null);
-    triggerToast('Atelier registration verification aborted.', 'info');
+    triggerToast('TAILORSHOP ERP registration verification aborted.', 'info');
   };
 
   const handleSignOut = () => {
@@ -1988,6 +2006,12 @@ export default function App() {
     // Add category
     setClothingCategories((prev) => [...prev, capitalizedName]);
 
+    // Add category's base price
+    setClothingPrices((prev) => ({
+      ...prev,
+      [capitalizedName]: newCategoryPrice || 300
+    }));
+
     // Copy template fields
     const baseFields = clothingTemplates[newCategoryBase] || { Length: '36', Width: '20' };
     setClothingTemplates((prev) => ({
@@ -1998,12 +2022,15 @@ export default function App() {
     // Switch active type to this new type!
     setClothingType(capitalizedName);
     setSizingFields({ ...baseFields });
+    // Set active session price
+    setPrice(newCategoryPrice || 300);
 
     // Toast
-    triggerToast(`Custom genre "${capitalizedName}" added successfully. Styled in Indigo theme!`, 'success');
+    triggerToast(`Custom genre "${capitalizedName}" added successfully with base price of ₹${newCategoryPrice || 300}. Styled in Indigo theme!`, 'success');
 
     // Reset inputs
     setNewCategoryName('');
+    setNewCategoryPrice(300);
     setShowAddCategoryForm(false);
   };
 
@@ -2083,7 +2110,7 @@ export default function App() {
         whatsapp: customerPhone.trim(),
         email: customerEmail.trim().toLowerCase(),
         address: 'Walk-in Workshop Customer',
-        qrCodeData: `https://sartorial-atelier.net/customer/${newId}`,
+        qrCodeData: `https://tailorshop-erp.net/customer/${newId}`,
         avatar: `https://images.unsplash.com/photo-${1534528741775 - Math.floor(Math.random() * 50000)}?auto=format&fit=crop&q=80&w=120`,
         createdAt: new Date().toISOString(),
         passwordChanged: false
@@ -2128,7 +2155,7 @@ export default function App() {
       createdAt: new Date().toISOString(),
       notes: {
         instructions: notes,
-        fabricDetails: 'Handled by Atelier Cutter Room',
+        fabricDetails: 'Handled by TAILORSHOP ERP Cutter Room',
         urgentNotes: 'Captured during live workshop sizing',
         tailorNotes: 'Pattern indices locked successfully',
         privateNotes: 'Bespoke client session logged'
@@ -2148,8 +2175,8 @@ export default function App() {
       day: 'numeric'
     });
 
-    const whatsappAlert = `Hello ${currentCust.name}, your bespoke tailoring session for custom ${clothingType} measurements is completed! Fitting scheduled to be ready on ${formattedDate}. Advance deposit: ₹${newOrder.advancePayment}. Outstanding: ₹${newOrder.remainingBalance}. Thank you, Sartorial Atelier!`;
-    const emailAlert = `Dear ${currentCust.name},\n\nWe have successfully logged your custom ${clothingType} measurements today in our Atelier Ledger. Sizing indices are archived under token reference ${newMeasureRecord.id}.\n\nYour customized tailoring package is scheduled to be completed and ready for final fitting on ${formattedDate}.\n\nWarmest regards,\nSartorial Luxury Tailoring team\nEST. 2026`;
+    const whatsappAlert = `Hello ${currentCust.name}, your bespoke tailoring session for custom ${clothingType} measurements is completed! Fitting scheduled to be ready on ${formattedDate}. Advance deposit: ₹${newOrder.advancePayment}. Outstanding: ₹${newOrder.remainingBalance}. Thank you, Sartorial TAILORSHOP ERP!`;
+    const emailAlert = `Dear ${currentCust.name},\n\nWe have successfully logged your custom ${clothingType} measurements today in our TAILORSHOP ERP Ledger. Sizing indices are archived under token reference ${newMeasureRecord.id}.\n\nYour customized tailoring package is scheduled to be completed and ready for final fitting on ${formattedDate}.\n\nWarmest regards,\nSartorial Luxury Tailoring team\nEST. 2026`;
 
     triggerSystemNotification('WhatsApp', currentCust.phone, whatsappAlert);
     triggerSystemNotification('Email', currentCust.email, emailAlert);
@@ -2234,7 +2261,7 @@ export default function App() {
     printWin.document.write(`
       <html>
         <head>
-          <title>Atelier Fitting Card - ${customer.name}</title>
+          <title>TAILORSHOP ERP Fitting Card - ${customer.name}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;850&family=Inter:wght@400;500;700;800&family=JetBrains+Mono:wght@400;700&family=Montserrat:wght@400;600;805;900&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;600;700&display=swap');
             body {
@@ -2437,7 +2464,7 @@ export default function App() {
                 <img 
                   src="${customLogoUrl}" 
                   style="height: 52px; max-width: 180px; object-fit: contain; margin-bottom: 12px; border-radius: 6px;" 
-                  alt="Atelier Logo" 
+                  alt="TAILORSHOP ERP Logo" 
                   referrerpolicy="no-referrer"
                 />
               ` : ''}
@@ -2488,7 +2515,7 @@ export default function App() {
             </div>
 
             ${order ? `
-              <div class="section-title">Atelier Accounting Ledger</div>
+              <div class="section-title">TAILORSHOP ERP Accounting Ledger</div>
               <table class="receipt-table">
                 <tr>
                   <td><strong>Pattern Job Ref:</strong></td>
@@ -2756,12 +2783,12 @@ export default function App() {
   };
 
   // Factory reset everything
-  const handleResetAtelierConfig = () => {
+  const handleResetTailorshopConfig = () => {
     localStorage.removeItem('custom_clothing_categories');
     localStorage.removeItem('custom_clothing_templates');
     localStorage.removeItem('custom_clothing_emojis');
     localStorage.removeItem('custom_clothing_prices');
-    localStorage.removeItem('atelier_name');
+    localStorage.removeItem('tailorshop_name');
     localStorage.removeItem('logo_url');
     localStorage.removeItem('landing_title');
     localStorage.removeItem('landing_description');
@@ -2794,10 +2821,10 @@ export default function App() {
       Kurta: 220,
       Custom: 290
     });
-    setAtelierName('tailorSHOP ERP');
+    setTailorshopName('TAILORSHOP ERP');
     setCustomLogoUrl('');
     setLogoLoadError(false);
-    setCustomLandingTitle('Welcome to tailorSHOP ERP');
+    setCustomLandingTitle('Welcome to TAILORSHOP ERP');
     setCustomLandingDescription('The ultimate bespoke artisan suite. Seamlessly track customer measurement blueprints, pattern designs, active stitching timelines, and automated billing ledgers.');
     setCustomTailorTitle('Tailor Workplace');
     setCustomTailorDescription('Manage measurement patterns, log customized customer fields, coordinate stitching/pickup timetables, and issue beautiful vouchers.');
@@ -2806,7 +2833,7 @@ export default function App() {
     setCustomCustomerDescription('Lookup personalized body dimensions, confirm current clothing milestones, print measurement vouchers, and review physical fitting alerts.');
     setCustomCustomerImage('https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=600');
     
-    triggerToast("Atelier configurations, branding, and layouts returned to original defaults!", "success");
+    triggerToast("TAILORSHOP ERP configurations, branding, and layouts returned to original defaults!", "success");
   };
 
   // Permanently purge all database records
@@ -3060,7 +3087,7 @@ export default function App() {
                   {customLogoUrl ? (
                     <img
                       src={customLogoUrl}
-                      alt="Atelier Logo"
+                      alt="TAILORSHOP ERP Logo"
                       className="w-full h-full object-contain rounded-xl"
                       referrerPolicy="no-referrer"
                     />
@@ -3088,7 +3115,7 @@ export default function App() {
                   onClick={() => {
                     setSignUpRole('Tailor');
                     setGatekeeperScreen('signin');
-                    triggerToast("Atelier Owner Portal selected! Please sign in with your workshop credentials.", 'info');
+                    triggerToast("TAILORSHOP ERP Owner Portal selected! Please sign in with your workshop credentials.", 'info');
                   }}
                   className={`group text-left rounded-2xl overflow-hidden border transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 active:scale-[0.99] cursor-pointer ${
                     isDarkMode 
@@ -3099,7 +3126,7 @@ export default function App() {
                   <div className="h-32 w-full overflow-hidden relative bg-zinc-100">
                     <img
                       src={customTailorImage}
-                      alt="Tailoring atelier hands at work"
+                      alt="Tailoring TAILORSHOP ERP hands at work"
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       referrerPolicy="no-referrer"
                     />
@@ -3122,7 +3149,7 @@ export default function App() {
                       <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded transition-colors duration-300 ${
                         isDarkMode ? 'bg-yellow-400/10 text-yellow-400 animate-none' : 'bg-zinc-100 text-zinc-800'
                       }`}>
-                        Atelier Owner
+                        TAILORSHOP ERP Owner
                       </span>
                     </div>
                     <p className={`text-xs mt-2 leading-relaxed font-semibold transition-colors duration-300 ${
@@ -3270,7 +3297,7 @@ export default function App() {
                   <h2 className={`font-sans font-black text-2xl tracking-tight mt-1 leading-tight ${
                     isDarkMode ? 'text-white' : 'text-zinc-950'
                   }`}>
-                    <Typewriter text={signUpRole === 'Tailor' ? 'Empower Your Atelier' : 'The Perfect Drape, Always.'} speed={40} isDark={isDarkMode} />
+                    <Typewriter text={signUpRole === 'Tailor' ? 'Empower Your TAILORSHOP ERP' : 'The Perfect Drape, Always.'} speed={40} isDark={isDarkMode} />
                   </h2>
                   <p className={`text-xs mt-2 select-none leading-relaxed font-semibold ${
                     isDarkMode ? 'text-zinc-350' : 'text-zinc-700'
@@ -3290,7 +3317,7 @@ export default function App() {
                 <div className={`absolute top-0 right-0 p-8 -z-10 font-sans font-black text-9xl select-none pointer-events-none transition-colors ${
                   isDarkMode ? 'text-zinc-900/10' : 'text-zinc-200/40'
                 }`}>
-                  Atelier
+                  TAILORSHOP ERP
                 </div>
 
                 <div>
@@ -3542,7 +3569,7 @@ export default function App() {
                   <span className={`text-[10px] uppercase font-mono tracking-[0.25em] font-extrabold ${
                     isDarkMode ? 'text-yellow-400' : 'text-amber-700'
                   }`}>
-                    Authorized Atelier Workspace
+                    Authorized TAILORSHOP ERP Workspace
                   </span>
                   <h2 className={`font-sans font-black text-2xl tracking-tight mt-1 leading-tight ${
                     isDarkMode ? 'text-white' : 'text-zinc-950'
@@ -3597,7 +3624,7 @@ export default function App() {
                         <input
                           type="text"
                           required
-                          placeholder="e.g. Arthur, owner@atelier.com, or phone number"
+                          placeholder="e.g. Arthur, owner@tailorshoperp.com, or phone number"
                           value={signInEmail}
                           onChange={(e) => setSignInEmail(e.target.value)}
                           className={`w-full pl-11 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-yellow-400 text-xs font-semibold ${
@@ -3679,7 +3706,7 @@ export default function App() {
                 }`}>
                   <p>All roles are automatically detected by system coordinates.</p>
                   <p className="text-[11px] opacity-90">
-                    <strong className="text-amber-600 dark:text-amber-400">Owner Bypass Email:</strong> owner@gmail.com (PSWD: AtelierOwner2026!)
+                    <strong className="text-amber-600 dark:text-amber-400">Owner Bypass Email:</strong> owner@gmail.com (PSWD: TAILORSHOP_ERPOwner2026!)
                   </p>
                   <p className="text-[11px] opacity-90">
                     <strong className="text-amber-600 dark:text-amber-400">Customer Access:</strong> Mobile/Email with your Order ID (e.g. ORD-9841) as Password.
@@ -3768,7 +3795,7 @@ export default function App() {
                 {customLogoUrl ? (
                   <img
                     src={customLogoUrl}
-                    alt="Atelier Logo"
+                    alt="TAILORSHOP ERP Logo"
                     className="h-10 w-10 sm:h-12 sm:w-12 object-contain rounded-lg"
                     referrerPolicy="no-referrer"
                   />
@@ -3783,7 +3810,7 @@ export default function App() {
               </div>
               <div className="min-w-0">
                 <h1 className="font-sans font-black text-sm sm:text-2xl tracking-wider uppercase text-transparent bg-clip-text bg-gradient-to-r from-stone-900 via-emerald-600 to-stone-800 dark:from-white dark:via-emerald-550 dark:to-stone-100 whitespace-nowrap transition-all">
-                  {atelierName.toUpperCase()}
+                  {tailorshopName.toUpperCase()}
                 </h1>
               </div>
             </div>
@@ -3883,7 +3910,7 @@ export default function App() {
 
               {myMeasurements.length === 0 ? (
                 <div className={`p-10 rounded-2xl border text-center text-stone-400 ${isDarkMode ? 'bg-slate-900/30' : 'bg-white shadow-xs'}`}>
-                  No measurement pattern archived yet. Join the atelier cutter studio to log your sizing records.
+                  No measurement pattern archived yet. Join the TAILORSHOP ERP cutter studio to log your sizing records.
                 </div>
               ) : (
                 <div className={`grid grid-cols-1 ${myMeasurements.length > 1 ? 'md:grid-cols-2' : ''} gap-6`}>
@@ -4033,7 +4060,7 @@ export default function App() {
                               { label: 'Fabric Outlining', key: 'Cutting', desc: 'Sizing templates calculated and cloth sheared.' },
                               { label: 'Master Tailoring', key: 'Stitching', desc: 'Assembly and active stitching in workshop progress.' },
                               { label: 'Finishing Checks', key: 'Finishing', desc: 'Final drapes, detail checks & steam ironing.' },
-                              { label: 'Ready for Atelier Pickup', key: 'Ready for Pickup', desc: 'Securely packaged and ready for pick-up!' },
+                              { label: 'Ready for TAILORSHOP ERP Pickup', key: 'Ready for Pickup', desc: 'Securely packaged and ready for pick-up!' },
                               { label: 'Formally Delivered', key: 'Delivered', desc: 'Milestone settled and package handed over.' }
                             ].map((stage, idx) => {
                               const orderStatuses: OrderStatus[] = [
@@ -4241,11 +4268,11 @@ export default function App() {
             setWorkers(updatedWorkers);
             saveWorkers(updatedWorkers);
 
-            triggerToast('Congratulations! Your Atelier Tailor Shop is now Registered!', 'success');
+            triggerToast('Congratulations! Your TAILORSHOP ERP Tailor Shop is now Registered!', 'success');
           }} className="space-y-4 text-left">
             <div>
               <label className="text-[10px] font-extrabold uppercase tracking-wider block mb-1">
-                Shop / Atelier Name *
+                Shop / TAILORSHOP ERP Name *
               </label>
               <input
                 type="text"
@@ -4563,7 +4590,7 @@ export default function App() {
 
   const userShopInfo = getCurrentUserShopInfo();
   const displayNavbarLogo = (currentUser && currentUser.role !== 'Owner' && userShopInfo) ? userShopInfo.logoUrl : customLogoUrl;
-  const displayNavbarName = (currentUser && currentUser.role !== 'Owner' && userShopInfo) ? userShopInfo.shopName : (atelierName || 'STYLUS');
+  const displayNavbarName = (currentUser && currentUser.role !== 'Owner' && userShopInfo) ? userShopInfo.shopName : (tailorshopName || 'STYLUS');
 
   return (
     <div className={`min-h-screen transition-colors duration-300 flex flex-col ${isDarkMode ? 'dark' : ''} ${
@@ -4579,7 +4606,7 @@ export default function App() {
               {(displayNavbarLogo && !logoLoadError) ? (
                 <img
                   src={displayNavbarLogo}
-                  alt="Atelier Logo"
+                  alt="TAILORSHOP ERP Logo"
                   className="h-10 w-10 sm:h-12 sm:w-12 object-contain rounded-lg"
                   referrerPolicy="no-referrer"
                   onError={() => setLogoLoadError(true)}
@@ -4761,16 +4788,16 @@ export default function App() {
                        </div>
                      </div>
                      <div className="space-y-2 text-left">
-                       <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider block">App Name / Atelier Title</label>
+                       <label className="text-[10px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider block">App Name / TAILORSHOP ERP Title</label>
                        <div className="relative">
                          <input
                            type="text"
-                           value={atelierName}
+                           value={tailorshopName}
                            onChange={(e) => {
-                             setAtelierName(e.target.value);
+                             setTailorshopName(e.target.value);
                              triggerToast("Navbar title updated in real-time!", "info");
                            }}
-                           placeholder="e.g. Atelier Luxury"
+                           placeholder="e.g. TAILORSHOP ERP Luxury"
                            className={`w-full p-3 pl-10 rounded-xl border text-xs font-bold uppercase tracking-wider focus:outline-none focus:ring-1 focus:ring-amber-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-250 text-stone-850'}`}
                          />
                          <span className="absolute left-3.5 top-3.5 text-stone-400">
@@ -4914,9 +4941,9 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => {
-                              setAtelierName('tailorSHOP ERP');
+                              setTailorshopName('TAILORSHOP ERP');
                               setCustomLogoUrl('');
-                              localStorage.setItem('atelier_name', 'tailorSHOP ERP');
+                              localStorage.setItem('tailorshop_name', 'TAILORSHOP ERP');
                               localStorage.setItem('logo_url', '');
                               triggerToast("Branding configuration reset to system default!", "success");
                             }}
@@ -4929,7 +4956,7 @@ export default function App() {
                             type="button"
                             onClick={() => {
                               localStorage.setItem('logo_url', customLogoUrl);
-                              localStorage.setItem('atelier_name', atelierName);
+                              localStorage.setItem('tailorshop_name', tailorshopName);
                               triggerToast("Brand configuration applied & saved successfully!", "success");
                             }}
                             className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center space-x-1.5 shadow-sm cursor-pointer whitespace-nowrap"
@@ -4993,7 +5020,7 @@ export default function App() {
                               type="text"
                               value={customLandingTitle}
                               onChange={(e) => setCustomLandingTitle(e.target.value)}
-                              placeholder="e.g. Welcome to Sartorial Atelier"
+                              placeholder="e.g. Welcome to TAILORSHOP ERP"
                               className={`w-full p-2.5 rounded-xl border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none ${isDarkMode ? 'bg-zinc-950 border-zinc-805 text-white' : 'bg-stone-50 border-stone-250 text-stone-855 shadow-3xs'}`}
                             />
                           </div>
@@ -5196,7 +5223,7 @@ export default function App() {
                           <Printer className="h-4 w-4" />
                         </div>
                         <div>
-                          <h3 className="font-extrabold text-xs uppercase tracking-wider text-amber-600 dark:text-amber-500">Atelier Voucher Designer &amp; Ledger Studio</h3>
+                          <h3 className="font-extrabold text-xs uppercase tracking-wider text-amber-600 dark:text-amber-500">TAILORSHOP ERP Voucher Designer &amp; Ledger Studio</h3>
                           <p className="text-[10px] text-stone-400">Design the layout style, font typography, color combinations, and text content of your printed invoices dynamically</p>
                         </div>
                       </div>
@@ -5548,7 +5575,7 @@ export default function App() {
                            ) : (
                              <div className="p-2 bg-amber-600 text-white rounded-md text-[10px] font-bold">✂️</div>
                            )}
-                           <span className="font-black text-xs tracking-wider uppercase text-stone-900">{atelierName || 'STYLUS'}</span>
+                           <span className="font-black text-xs tracking-wider uppercase text-stone-900">{tailorshopName || 'STYLUS'}</span>
                          </div>
                          <div className="flex space-x-2">
                            <span className="w-8 h-3.5 bg-stone-100 rounded"></span>
@@ -5575,7 +5602,7 @@ export default function App() {
                            ) : (
                              <div className="p-2 bg-amber-500 text-white rounded-md text-[10px] font-bold">✂️</div>
                            )}
-                           <span className="font-black text-xs tracking-wider uppercase text-white">{atelierName || 'STYLUS'}</span>
+                           <span className="font-black text-xs tracking-wider uppercase text-white">{tailorshopName || 'STYLUS'}</span>
                          </div>
                          <div className="flex space-x-2">
                            <span className="w-8 h-3.5 bg-slate-900 rounded"></span>
@@ -5622,7 +5649,7 @@ export default function App() {
                         type="button"
                         onClick={() => {
                           if (window.confirm("Are you sure you want to restore all custom branding, text, prices, and configurations back to factory defaults?")) {
-                            handleResetAtelierConfig();
+                            handleResetTailorshopConfig();
                           }
                         }}
                         className="w-full sm:w-auto px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-[10px] font-bold transition flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer whitespace-nowrap"
@@ -5702,7 +5729,7 @@ export default function App() {
                                     type="button"
                                     onClick={() => {
                                       setAdminConfiguringTailorId(t.id);
-                                      setAdminShopName(`${t.name}'s Bespoke Atelier`);
+                                      setAdminShopName(`${t.name}'s Bespoke TAILORSHOP ERP`);
                                       setAdminOwnerName(t.name);
                                       setAdminShopPhone(t.phone || '');
                                       setAdminShopCountry('India');
@@ -5795,8 +5822,8 @@ export default function App() {
                                   saveRegisteredTailors(updated);
                                   setRegisteredTailors(updated);
                                   setAdminConfiguringTailorId(null);
-                                  triggerToast(`Atelier Shop Workstation "${adminShopName.trim()}" activated successfully!`, 'success');
-                                  addActivity('Admin Register Shop', `Admin registered shop "${adminShopName.trim()}" for tailor ${adminOwnerName.trim()}`, 'Owner', 'Atelier Master Admin');
+                                  triggerToast(`TAILORSHOP ERP Shop Workstation "${adminShopName.trim()}" activated successfully!`, 'success');
+                                  addActivity('Admin Register Shop', `Admin registered shop "${adminShopName.trim()}" for tailor ${adminOwnerName.trim()}`, 'Owner', 'TAILORSHOP ERP Master Admin');
                                 }}
                                 className="w-full mt-2 p-3 bg-stone-150 dark:bg-stone-900 border border-stone-200 dark:border-stone-850 rounded-xl space-y-3 block text-left transition-all"
                               >
@@ -5815,7 +5842,7 @@ export default function App() {
 
                                 <div className="space-y-1">
                                   <label className="text-[9px] font-extrabold uppercase block mb-1">
-                                    Shop / Atelier Name *
+                                    Shop / TAILORSHOP ERP Name *
                                   </label>
                                   <input
                                     type="text"
@@ -6391,7 +6418,7 @@ export default function App() {
                     </div>
 
                     {showAddCategoryForm && (
-                      <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-center gap-2.5 text-xs w-full transition-all ${
+                      <div className={`p-4 rounded-xl border flex flex-col md:flex-row items-center gap-2.5 text-xs w-full transition-all ${
                         isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-stone-50 border-stone-250 shadow-sm'
                       }`}>
                         <div className="flex-1 w-full">
@@ -6411,7 +6438,19 @@ export default function App() {
                             }}
                           />
                         </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <div className="flex items-center gap-2 w-full md:w-auto">
+                          <span className="text-[10px] text-stone-400 font-bold whitespace-nowrap">Base Price (₹):</span>
+                          <input
+                            type="number"
+                            value={newCategoryPrice || ''}
+                            onChange={(e) => setNewCategoryPrice(parseInt(e.target.value) || 0)}
+                            placeholder="e.g. 300"
+                            className={`p-2 px-3 rounded-lg text-xs leading-none border focus:outline-none w-24 ${
+                              isDarkMode ? 'bg-slate-900 border-slate-800 text-white focus:ring-1 focus:ring-indigo-500' : 'bg-white border-stone-300 focus:ring-1 focus:ring-indigo-600'
+                            }`}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 w-full md:w-auto">
                           <span className="text-[10px] text-stone-400 font-bold whitespace-nowrap">Template:</span>
                           <select
                             value={newCategoryBase}
@@ -6427,7 +6466,7 @@ export default function App() {
                             <option value="Kurta">Copy Kurta defaults</option>
                           </select>
                         </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
                           <button
                             type="button"
                             onClick={handleAddCategory}
@@ -6440,6 +6479,7 @@ export default function App() {
                             onClick={() => {
                               setShowAddCategoryForm(false);
                               setNewCategoryName('');
+                              setNewCategoryPrice(300);
                             }}
                             className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-xs font-bold font-sans cursor-pointer px-1"
                           >
@@ -6448,6 +6488,8 @@ export default function App() {
                         </div>
                       </div>
                     )}
+
+                    {/* Sizing Session Price Overrides removed from top */}
 
                     {/* Sizing inputs grid ("blocks like before") */}
                     <div className="py-4">
@@ -6582,7 +6624,7 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => {
-                            localStorage.setItem('atelier_draft_notes', notes);
+                            localStorage.setItem('tailorshop_draft_notes', notes);
                             triggerToast('Workshop fit instructions saved to drafting storage!', 'success');
                           }}
                           className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] rounded-lg transition-all cursor-pointer flex items-center space-x-1 shadow-sm active:scale-95"
@@ -6599,6 +6641,25 @@ export default function App() {
                           isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200'
                         }`}
                       />
+                    </div>
+
+                    {/* Quoted Price Adjustment */}
+                    <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-xs transition-all ${
+                      isDarkMode ? 'bg-slate-950/40 border-slate-850' : 'bg-stone-50/50 border-stone-200 shadow-3xs'
+                    }`}>
+                      <span className="font-bold text-stone-600 dark:text-stone-300">Quoted Price:</span>
+                      <div className="relative">
+                        <IndianRupee className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-emerald-500" />
+                        <input
+                          type="number"
+                          min="1"
+                          value={price}
+                          onChange={(e) => setPrice(parseInt(e.target.value) || 0)}
+                          className={`pl-7 pr-2.5 py-1.5 rounded-lg border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none font-extrabold w-28 text-left ${
+                            isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-250 shadow-sm'
+                          }`}
+                        />
+                      </div>
                     </div>
 
                     {/* Authorize Save Button */}
@@ -6637,7 +6698,7 @@ export default function App() {
                   }`}>
                     {/* Decorative background visual thread */}
                     <div className="absolute top-0 right-0 p-8 text-stone-100 dark:text-slate-900/10 -z-10 font-sans font-black text-9xl select-none pointer-events-none">
-                      Atelier
+                      TAILORSHOP ERP
                     </div>
 
                     <div className="space-y-6">
@@ -6647,7 +6708,7 @@ export default function App() {
                           <p className="text-xs text-stone-400">Record customer coordinates &amp; scheduling targets</p>
                         </div>
                         <span className="p-1.5 px-3 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase tracking-wider">
-                          Atelier Sizing Core
+                          TAILORSHOP ERP Sizing Core
                         </span>
                       </div>
 
@@ -7191,7 +7252,7 @@ export default function App() {
                   {visibleOrders.length === 0 && (
                     <tr>
                       <td colSpan={4} className="py-10 text-center text-stone-400 font-serif italic">
-                        Zero orders booked in Atelier system yet. Set up client coordinates to log customized orders.
+                        Zero orders booked in TAILORSHOP ERP system yet. Set up client coordinates to log customized orders.
                       </td>
                     </tr>
                   )}
@@ -7294,7 +7355,7 @@ export default function App() {
                         </p>
                         {t.hasRegisteredShop && t.shopName && (
                           <p className="flex items-center justify-between">
-                            <span className="font-mono text-[10px] text-stone-400 font-bold">ATELIER SHOP:</span>
+                            <span className="font-mono text-[10px] text-stone-400 font-bold">TAILORSHOP ERP:</span>
                             <span className="font-bold text-amber-600 dark:text-amber-500">{t.shopName}</span>
                           </p>
                         )}
@@ -7313,7 +7374,7 @@ export default function App() {
           /* Settings Page Section */
           <div className="space-y-6 fade-in font-sans">
             {/* Settings Sub-tabs (Rendered directly under the main tab switcher navigation bar) */}
-            <div className="flex border-b border-stone-200 dark:border-slate-800 space-x-6 pb-2">
+            <div className="flex border-b border-stone-200 dark:border-slate-800 space-x-6 pb-2 overflow-x-auto whitespace-nowrap scrollbar-none">
               <button
                 type="button"
                 onClick={() => setSelectedSettingsSubTab('general')}
@@ -7338,84 +7399,65 @@ export default function App() {
                 <User className="h-3.5 w-3.5" />
                 <span>Edit Shop Workstation Details</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setSelectedSettingsSubTab('add_worker')}
+                className={`pb-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  selectedSettingsSubTab === 'add_worker'
+                    ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500 font-extrabold'
+                    : 'border-transparent text-stone-400 hover:text-stone-600 dark:hover:text-stone-200'
+                }`}
+              >
+                <Users className="h-3.5 w-3.5" />
+                <span>Tailor Registry</span>
+              </button>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-slate-800 pb-4">
-              <div>
-                <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                  <span className="p-2 bg-amber-500/10 text-amber-600 rounded-lg"><Settings className="h-4.5 w-4.5" /></span>
-                  <span>Atelier Blueprint &amp; System Settings</span>
-                </h2>
-                <p className="text-xs text-stone-400 mt-1">Configure personalized garment templates, pricing, default measurements and workshop properties.</p>
+            {selectedSettingsSubTab === 'general' && (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-slate-800 pb-4">
+                <div>
+                  <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <span className="p-2 bg-amber-500/10 text-amber-600 rounded-lg"><Settings className="h-4.5 w-4.5" /></span>
+                    <span>TAILORSHOP ERP Blueprint &amp; System Settings</span>
+                  </h2>
+                  <p className="text-xs text-stone-400 mt-1">Configure personalized garment templates, pricing, default measurements and workshop properties.</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {confirmResetConfigs ? (
+                    <div className="flex items-center gap-1.5 bg-yellow-500/10 border border-yellow-500/25 rounded-xl p-1 animate-fadeIn">
+                      <span className="text-[10px] text-yellow-600 dark:text-yellow-500 font-extrabold px-1.5 select-none">Restore default setups?</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleResetTailorshopConfig();
+                          setConfirmResetConfigs(false);
+                        }}
+                        className="px-2 py-1 rounded bg-yellow-600 hover:bg-yellow-700 text-white text-[10px] font-bold cursor-pointer"
+                      >
+                        Yes, Restore
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmResetConfigs(false)}
+                        className="px-2 py-1 rounded bg-stone-500 hover:bg-stone-600 text-white text-[10px] font-bold cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmResetConfigs(true)}
+                      className="px-3.5 py-1.5 border border-stone-300 dark:border-slate-700 bg-transparent hover:bg-yellow-500/10 text-stone-600 hover:text-yellow-700 dark:text-stone-300 dark:hover:text-yellow-400 rounded-xl text-xs font-bold transition duration-155 flex items-center space-x-1.5 cursor-pointer shadow-3xs"
+                      title="Reset Categories and Templates"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      <span>Restore Factory Defaults</span>
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {confirmResetConfigs ? (
-                  <div className="flex items-center gap-1.5 bg-yellow-500/10 border border-yellow-500/25 rounded-xl p-1 animate-fadeIn">
-                    <span className="text-[10px] text-yellow-600 dark:text-yellow-500 font-extrabold px-1.5 select-none">Restore default setups?</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleResetAtelierConfig();
-                        setConfirmResetConfigs(false);
-                      }}
-                      className="px-2 py-1 rounded bg-yellow-600 hover:bg-yellow-700 text-white text-[10px] font-bold cursor-pointer"
-                    >
-                      Yes, Restore
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmResetConfigs(false)}
-                      className="px-2 py-1 rounded bg-stone-500 hover:bg-stone-600 text-white text-[10px] font-bold cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmResetConfigs(true)}
-                    className="px-3.5 py-1.5 border border-stone-300 dark:border-slate-700 bg-transparent hover:bg-yellow-500/10 text-stone-600 hover:text-yellow-700 dark:text-stone-300 dark:hover:text-yellow-400 rounded-xl text-xs font-bold transition duration-155 flex items-center space-x-1.5 cursor-pointer shadow-3xs"
-                    title="Reset Categories and Templates"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    <span>Restore Factory Defaults</span>
-                  </button>
-                )}
-
-                {confirmPurgeDatabase ? (
-                  <div className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/25 rounded-xl p-1 animate-fadeIn">
-                    <span className="text-[10px] text-red-600 dark:text-red-500 font-extrabold px-1.5 select-none font-mono">PERMANENTLY PURGE ALL DATA?</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handlePurgeAllDatabase();
-                        setConfirmPurgeDatabase(false);
-                      }}
-                      className="px-2 py-1 rounded bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold cursor-pointer"
-                    >
-                      Yes, Purge
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmPurgeDatabase(false)}
-                      className="px-2 py-1 rounded bg-stone-500 hover:bg-stone-600 text-white text-[10px] font-bold cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmPurgeDatabase(true)}
-                    className="px-3.5 py-1.5 border border-rose-350 dark:border-rose-900 bg-transparent hover:bg-rose-500/10 text-stone-600 hover:text-rose-700 dark:text-stone-300 dark:hover:text-rose-450 rounded-xl text-xs font-bold transition duration-155 flex items-center space-x-1.5 cursor-pointer shadow-3xs"
-                    title="Purge all customer list and order database"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span>Purge Database (Clean Slate)</span>
-                  </button>
-                )}
-              </div>
-            </div>
+            )}
 
             {selectedSettingsSubTab === 'general' ? (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -7829,38 +7871,94 @@ export default function App() {
                                 <div className="flex flex-col pl-0 sm:pl-1">
                                   <label className="text-[7.5px] font-extrabold text-stone-400 dark:text-stone-300 uppercase tracking-wider mb-1">Presets</label>
                                   <div className="flex flex-wrap gap-1 max-w-[125px]">
-                                    {[
-                                      { key: 'svg:Shirt', label: 'Shirt' },
-                                      { key: 'svg:Pant', label: 'Pant' },
-                                      { key: 'svg:Suit', label: 'Suit' },
-                                      { key: 'svg:Kurta', label: 'Kurta' },
-                                      { key: 'svg:Custom', label: 'Ruler' },
-                                      { key: 'svg:Scissors', label: 'Scissors' }
-                                    ].map((preset) => (
-                                      <button
-                                        key={preset.key}
-                                        type="button"
-                                        onClick={() => {
-                                          setClothingCategoryEmojis(prev => ({
-                                            ...prev,
-                                            [cat]: preset.key
-                                          }));
-                                        }}
-                                        className={`w-5 h-5 rounded flex items-center justify-center border hover:scale-110 active:scale-95 transition-all cursor-pointer ${
-                                          clothingCategoryEmojis[cat] === preset.key
-                                            ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400'
-                                            : isDarkMode ? 'bg-slate-900 border-slate-850 hover:bg-slate-800 text-stone-400' : 'bg-stone-100 border-stone-200 hover:bg-stone-200 text-stone-600'
-                                        }`}
-                                        title={`Set ${preset.label} line-icon as default`}
-                                      >
-                                        {preset.key === 'svg:Shirt' && <Shirt className="w-3.5 h-3.5" />}
-                                        {preset.key === 'svg:Pant' && <PantIcon className="w-3.5 h-3.5" />}
-                                        {preset.key === 'svg:Suit' && <SuitIcon className="w-3.5 h-3.5" />}
-                                        {preset.key === 'svg:Kurta' && <KurtaIcon className="w-3.5 h-3.5" />}
-                                        {preset.key === 'svg:Custom' && <Ruler className="w-3.5 h-3.5" />}
-                                        {preset.key === 'svg:Scissors' && <Scissors className="w-3.5 h-3.5" />}
-                                      </button>
-                                    ))}
+                                    {(() => {
+                                      let presetsList: { key: string; label: string; isSvg?: boolean; emoji?: string }[] = [];
+                                      
+                                      if (cat === 'Shirt') {
+                                        presetsList = [
+                                          { key: 'svg:Shirt', label: 'Shirt', isSvg: true },
+                                          { key: '👕', label: 'T-Shirt', emoji: '👕' },
+                                          { key: '👔', label: 'Necktie', emoji: '👔' },
+                                          { key: '🧥', label: 'Coat', emoji: '🧥' },
+                                          { key: 'svg:Custom', label: 'Ruler', isSvg: true },
+                                          { key: 'svg:Scissors', label: 'Scissors', isSvg: true },
+                                        ];
+                                      } else if (cat === 'Pant') {
+                                        presetsList = [
+                                          { key: 'svg:Pant', label: 'Pant', isSvg: true },
+                                          { key: '👖', label: 'Jeans', emoji: '👖' },
+                                          { key: '🩳', label: 'Shorts', emoji: '🩳' },
+                                          { key: 'svg:Custom', label: 'Ruler', isSvg: true },
+                                          { key: 'svg:Scissors', label: 'Scissors', isSvg: true },
+                                        ];
+                                      } else if (cat === 'Suit') {
+                                        presetsList = [
+                                          { key: 'svg:Suit', label: 'Suit', isSvg: true },
+                                          { key: '🕴️', label: 'Formal', emoji: '🕴️' },
+                                          { key: '🧥', label: 'Coat', emoji: '🧥' },
+                                          { key: '🤵', label: 'Tuxedo', emoji: '🤵' },
+                                          { key: 'svg:Custom', label: 'Ruler', isSvg: true },
+                                          { key: 'svg:Scissors', label: 'Scissors', isSvg: true },
+                                        ];
+                                      } else if (cat === 'Kurta') {
+                                        presetsList = [
+                                          { key: 'svg:Kurta', label: 'Kurta', isSvg: true },
+                                          { key: '🥻', label: 'Saree', emoji: '🥻' },
+                                          { key: '👗', label: 'Dress', emoji: '👗' },
+                                          { key: '👘', label: 'Kimono', emoji: '👘' },
+                                          { key: 'svg:Custom', label: 'Ruler', isSvg: true },
+                                          { key: 'svg:Scissors', label: 'Scissors', isSvg: true },
+                                        ];
+                                      } else {
+                                        // Custom user-created genre gets all presets
+                                        presetsList = [
+                                          { key: 'svg:Shirt', label: 'Shirt', isSvg: true },
+                                          { key: 'svg:Pant', label: 'Pant', isSvg: true },
+                                          { key: 'svg:Suit', label: 'Suit', isSvg: true },
+                                          { key: 'svg:Kurta', label: 'Kurta', isSvg: true },
+                                          { key: 'svg:Custom', label: 'Ruler', isSvg: true },
+                                          { key: 'svg:Scissors', label: 'Scissors', isSvg: true },
+                                          { key: '👔', label: 'Necktie', emoji: '👔' },
+                                          { key: '👕', label: 'T-Shirt', emoji: '👕' },
+                                          { key: '👖', label: 'Jeans', emoji: '👖' },
+                                          { key: '👗', label: 'Dress', emoji: '👗' },
+                                          { key: '🧥', label: 'Coat', emoji: '🧥' },
+                                          { key: '🥻', label: 'Saree', emoji: '🥻' },
+                                        ];
+                                      }
+                                      
+                                      return presetsList.map((preset) => (
+                                        <button
+                                          key={preset.key}
+                                          type="button"
+                                          onClick={() => {
+                                            setClothingCategoryEmojis(prev => ({
+                                              ...prev,
+                                              [cat]: preset.key
+                                            }));
+                                          }}
+                                          className={`w-5 h-5 rounded flex items-center justify-center border hover:scale-110 active:scale-95 transition-all cursor-pointer ${
+                                            clothingCategoryEmojis[cat] === preset.key
+                                              ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400'
+                                              : isDarkMode ? 'bg-slate-900 border-slate-850 hover:bg-slate-800 text-stone-400' : 'bg-stone-100 border-stone-200 hover:bg-stone-200 text-stone-600'
+                                          }`}
+                                          title={`Set as icon`}
+                                        >
+                                          {preset.isSvg ? (
+                                            <>
+                                              {preset.key === 'svg:Shirt' && <Shirt className="w-3.5 h-3.5" />}
+                                              {preset.key === 'svg:Pant' && <PantIcon className="w-3.5 h-3.5" />}
+                                              {preset.key === 'svg:Suit' && <SuitIcon className="w-3.5 h-3.5" />}
+                                              {preset.key === 'svg:Kurta' && <KurtaIcon className="w-3.5 h-3.5" />}
+                                              {preset.key === 'svg:Custom' && <Ruler className="w-3.5 h-3.5" />}
+                                              {preset.key === 'svg:Scissors' && <Scissors className="w-3.5 h-3.5" />}
+                                            </>
+                                          ) : (
+                                            <span className="text-[10px] leading-none mb-0.5">{preset.emoji}</span>
+                                          )}
+                                        </button>
+                                      ));
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -8039,7 +8137,7 @@ export default function App() {
               </div>
 
             </div>
-            ) : (
+            ) : selectedSettingsSubTab === 'shop_profile' ? (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-fadeIn">
                 {/* Left Column - Shop Workstation details */}
                 <div className="lg:col-span-2 space-y-6">
@@ -8500,11 +8598,11 @@ export default function App() {
                 <div className="space-y-6">
                   {tailorLogoUrlInput && (
                     <div className={`p-5 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
-                      <h4 className="text-[10px] font-extrabold text-stone-500 dark:text-stone-300 uppercase tracking-wider mb-3">Atelier Logo Outlook</h4>
+                      <h4 className="text-[10px] font-extrabold text-stone-500 dark:text-stone-300 uppercase tracking-wider mb-3">TAILORSHOP ERP Logo Outlook</h4>
                       <div className="mx-auto h-24 w-24 rounded-full border border-stone-150 dark:border-slate-800 bg-stone-50 dark:bg-slate-950 overflow-hidden flex items-center justify-center p-2">
                         <img
                           src={tailorLogoUrlInput}
-                          alt="Atelier Logo preview"
+                          alt="TAILORSHOP ERP Logo preview"
                           referrerPolicy="no-referrer"
                           className="max-h-full max-w-full object-contain"
                           onError={(e) => {
@@ -8565,6 +8663,28 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+              </div>
+            ) : (
+              <div className="space-y-6 fade-in font-sans">
+                <WorkerManagementView
+                  workers={workers.filter((w: any) => {
+                    const shopInfo = getCurrentUserShopInfo();
+                    if (currentUser?.role === 'Owner') return true;
+                    if (shopInfo) {
+                      const sName = (shopInfo.shopName || '').toLowerCase().trim();
+                      const wName = (w.shopName || '').toLowerCase().trim();
+                      if (sName && sName === wName) return true;
+                    }
+                    return w.shopOwnerId === currentUser?.id || 
+                           (w.shopOwnerEmail && currentUser?.email && w.shopOwnerEmail.toLowerCase().trim() === currentUser.email.toLowerCase().trim());
+                  })}
+                  orders={visibleOrders}
+                  onAddWorker={handleAddWorker}
+                  onDeleteWorker={handleDeleteWorker}
+                  registeredTailors={registeredTailors}
+                  triggerToast={triggerToast}
+                  isDarkMode={isDarkMode}
+                />
               </div>
             )}
           </div>

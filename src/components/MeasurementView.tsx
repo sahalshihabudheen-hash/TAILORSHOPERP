@@ -11,7 +11,8 @@ import {
   TrendingUp,
   FileSpreadsheet,
   Trash2,
-  Shirt
+  Shirt,
+  Scissors
 } from 'lucide-react';
 import { Customer, MeasurementRecord } from '../types';
 
@@ -117,7 +118,13 @@ export default function MeasurementView({
   const [clothingCategoryEmojis] = useState<Record<string, string>>(() => {
     try {
       const saved = localStorage.getItem('custom_clothing_emojis');
-      return saved ? JSON.parse(saved) : {};
+      const parsed = saved ? JSON.parse(saved) : {};
+      const defaults = ['Shirt', 'Pant', 'Suit', 'Kurta', 'Custom'];
+      const cleaned: Record<string, string> = { ...parsed };
+      for (const key of defaults) {
+        cleaned[key] = ''; // force defaults to be empty so they fall back to clean outline SVGs
+      }
+      return cleaned;
     } catch {
       return {};
     }
@@ -203,7 +210,7 @@ export default function MeasurementView({
       printWindow.document.write(`
         <html>
           <head>
-            <title>Atelier Sizing Voucher - #${record.id}</title>
+            <title>TAILORSHOP ERP Sizing Voucher - #${record.id}</title>
             <style>
               body { font-family: 'Georgia', serif; padding: 40px; color: #1c1917; background-color: #fdfbf7; }
               .card { border: 2px dashed #aa8612; padding: 30px; max-width: 500px; margin: 0 auto; background: white; }
@@ -219,7 +226,7 @@ export default function MeasurementView({
           <body>
             <div class="card">
               <div class="header">
-                <div class="title">Sartorial Atelier</div>
+                <div class="title">Sartorial TAILORSHOP ERP</div>
                 <div class="subtitle">Bespoke Sizing Ledger</div>
               </div>
               <div class="details">
@@ -252,7 +259,7 @@ export default function MeasurementView({
                 <strong>Apothecary Instruction Notes:</strong> ${record.notes || 'Classic standard fit.'}
               </div>
               <div class="meta">
-                Printed via Sartorial CRM Engine. All patterns remain confidential copyright properties of the Atelier.
+                Printed via Sartorial CRM Engine. All patterns remain confidential copyright properties of the TAILORSHOP ERP.
               </div>
             </div>
             <script>window.print();</script>
@@ -268,7 +275,7 @@ export default function MeasurementView({
       {/* Intro strip */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 border-b border-stone-250 gap-4">
         <div>
-          <h2 className="font-serif text-2xl font-bold tracking-tight">Atelier Sizing Ledger</h2>
+          <h2 className="font-serif text-2xl font-bold tracking-tight">TAILORSHOP ERP Sizing Ledger</h2>
           <p className="text-stone-400 text-xs">Establish, archive, and cross-reference bespoke clothing outlines</p>
         </div>
         <div className="flex items-center space-x-2">
@@ -325,6 +332,15 @@ export default function MeasurementView({
                     {(() => {
                       const custom = clothingCategoryEmojis[type];
                       if (custom) {
+                        if (custom.startsWith('svg:')) {
+                          const iconKey = custom.slice(4);
+                          if (iconKey === 'Shirt') return <Shirt className="h-3.5 w-3.5" />;
+                          if (iconKey === 'Pant') return <PantIcon className="h-3.5 w-3.5" />;
+                          if (iconKey === 'Suit') return <SuitIcon className="h-3.5 w-3.5" />;
+                          if (iconKey === 'Kurta') return <KurtaIcon className="h-3.5 w-3.5" />;
+                          if (iconKey === 'Scissors') return <Scissors className="h-3.5 w-3.5" />;
+                          return <Ruler className="h-3.5 w-3.5" />;
+                        }
                         if (custom.startsWith('data:image/')) {
                           return (
                             <img 

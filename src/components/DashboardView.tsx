@@ -317,7 +317,7 @@ export default function DashboardView({
         }`}>
           <div className="mb-4">
             <h3 className="font-bold text-sm">Recent Activity Field</h3>
-            <p className="text-[11px] text-stone-400">Atelier operations audit logs</p>
+            <p className="text-[11px] text-stone-400">TAILORSHOP ERP operations audit logs</p>
           </div>
           <div className="space-y-4 max-h-[220px] overflow-y-auto">
             {activities.length === 0 ? (

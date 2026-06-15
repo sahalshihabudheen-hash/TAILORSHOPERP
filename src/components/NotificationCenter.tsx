@@ -13,7 +13,7 @@ export default function NotificationCenter({ notifications, isDarkMode }: Notifi
       {/* Intro Block */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 border-b border-stone-250 gap-4">
         <div>
-          <h2 className="font-serif text-2xl font-bold tracking-tight">Atelier Dispatch Logs</h2>
+          <h2 className="font-serif text-2xl font-bold tracking-tight">TAILORSHOP ERP Dispatch Logs</h2>
           <p className="text-stone-400 text-xs text-stone-400">Chronological list of all live WhatsApp notifications and automated emails triggered by tailor shop activities</p>
         </div>
       </div>
@@ -24,7 +24,7 @@ export default function NotificationCenter({ notifications, isDarkMode }: Notifi
       }`}>
         <h3 className="font-serif text-sm font-bold flex items-center space-x-1.5 pb-2 border-b border-stone-100 dark:border-slate-800">
           <Bell className="h-4 w-4 text-amber-500" />
-          <span>Atelier Automatic Dispatch Logs ({notifications.length})</span>
+          <span>TAILORSHOP ERP Automatic Dispatch Logs ({notifications.length})</span>
         </h3>
 
         {notifications.length === 0 ? (

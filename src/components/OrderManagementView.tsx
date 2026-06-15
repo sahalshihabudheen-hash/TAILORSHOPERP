@@ -149,7 +149,7 @@ export default function OrderManagementView({
       {/* Intro block */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 border-b border-stone-250 gap-4">
         <div>
-          <h2 className="font-serif text-2xl font-bold tracking-tight">Atelier Orders Workspace</h2>
+          <h2 className="font-serif text-2xl font-bold tracking-tight">TAILORSHOP ERP Orders Workspace</h2>
           <p className="text-stone-400 text-xs">Coordinate ongoing commission files, assign stitchers, and track status parameters</p>
         </div>
         {simulatedRole !== 'Worker' && (
@@ -278,7 +278,7 @@ export default function OrderManagementView({
                 {/* Progress Status workflow timeline bar */}
                 <div className="space-y-2 pt-1">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-stone-400 uppercase text-[9px] tracking-wider">ateliers workflow status:</span>
+                    <span className="font-bold text-stone-400 uppercase text-[9px] tracking-wider">TAILORSHOP ERP workflow status:</span>
                     <span className="font-bold text-amber-500">{ord.status} phase</span>
                   </div>
 

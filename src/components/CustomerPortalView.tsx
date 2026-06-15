@@ -102,7 +102,7 @@ export default function CustomerPortalView({
         password: newPassword
       });
       setIsForcedResetCodeOpen(false);
-      alert('Password updated successfully! Welcome to your digital atelier account.');
+      alert('Password updated successfully! Welcome to your digital TAILORSHOP ERP account.');
     }
   };
 
@@ -223,7 +223,7 @@ export default function CustomerPortalView({
             </h3>
 
             {custSizes.length === 0 ? (
-              <p className="text-stone-400 text-center py-10">No sizing outlines registered in atelier.</p>
+              <p className="text-stone-400 text-center py-10">No sizing outlines registered in TAILORSHOP ERP.</p>
             ) : (
               custSizes.map((sz) => (
                 <div key={sz.id} className="p-3 bg-stone-50 dark:bg-slate-900/40 rounded-xl space-y-2 border">
@@ -306,7 +306,7 @@ export default function CustomerPortalView({
           <div className="p-3 rounded-full bg-amber-50 text-amber-500 dark:bg-slate-800 w-12 h-12 flex items-center justify-center mx-auto">
             <Smartphone className="h-6 w-6" />
           </div>
-          <h3 className="font-serif text-lg font-bold">Atelier Customer Portal</h3>
+          <h3 className="font-serif text-lg font-bold">TAILORSHOP ERP Customer Portal</h3>
           <p className="text-stone-400 leading-tight">Enter credentials to track active commissions, deliveries, sizing ledgers, and download billing invoices.</p>
         </div>
 

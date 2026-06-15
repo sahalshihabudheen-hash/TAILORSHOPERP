@@ -343,7 +343,7 @@ export default function WorkerManagementView({
       {/* Intro Block */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 border-b border-stone-250 gap-4">
         <div>
-          <h2 className="font-serif text-2xl font-bold tracking-tight">Atelier Tailor Registry</h2>
+          <h2 className="font-serif text-2xl font-bold tracking-tight">TAILORSHOP ERP Tailor Registry</h2>
           <p className="text-stone-400 text-xs">Verify tailor profiles, check productivity charts, commissions, and assign custom bonus structures</p>
         </div>
         <button
@@ -439,7 +439,7 @@ export default function WorkerManagementView({
                     type="button"
                     onClick={() => {
                       setSelectedSetupWorker(worker);
-                      setSetupShopName(`${worker.name}'s Bespoke Atelier`);
+                      setSetupShopName(`${worker.name}'s Bespoke TAILORSHOP ERP`);
                       setSetupOwnerName(worker.name);
                       setSetupShopPhone(worker.phone || '');
                       setSetupShopCountry('India');
@@ -467,7 +467,7 @@ export default function WorkerManagementView({
                       const statusObj = getShopRegistrationStatus(worker);
                       const rec = statusObj?.record || worker;
                       setSelectedSetupWorker(worker);
-                      setSetupShopName(rec.shopName || `${worker.name}'s Bespoke Atelier`);
+                      setSetupShopName(rec.shopName || `${worker.name}'s Bespoke TAILORSHOP ERP`);
                       setSetupOwnerName(rec.name || worker.name);
                       setSetupShopPhone(rec.phone || worker.phone || '');
                       
@@ -703,7 +703,7 @@ export default function WorkerManagementView({
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-stone-400 font-semibold mb-1">Shop / Atelier Name *</label>
+                  <label className="block text-stone-400 font-semibold mb-1">Shop / TAILORSHOP ERP Name *</label>
                   <input
                     type="text"
                     required

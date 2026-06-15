@@ -62,7 +62,7 @@ export default function AnalyticsView({
       {/* Intro stripe */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 border-b border-stone-250 gap-4">
         <div>
-          <h2 className="font-serif text-2xl font-bold tracking-tight">Atelier Reports & Analytics</h2>
+          <h2 className="font-serif text-2xl font-bold tracking-tight">TAILORSHOP ERP Reports & Analytics</h2>
           <p className="text-stone-400 text-xs">A comprehensive operational perspective on tailoring pipelines, premium clients, and staffing productivity indexes</p>
         </div>
       </div>
