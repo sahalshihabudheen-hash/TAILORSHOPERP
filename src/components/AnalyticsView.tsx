@@ -155,7 +155,11 @@ export default function AnalyticsView({
               return (
                 <div key={w.id} className="flex justify-between items-center">
                   <div className="flex items-center space-x-3">
-                    <img src={w.avatar} alt="" className="w-8 h-8 rounded-lg object-cover" />
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black tracking-wider shrink-0 select-none border ${
+                      isDarkMode ? 'bg-slate-800 text-amber-500 border-slate-755' : 'bg-amber-50 text-amber-700 border-amber-100'
+                    }`}>
+                      {w.name ? w.name.trim().substring(0, 2).toUpperCase() : 'TA'}
+                    </div>
                     <div>
                       <h4 className="font-bold">{w.name}</h4>
                       <p className="text-[10px] text-stone-400">{w.role}</p>

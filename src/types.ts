@@ -21,6 +21,8 @@ export interface MeasurementRecord {
   date: string;
   fields: Record<string, string>; // Length, Chest, Waist, Collar, Sleeve, Inseam, Hips, Shoulder, etc.
   notes?: string;
+  tailorId?: string; // Links measurement to specific shop owner!
+  shopName?: string; // Links to specific shop name
 }
 
 export interface OrderNotes {
@@ -69,7 +71,7 @@ export interface Worker {
   name: string;
   phone: string;
   email: string;
-  role: 'Master Cutter' | 'Senior Stitcher' | 'Finisher & Ironer' | 'Apprentice';
+  role: 'Master Cutter' | 'Senior Stitcher' | 'Finisher & Ironer' | 'Apprentice' | 'Manager' | 'Tailor';
   rating: number;
   baseSalary: number;
   perOrderBonus: number;
@@ -83,6 +85,7 @@ export interface Worker {
   shopOwnerId?: string;
   shopOwnerEmail?: string;
   shopLogoUrl?: string;
+  skills?: string[];
 }
 
 export interface PaymentInvoice {

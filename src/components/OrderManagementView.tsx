@@ -53,6 +53,12 @@ export default function OrderManagementView({
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Filter matrix states
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [workerFilter, setWorkerFilter] = useState('All');
+  const [credentialFilter, setCredentialFilter] = useState('All');
+
   // New Order Form State
   const [newOrder, setNewOrder] = useState({
     customerId: customers[0]?.id || '',
@@ -130,18 +136,59 @@ export default function OrderManagementView({
     alert('Bespoke order registered successfully and staff assignments triggered!');
   };
 
-  // Search through order files
-  const combinedSearchQuery = (searchTerm || searchFilter || '').toLowerCase();
+  // Search through order files and apply multi-faceted filters
+  const combinedSearchQuery = (searchTerm || searchFilter || '').toLowerCase().trim();
   const filteredOrders = orders.filter((o) => {
     const cust = customers.find((c) => c.id === o.customerId);
     const worker = workers.find((w) => w.id === o.assignedWorkerId);
-    return (
-      o.id.toLowerCase().includes(combinedSearchQuery) ||
-      o.clothingType.toLowerCase().includes(combinedSearchQuery) ||
-      o.status.toLowerCase().includes(combinedSearchQuery) ||
-      (cust && cust.name.toLowerCase().includes(combinedSearchQuery)) ||
-      (worker && worker.name.toLowerCase().includes(combinedSearchQuery))
-    );
+
+    // 1. Text Search Filter
+    if (combinedSearchQuery) {
+      const matchText = (
+        o.id.toLowerCase().includes(combinedSearchQuery) ||
+        o.clothingType.toLowerCase().includes(combinedSearchQuery) ||
+        o.status.toLowerCase().includes(combinedSearchQuery) ||
+        (cust && cust.name.toLowerCase().includes(combinedSearchQuery)) ||
+        (worker && worker.name.toLowerCase().includes(combinedSearchQuery))
+      );
+      if (!matchText) return false;
+    }
+
+    // 2. Status Filter
+    if (statusFilter !== 'All') {
+      if (o.status !== statusFilter) return false;
+    }
+
+    // 3. Category Filter
+    if (categoryFilter !== 'All') {
+      if (o.clothingType.toLowerCase().trim() !== categoryFilter.toLowerCase().trim()) return false;
+    }
+
+    // 4. Worker Filter
+    if (workerFilter !== 'All') {
+      if (workerFilter === 'Unassigned') {
+        if (o.assignedWorkerId) return false;
+      } else {
+        if (o.assignedWorkerId !== workerFilter) return false;
+      }
+    }
+
+    // 5. Credential Filter
+    if (credentialFilter !== 'All') {
+      if (credentialFilter === 'Matched') {
+        if (!worker) return false;
+        const isSpecialist = worker.skills?.some(s => s.toLowerCase().trim() === o.clothingType.toLowerCase().trim());
+        if (!isSpecialist) return false;
+      } else if (credentialFilter === 'Mismatch') {
+        if (!worker) return false;
+        const isSpecialist = worker.skills?.some(s => s.toLowerCase().trim() === o.clothingType.toLowerCase().trim());
+        if (isSpecialist) return false;
+      } else if (credentialFilter === 'Unassigned') {
+        if (o.assignedWorkerId) return false;
+      }
+    }
+
+    return true;
   });
 
   return (
@@ -163,20 +210,121 @@ export default function OrderManagementView({
         )}
       </div>
 
-      {/* Lookup controls */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-        <input
-          type="text"
-          placeholder="Lookup style, staff or status (e.g. stitching, ORD-9841)..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className={`w-full pl-10 pr-4 py-1.5 text-xs rounded-xl border focus:outline-none focus:ring-1 ${
-            isDarkMode
-              ? 'bg-slate-800 border-slate-700 text-white focus:border-amber-500 focus:ring-amber-500'
-              : 'bg-white border-stone-250 text-stone-800 focus:border-amber-500 focus:ring-amber-500'
-          }`}
-        />
+      {/* Lookup & Filter Control panel */}
+      <div className={`p-4 rounded-xl border space-y-3 ${
+        isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-stone-50 border-stone-200 shadow-3xs'
+      }`}>
+        <span className="text-[10px] font-black uppercase tracking-widest text-[#aa8612] dark:text-[#f3cd57] block mb-1">
+          ⚙️ Premium Bespoke Filter Matrix
+        </span>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+          {/* Text Search filter */}
+          <div className="space-y-1">
+            <label className="text-[9px] font-bold text-stone-400 uppercase tracking-wider block">Keyword/Patron Search</label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-stone-400" />
+              <input
+                type="text"
+                placeholder="Search style, patron, ID..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className={`w-full pl-8 pr-2 py-1.5 text-xs rounded-lg border focus:outline-none focus:ring-1 ${
+                  isDarkMode
+                    ? 'bg-slate-950 border-slate-800 text-white focus:ring-amber-500'
+                    : 'bg-white border-stone-250 text-stone-800 focus:ring-amber-500'
+                }`}
+              />
+            </div>
+          </div>
+
+          {/* Status Filter */}
+          <div className="space-y-1">
+            <label className="text-[9px] font-bold text-stone-400 uppercase tracking-wider block">Milestone Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className={`w-full p-1.5 px-2 text-xs rounded-lg border focus:outline-none ${
+                isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-800'
+              }`}
+            >
+              <option value="All">All Milestones</option>
+              {ALL_STATUS_STAGES.map((st) => (
+                <option key={st} value={st}>{st}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Category/Genre Filter */}
+          <div className="space-y-1">
+            <label className="text-[9px] font-bold text-stone-400 uppercase tracking-wider block">Clothing Genre</label>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className={`w-full p-1.5 px-2 text-xs rounded-lg border focus:outline-none ${
+                isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-800'
+              }`}
+            >
+              <option value="All">All Genres</option>
+              {Array.from(new Set(orders.map(o => o.clothingType))).map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Assigned Worker Filter */}
+          <div className="space-y-1">
+            <label className="text-[9px] font-bold text-stone-400 uppercase tracking-wider block">Craftsman Assigned</label>
+            <select
+              value={workerFilter}
+              onChange={(e) => setWorkerFilter(e.target.value)}
+              className={`w-full p-1.5 px-2 text-xs rounded-lg border focus:outline-none ${
+                isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-800'
+              }`}
+            >
+              <option value="All">All Tailor Staff</option>
+              <option value="Unassigned">Unassigned Only</option>
+              {workers.map((w) => (
+                <option key={w.id} value={w.id}>{w.name} ({w.role})</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Credentials Skill Matching filter */}
+          <div className="space-y-1">
+            <label className="text-[9px] font-bold text-stone-400 uppercase tracking-wider block">Credential Check</label>
+            <select
+              value={credentialFilter}
+              onChange={(e) => setCredentialFilter(e.target.value)}
+              className={`w-full p-1.5 px-2 text-xs rounded-lg border focus:outline-none ${
+                isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-800'
+              }`}
+            >
+              <option value="All">All Checks</option>
+              <option value="Matched">Verified Specialist ⭐</option>
+              <option value="Mismatch">Credential Mismatch ⚠️</option>
+              <option value="Unassigned">Not Yet Assigned</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Filters Clear Button row if any filters are active */}
+        {(statusFilter !== 'All' || categoryFilter !== 'All' || workerFilter !== 'All' || credentialFilter !== 'All' || searchTerm) && (
+          <div className="flex justify-end pt-1">
+            <button
+              onClick={() => {
+                setStatusFilter('All');
+                setCategoryFilter('All');
+                setWorkerFilter('All');
+                setCredentialFilter('All');
+                setSearchTerm('');
+              }}
+              className="text-[10px] font-extrabold text-amber-600 hover:text-amber-700 bg-amber-500/10 px-2.5 py-1 rounded-md cursor-pointer transition"
+            >
+              Clear Active Filters
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Orders Pipeline Stack */}
@@ -236,18 +384,22 @@ export default function OrderManagementView({
                     )}
                   </div>
 
-                  <div className="text-xs">
+                  <div className="text-xs space-y-2">
                     <p className="text-stone-400 font-bold uppercase text-[9px] tracking-wider">Assigned Tailor Customizer</p>
                     {worker ? (
-                      <div className="flex items-center space-x-2 mt-1">
-                        <img src={worker.avatar} alt="" className="w-6 h-6 rounded-lg object-cover" />
+                      <div className="flex items-center space-x-2">
+                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[9px] font-black tracking-wider shrink-0 select-none border ${
+                          isDarkMode ? 'bg-slate-800 text-amber-500 border-slate-750' : 'bg-amber-50 text-amber-700 border-amber-100'
+                        }`}>
+                          {worker.name ? worker.name.trim().substring(0, 2).toUpperCase() : 'TA'}
+                        </div>
                         <div>
-                          <p className="font-bold">{worker.name}</p>
-                          <p className="text-[10px] text-stone-400">{worker.role}</p>
+                          <p className="font-bold leading-none">{worker.name}</p>
+                          <p className="text-[10px] text-stone-400 mt-0.5">{worker.role}</p>
                         </div>
                       </div>
                     ) : (
-                      <span className="text-stone-400 italic text-[11px]">Unassigned</span>
+                      <span className="text-stone-400 italic text-[11px] block">Unassigned</span>
                     )}
 
                     {/* Staff reassignment quick drop for Owner or Manager */}
@@ -255,16 +407,58 @@ export default function OrderManagementView({
                       <select
                         value={ord.assignedWorkerId || ''}
                         onChange={(e) => onAssignWorker(ord.id, e.target.value)}
-                        className="mt-1 font-semibold text-[10px] p-1 border rounded dark:bg-slate-850"
+                        className="mt-1 font-semibold text-[10px] p-1.5 border rounded-lg dark:bg-slate-850 w-full focus:outline-none focus:ring-1 focus:ring-amber-500"
                       >
-                        <option value="">Reassign Customizer</option>
-                        {workers.map((w) => (
-                          <option key={w.id} value={w.id}>
-                            {w.name} ({w.role})
-                          </option>
-                        ))}
+                        <option value="">Choose Craftsman...</option>
+                        {workers.map((w) => {
+                          const isSpecialist = w.skills?.some(s => s.toLowerCase().trim() === ord.clothingType.toLowerCase().trim());
+                          const skillStr = w.skills && w.skills.length > 0 ? ` [${w.skills.join(', ')}]` : '';
+                          return (
+                            <option key={w.id} value={w.id}>
+                              {w.name} ({w.role}){isSpecialist ? ' ⭐ SPECIALIST' : ''}{skillStr}
+                            </option>
+                          );
+                        })}
                       </select>
                     )}
+
+                    {/* Credentials Status Match Indicator */}
+                    <div className="pt-1.5">
+                      {worker ? (
+                        (() => {
+                          const isSpecialist = worker.skills?.some(s => s.toLowerCase().trim() === ord.clothingType.toLowerCase().trim());
+                          if (isSpecialist) {
+                            return (
+                              <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-extrabold w-full">
+                                <span className="text-emerald-500 text-xs">⭐</span>
+                                <span className="leading-tight">Credentials Match: {ord.clothingType} Specialist</span>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div className="p-2 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] w-full">
+                                <div className="flex items-center gap-1 font-extrabold text-rose-600 dark:text-rose-400">
+                                  <span>⚠️ Credentials Mismatch</span>
+                                </div>
+                                <p className="text-[9.5px] text-stone-500 dark:text-stone-300 mt-1 leading-tight">
+                                  Not specialized in <strong>{ord.clothingType}</strong>. Certifications: {worker.skills && worker.skills.length > 0 ? worker.skills.join(', ') : 'None'}.
+                                </p>
+                              </div>
+                            );
+                          }
+                        })()
+                      ) : (
+                        <div className="p-2 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 text-[10px] w-full">
+                          <span className="font-extrabold block">⚠️ Setup Skill Matcher Suggestions:</span>
+                          <p className="text-[9.5px] text-stone-500 dark:text-stone-300 mt-1 leading-tight">
+                            Suggested Specialists for {ord.clothingType}: {
+                              workers.filter(w => w.skills?.some(s => s.toLowerCase().trim() === ord.clothingType.toLowerCase().trim()))
+                                .map(w => w.name).join(', ') || 'No matching certified generalists found.'
+                            }
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="text-xs text-right space-y-1">
@@ -423,11 +617,15 @@ export default function OrderManagementView({
                     className="p-2 w-full rounded-xl border dark:bg-slate-800"
                   >
                     <option value="">Unassigned</option>
-                    {workers.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.name} ({w.role})
-                      </option>
-                    ))}
+                    {workers.map((w) => {
+                      const isSpecialist = w.skills?.some(s => s.toLowerCase() === newOrder.clothingType.toLowerCase());
+                      const skillStr = w.skills && w.skills.length > 0 ? ` [${w.skills.join(', ')}]` : '';
+                      return (
+                        <option key={w.id} value={w.id}>
+                          {w.name} ({w.role}){isSpecialist ? ' ⭐ SPECIALIST' : ''}{skillStr}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 

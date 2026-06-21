@@ -55,10 +55,12 @@ const setupSync = <T extends { id: string }>(
         const customerEmail = (data as any).customerEmail;
 
         const isFake = 
-          ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(custId) ||
-          ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(customerId) ||
-          (typeof email === 'string' && (email.toLowerCase().includes('@example.com') || email.toLowerCase().includes('@tailorshop.com'))) ||
-          (typeof customerEmail === 'string' && (customerEmail.toLowerCase().includes('@example.com') || customerEmail.toLowerCase().includes('@tailorshop.com')));
+          (collectionName === 'customers' || collectionName === 'workers' || collectionName === 'measurements' || collectionName === 'orders') && (
+            ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(custId) ||
+            ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(customerId) ||
+            (typeof email === 'string' && (email.toLowerCase().includes('@example.com') || email.toLowerCase().includes('@tailorshop.com'))) ||
+            (typeof customerEmail === 'string' && (customerEmail.toLowerCase().includes('@example.com') || customerEmail.toLowerCase().includes('@tailorshop.com')))
+          );
 
         if (isFake) {
           deleteDoc(doc(db, collectionName, docSnap.id)).catch((err) => {
@@ -95,6 +97,26 @@ if (typeof window !== 'undefined') {
   setupSync('activities', KEYS.ACTIVITIES, INITIAL_ACTIVITIES);
 }
 
+// Helper to recursively strip any properties with 'undefined' status because Firestore rejects undefined
+const cleanUndefined = (obj: any): any => {
+  if (obj === null || obj === undefined) return null;
+  if (Array.isArray(obj)) {
+    return obj.map(cleanUndefined);
+  }
+  if (typeof obj === 'object') {
+    const cleaned: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        if (obj[key] !== undefined) {
+          cleaned[key] = cleanUndefined(obj[key]);
+        }
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+};
+
 // Helper to update elements in Firestore and clean up any deleted items safely
 const syncListToFirestore = async <T extends { id: string }>(
   collectionName: string,
@@ -105,27 +127,30 @@ const syncListToFirestore = async <T extends { id: string }>(
   // Write new or updated docs
   for (const item of items) {
     try {
-      await setDoc(doc(db, collectionName, item.id), item);
+      const cleaned = cleanUndefined(item);
+      await setDoc(doc(db, collectionName, item.id), cleaned);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `${collectionName}/${item.id}`);
     }
   }
 
-  // Query database in background to clean up deleted records
-  try {
-    const colRef = collection(db, collectionName);
-    const snapshot = await getDocs(colRef);
-    for (const docSnap of snapshot.docs) {
-      if (!ids.has(docSnap.id)) {
-        try {
-          await deleteDoc(docSnap.ref);
-        } catch (err) {
-          handleFirestoreError(err, OperationType.DELETE, `${collectionName}/${docSnap.id}`);
+  // Query database in background to clean up deleted records (skip append-only logs)
+  if (collectionName !== 'activities' && collectionName !== 'notifications') {
+    try {
+      const colRef = collection(db, collectionName);
+      const snapshot = await getDocs(colRef);
+      for (const docSnap of snapshot.docs) {
+        if (!ids.has(docSnap.id)) {
+          try {
+            await deleteDoc(docSnap.ref);
+          } catch (err) {
+            handleFirestoreError(err, OperationType.DELETE, `${collectionName}/${docSnap.id}`);
+          }
         }
       }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.LIST, collectionName);
     }
-  } catch (err) {
-    handleFirestoreError(err, OperationType.LIST, collectionName);
   }
 };
 

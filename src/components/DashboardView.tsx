@@ -274,11 +274,11 @@ export default function DashboardView({
                     <tr key={worker.id} className="hover:bg-stone-50/50 dark:hover:bg-slate-850/50">
                       <td className="py-3">
                         <div className="flex items-center space-x-2">
-                          <img
-                            src={worker.avatar}
-                            alt={worker.name}
-                            className="h-7 w-7 rounded-lg object-cover"
-                          />
+                          <div className={`h-7 w-7 rounded-lg flex items-center justify-center text-[10px] font-black tracking-wider shrink-0 select-none border ${
+                            isDarkMode ? 'bg-slate-800 text-amber-500 border-slate-750' : 'bg-amber-50 text-amber-700 border-amber-100'
+                          }`}>
+                            {worker.name ? worker.name.trim().substring(0, 2).toUpperCase() : 'TA'}
+                          </div>
                           <div>
                             <span className="font-bold block">{worker.name}</span>
                             <span className="text-[9px] text-stone-400 font-medium">{worker.role}</span>

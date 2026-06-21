@@ -212,11 +212,9 @@ export default function CustomerManagementView({
                   }`}
                 >
                   <div className="flex items-center space-x-3 min-w-0">
-                    <img
-                      src={cust.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120'}
-                      alt={cust.name}
-                      className="h-10 w-10 rounded-lg object-cover ring-2 ring-stone-200/55 dark:ring-slate-800"
-                    />
+                    <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-slate-900 border border-slate-800 text-stone-100 font-mono text-[10px] font-bold p-1 overflow-hidden select-none shrink-0 ring-2 ring-stone-200/55 dark:ring-slate-800" title={cust.name}>
+                      <span className="truncate max-w-full text-center lowercase leading-none">{cust.name.substring(0, 20)}</span>
+                    </div>
                     <div className="min-w-0">
                       <h4 className="font-bold text-xs truncate">{cust.name}</h4>
                       <p className="text-[10px] text-stone-400 font-mono tracking-wide">{cust.id}</p>
@@ -259,11 +257,9 @@ export default function CustomerManagementView({
           {/* Header row */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 border-b border-stone-100 dark:border-slate-800 gap-4">
             <div className="flex items-center space-x-3">
-              <img
-                src={selectedCustomer.avatar}
-                alt={selectedCustomer.name}
-                className="h-14 w-14 rounded-xl object-cover border"
-              />
+              <div className="h-14 w-14 rounded-xl flex items-center justify-center bg-slate-900 border border-slate-800 text-stone-100 font-mono text-xs font-bold p-1 overflow-hidden select-none shrink-0" title={selectedCustomer.name}>
+                <span className="truncate max-w-full text-center lowercase leading-none">{selectedCustomer.name.substring(0, 20)}</span>
+              </div>
               <div>
                 <span className="text-[9px] uppercase tracking-wider font-extrabold text-amber-500 block">Active Client Dossier</span>
                 <h3 className="font-serif text-xl font-bold">{selectedCustomer.name}</h3>
