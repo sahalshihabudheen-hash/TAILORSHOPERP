@@ -103,17 +103,7 @@ if (typeof window !== 'undefined') {
   setupSync('orders', KEYS.ORDERS, INITIAL_ORDERS);
   setupSync('notifications', KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
   setupSync('activities', KEYS.ACTIVITIES, INITIAL_ACTIVITIES);
-  setupSync('registered_tailors', KEYS.REGISTERED_TAILORS, [
-    {
-      id: 'TAILOR-101',
-      name: 'Arthur S. Row',
-      email: 'owner@tailorshoperp.com',
-      phone: '+44 20 7123 4567',
-      location: 'Savile Row, London',
-      password: 'password123',
-      createdAt: new Date().toISOString()
-    }
-  ]);
+  setupSync('registered_tailors', KEYS.REGISTERED_TAILORS, []);
 }
 
 // Helper to recursively strip any properties with 'undefined' status because Firestore rejects undefined
@@ -210,17 +200,7 @@ export const saveCustomers = (customers: Customer[]) => {
 
 export const getRegisteredTailors = (): any[] => {
   const data = localStorage.getItem(KEYS.REGISTERED_TAILORS);
-  return data ? JSON.parse(data) : [
-    {
-      id: 'TAILOR-101',
-      name: 'Arthur S. Row',
-      email: 'owner@tailorshoperp.com',
-      phone: '+44 20 7123 4567',
-      location: 'Savile Row, London',
-      password: 'password123',
-      createdAt: new Date().toISOString()
-    }
-  ];
+  return data ? JSON.parse(data) : [];
 };
 
 export const saveRegisteredTailors = (list: any[]) => {
