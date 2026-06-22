@@ -39,7 +39,9 @@ import {
   Upload,
   Image,
   RotateCcw,
-  Download
+  Download,
+  QrCode,
+  Smartphone
 } from 'lucide-react';
 import {
   getCustomers,
@@ -408,6 +410,22 @@ export default function App() {
       setUiToast(null);
     }, 4500);
   };
+
+  // URL-driven query parameter states for instant sizing cards and bills
+  const [urlViewSizeCard, setUrlViewSizeCard] = useState<string | null>(null);
+  const [urlViewBill, setUrlViewBill] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sizeCardId = params.get('viewSizeCard');
+    const billId = params.get('viewBill');
+    if (sizeCardId) {
+      setUrlViewSizeCard(sizeCardId);
+    }
+    if (billId) {
+      setUrlViewBill(billId);
+    }
+  }, []);
 
   // Location search coordinates helper
   const handleUseMyLocation = () => {
@@ -3740,6 +3758,245 @@ export default function App() {
 
 
   // ==========================================
+  // --- QR CODE SCANNING URL BYPASS VIEWS ---
+  // ==========================================
+  if (urlViewSizeCard) {
+    const matchingMeasure = measurements.find((m) => m.id === urlViewSizeCard);
+    const matchingCust = matchingMeasure ? customers.find((c) => c.id === matchingMeasure.customerId) : null;
+    const matchingOrder = matchingMeasure && matchingCust 
+      ? orders.find(o => o.customerId === matchingCust.id && o.clothingType.toLowerCase().trim() === matchingMeasure.clothingType.toLowerCase().trim())
+      : null;
+
+    return (
+      <div className={`min-h-screen transition-colors duration-300 flex flex-col ${isDarkMode ? 'dark bg-black text-white' : 'bg-stone-50 text-stone-900 font-sans'}`}>
+        <header className={`border-b p-4 ${isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-white border-stone-200'}`}>
+          <div className="max-w-md mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <QrCode className="h-5 w-5 text-amber-500" />
+              <span className="font-sans font-black text-xs uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-amber-500">
+                Size Card Reader
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                setUrlViewSizeCard(null);
+                window.history.replaceState({}, '', window.location.pathname);
+              }}
+              className="text-xs font-bold text-rose-500 hover:underline cursor-pointer bg-rose-500/10 px-3 py-1.5 rounded-xl"
+            >
+              Exit View
+            </button>
+          </div>
+        </header>
+
+        <main className="flex-1 max-w-md mx-auto w-full p-4 space-y-6">
+          {!matchingMeasure ? (
+            <div className={`p-8 text-center rounded-2xl border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-stone-250 shadow-xs'}`}>
+              <p className="text-sm font-bold text-rose-500">Measurement file not found or has been archived.</p>
+              <p className="text-xs text-stone-400 mt-2">Please ask the main desk to recreate this sizing pattern.</p>
+            </div>
+          ) : (
+            <div className={`p-6 rounded-2xl border space-y-6 ${isDarkMode ? 'bg-zinc-950 border-zinc-900 shadow-xl' : 'bg-white border-stone-250 shadow-md'}`}>
+              <div className="text-left border-b border-stone-100 dark:border-slate-900 pb-4">
+                <span className="px-2 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-extrabold text-[9px] tracking-widest uppercase rounded">
+                  {matchingMeasure.clothingType} Size Card
+                </span>
+                <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 mt-2">
+                  {matchingCust?.name || 'Walk-in Client'}
+                </h2>
+                <p className="text-xs text-stone-400 mt-1">
+                  Phone: {matchingCust?.phone || 'No phone'} | Date: {new Date(matchingMeasure.date).toLocaleDateString()}
+                </p>
+                {matchingOrder && (
+                  <div className="mt-3 p-2 bg-stone-50 dark:bg-slate-900 rounded-lg text-[10.5px] border border-stone-100 dark:border-slate-800 text-stone-500 dark:text-stone-400">
+                    <strong className="text-amber-600 dark:text-amber-400 uppercase font-mono text-[9px] block">Matching Order ID: {matchingOrder.id}</strong>
+                    Delivery Target: {matchingOrder.deliveryDate} | Status: <span className="font-bold text-indigo-500">{matchingOrder.status}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-xs uppercase font-black text-stone-400 tracking-wider text-left">
+                  Sizing Parameters
+                </h3>
+                <div className="grid grid-cols-2 gap-3 text-center">
+                  {Object.entries(matchingMeasure.fields).map(([k, val]) => (
+                    <div key={k} className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-stone-50 border-stone-150'}`}>
+                      <span className="text-[10px] text-stone-400 font-sans uppercase tracking-wider block mb-1">{k}</span>
+                      <span className="font-mono text-base font-black text-amber-600 dark:text-amber-400">
+                        {val || '--'} <span className="text-[9px] font-normal text-stone-450">in</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {matchingMeasure.notes && (
+                <div className={`p-4 rounded-xl text-xs text-left italic border leading-relaxed ${isDarkMode ? 'bg-slate-900/60 border-slate-800 text-stone-300' : 'bg-stone-50 border-stone-150 text-stone-600'}`}>
+                  <strong className="font-bold font-sans not-italic block uppercase tracking-wider text-[9px] text-stone-400 mb-1">Fitting Sizing Memo</strong>
+                  "{matchingMeasure.notes}"
+                </div>
+              )}
+
+              <div className="p-3 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/10 rounded-xl flex items-center space-x-3 text-left">
+                <ShieldCheck className="h-5 w-5 text-emerald-500 shrink-0" />
+                <div>
+                  <h4 className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Registered Size Blueprint</h4>
+                  <p className="text-[10px] text-stone-400">This size card was securely fetched via QR scanning from the workshop's master ledger database.</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  if (urlViewBill) {
+    const matchingOrder = orders.find((o) => o.id === urlViewBill);
+    const matchingCust = matchingOrder ? customers.find((c) => c.id === matchingOrder.customerId) : null;
+    const matchingMeasure = matchingOrder && matchingCust
+      ? measurements.find(m => m.customerId === matchingCust.id && m.clothingType.toLowerCase().trim() === matchingOrder.clothingType.toLowerCase().trim())
+      : null;
+
+    return (
+      <div className={`min-h-screen transition-colors duration-300 flex flex-col ${isDarkMode ? 'dark bg-black text-white' : 'bg-stone-50 text-stone-900 font-sans'}`}>
+        <header className={`border-b p-4 ${isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-white border-stone-200'}`}>
+          <div className="max-w-md mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <QrCode className="h-5 w-5 text-indigo-500" />
+              <span className="font-sans font-black text-xs uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-indigo-600">
+                Digital Invoice Portal
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                setUrlViewBill(null);
+                window.history.replaceState({}, '', window.location.pathname);
+              }}
+              className="text-xs font-bold text-rose-500 hover:underline cursor-pointer bg-rose-500/10 px-3 py-1.5 rounded-xl"
+            >
+              Exit View
+            </button>
+          </div>
+        </header>
+
+        <main className="flex-1 max-w-md mx-auto w-full p-4 space-y-6">
+          {!matchingOrder ? (
+            <div className={`p-8 text-center rounded-2xl border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-stone-250 shadow-xs'}`}>
+              <p className="text-sm font-bold text-rose-500">Order record not found.</p>
+              <p className="text-xs text-stone-400 mt-2">Please make sure the QR code corresponds to a valid existing order.</p>
+            </div>
+          ) : (
+            <div className={`p-6 rounded-2xl border space-y-6 ${isDarkMode ? 'bg-zinc-950 border-zinc-900 shadow-xl' : 'bg-white border-stone-250 shadow-md'}`}>
+              <div className="text-center border-b border-stone-100 dark:border-slate-900 pb-5">
+                <div className="flex justify-center mb-2">
+                  <div className="p-3 bg-indigo-505/10 text-indigo-500 rounded-full">
+                    <QrCode className="h-8 w-8" />
+                  </div>
+                </div>
+                <h2 className="text-lg font-sans font-black uppercase tracking-wider text-stone-800 dark:text-white">
+                  {tailorshopName}
+                </h2>
+                <p className="text-[11px] text-stone-400 uppercase tracking-widest font-mono mt-1">
+                  Digital Invoice Receipt
+                </p>
+                <div className="mt-3 inline-block px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold text-[10px] tracking-wide border border-indigo-100/50 dark:border-indigo-900/30">
+                  Order Token: {matchingOrder.id}
+                </div>
+              </div>
+
+              <div className="text-left space-y-2 text-xs">
+                <span className="text-[9px] text-stone-400 uppercase font-black block tracking-wider">Patron Particulars</span>
+                <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-stone-50 border-stone-150'}`}>
+                  <p className="font-bold text-stone-800 dark:text-white">{matchingCust?.name || 'Walk-In Customer'}</p>
+                  <p className="text-stone-500 dark:text-stone-400 mt-0.5">{matchingCust?.phone || 'No phone'} | {matchingCust?.email || 'No email'}</p>
+                </div>
+              </div>
+
+              <div className="text-left space-y-2 text-xs">
+                <span className="text-[9px] text-stone-400 uppercase font-black block tracking-wider">Garment Description</span>
+                <div className={`p-3 rounded-xl border space-y-1.5 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-stone-50 border-stone-150'}`}>
+                  <div className="flex justify-between font-bold">
+                    <span>{matchingOrder.clothingType} (Qty: {matchingOrder.quantity})</span>
+                    <span>₹{matchingOrder.price}</span>
+                  </div>
+                  {matchingOrder.notes.fabricDetails && (
+                    <p className="text-[10px] text-stone-505 dark:text-stone-440">
+                      <strong>Fabrication:</strong> {matchingOrder.notes.fabricDetails}
+                    </p>
+                  )}
+                  {matchingOrder.notes.instructions && (
+                    <p className="text-[10px] text-stone-505 dark:text-stone-440">
+                      <strong>Instructions:</strong> {matchingOrder.notes.instructions}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="text-xs space-y-2 pt-2 border-t border-stone-100 dark:border-slate-850">
+                <div className="flex justify-between font-medium text-stone-500 dark:text-stone-400">
+                  <span>Subtotal Amount:</span>
+                  <span>₹{matchingOrder.price}</span>
+                </div>
+                <div className="flex justify-between font-medium text-emerald-600 dark:text-emerald-400">
+                  <span>Advance Deposit Paid:</span>
+                  <span>- ₹{matchingOrder.advancePayment}</span>
+                </div>
+                <div className="flex justify-between font-black text-rose-600 dark:text-rose-400 border-t border-dashed border-stone-200 dark:border-slate-800 pt-2 text-sm">
+                  <span>Balance Outstanding:</span>
+                  <span>₹{matchingOrder.remainingBalance}</span>
+                </div>
+              </div>
+
+              <div className="bg-stone-50 dark:bg-slate-900/60 p-4 border border-stone-150 dark:border-slate-850 rounded-xl space-y-2 text-left">
+                <div className="flex justify-between text-[10px] text-stone-400 uppercase font-black tracking-widest">
+                  <span>Fit & Fabric Status</span>
+                  <span className="text-indigo-500 font-bold">{matchingOrder.status}</span>
+                </div>
+                <div className="w-full bg-stone-200 dark:bg-slate-950 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${
+                        matchingOrder.status === 'Ready for Pickup' || matchingOrder.status === 'Delivered' ? 100 :
+                        matchingOrder.status === 'Finishing' ? 80 :
+                        matchingOrder.status === 'Stitching' ? 65 :
+                        matchingOrder.status === 'Cutting' ? 45 :
+                        matchingOrder.status === 'Measurement Taken' ? 25 : 15
+                      }%`
+                    }}
+                  />
+                </div>
+                <p className="text-[10px] text-stone-400 leading-normal mt-2">
+                  Scheduled delivery ready/pickup target: <strong className="text-stone-600 dark:text-stone-300">{matchingOrder.deliveryDate}</strong>.
+                </p>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => triggerPrintVoucher(matchingMeasure?.id || '', matchingCust?.id || '', matchingOrder.id)}
+                  className="flex-1 w-full bg-black hover:bg-stone-900 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-black font-extrabold text-xs py-3 rounded-xl flex items-center justify-center space-x-2 shadow-md transition active:scale-[0.99] cursor-pointer"
+                >
+                  <Printer className="h-4 w-4" />
+                  <span>Print Paper Copy</span>
+                </button>
+                <button
+                  onClick={() => downloadVoucherAsHtml(matchingMeasure?.id || '', matchingCust?.id || '', matchingOrder.id)}
+                  className="flex-1 w-full bg-indigo-55 dark:bg-indigo-950/20 text-indigo-650 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/40 hover:bg-indigo-55 dark:hover:bg-indigo-950/40 font-extrabold text-xs py-3 rounded-xl flex items-center justify-center space-x-2 transition active:scale-[0.99] cursor-pointer"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Download HTML Bill</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  // ==========================================
   // --- AUTH SECURITY GATEKEEPER ---
   // ==========================================
   if (!currentUser) {
@@ -4591,19 +4848,6 @@ export default function App() {
                       <span>Sign In</span>
                     </button>
                   </form>
-                </div>
-
-                {/* Info and helpers bar with clean instructions */}
-                <div className={`mt-8 text-center text-xs font-semibold p-4 rounded-xl transition-all space-y-1 ${
-                  isDarkMode ? 'bg-zinc-900/40 text-zinc-400 border border-zinc-800/40' : 'bg-stone-50 text-stone-500 border border-stone-200/50'
-                }`}>
-                  <p>All roles are automatically detected by system coordinates.</p>
-                  <p className="text-[11px] opacity-90">
-                    <strong className="text-amber-600 dark:text-amber-400">Owner Bypass Email:</strong> owner@gmail.com (PSWD: TAILORSHOP_ERPOwner2026!)
-                  </p>
-                  <p className="text-[11px] opacity-90">
-                    <strong className="text-amber-600 dark:text-amber-400">Customer Access:</strong> Mobile/Email with your Order ID (e.g. ORD-9841) as Password.
-                  </p>
                 </div>
 
               </div>
