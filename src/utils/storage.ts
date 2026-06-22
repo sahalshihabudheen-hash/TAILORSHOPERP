@@ -17,6 +17,7 @@ const KEYS = {
   ORDERS: 'tailor_orders',
   NOTIFICATIONS: 'tailor_notifications',
   ACTIVITIES: 'tailor_activities',
+  REGISTERED_TAILORS: 'registered_tailors',
 };
 
 // Generic Sync setup function to sync Firestore collections to LocalStorage securely
@@ -25,64 +26,71 @@ const setupSync = <T extends { id: string }>(
   localStorageKey: string,
   initialData: T[]
 ) => {
-  const colRef = collection(db, collectionName);
+  const isRegisteredTailors = (collectionName === 'registered_tailors');
+  const firestoreCollectionName = isRegisteredTailors ? 'workers' : collectionName;
+  const colRef = collection(db, firestoreCollectionName);
   
   onSnapshot(colRef, (snapshot) => {
-    if (snapshot.empty) {
-      console.log(`Seeding ${collectionName} in Firestore...`);
-      const batch = writeBatch(db);
-      initialData.forEach((item) => {
-        const docRef = doc(db, collectionName, item.id);
-        batch.set(docRef, item);
-      });
-      batch.commit().catch((err) => {
-        handleFirestoreError(err, OperationType.WRITE, collectionName);
-      });
+    const items: T[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as T;
+      const custId = data.id;
+      const customerId = (data as any).customerId;
+      const email = (data as any).email;
+      const customerEmail = (data as any).customerEmail;
 
-      const prev = localStorage.getItem(localStorageKey);
-      const str = JSON.stringify(initialData);
-      if (prev !== str) {
-        localStorage.setItem(localStorageKey, str);
-        window.dispatchEvent(new CustomEvent('db-sync-update'));
-      }
-    } else {
-      const items: T[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as T;
-        const custId = data.id;
-        const customerId = (data as any).customerId;
-        const email = (data as any).email;
-        const customerEmail = (data as any).customerEmail;
+      const isFake = 
+        (firestoreCollectionName === 'customers' || firestoreCollectionName === 'workers' || firestoreCollectionName === 'measurements' || firestoreCollectionName === 'orders') && (
+          ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(custId) ||
+          ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(customerId) ||
+          (typeof email === 'string' && (email.toLowerCase().includes('@example.com') || email.toLowerCase().includes('@tailorshop.com'))) ||
+          (typeof customerEmail === 'string' && (customerEmail.toLowerCase().includes('@example.com') || customerEmail.toLowerCase().includes('@tailorshop.com')))
+        );
 
-        const isFake = 
-          (collectionName === 'customers' || collectionName === 'workers' || collectionName === 'measurements' || collectionName === 'orders') && (
-            ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(custId) ||
-            ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(customerId) ||
-            (typeof email === 'string' && (email.toLowerCase().includes('@example.com') || email.toLowerCase().includes('@tailorshop.com'))) ||
-            (typeof customerEmail === 'string' && (customerEmail.toLowerCase().includes('@example.com') || customerEmail.toLowerCase().includes('@tailorshop.com')))
-          );
-
-        if (isFake) {
-          deleteDoc(doc(db, collectionName, docSnap.id)).catch((err) => {
-            handleFirestoreError(err, OperationType.DELETE, `${collectionName}/${docSnap.id}`);
-          });
+      if (isFake) {
+        deleteDoc(doc(db, firestoreCollectionName, docSnap.id)).catch((err) => {
+          handleFirestoreError(err, OperationType.DELETE, `${firestoreCollectionName}/${docSnap.id}`);
+        });
+      } else {
+        if (isRegisteredTailors) {
+          if ((data as any).isRegisteredTailor === true) {
+            items.push(data);
+          }
+        } else if (firestoreCollectionName === 'workers') {
+          if ((data as any).isRegisteredTailor !== true) {
+            items.push(data);
+          }
         } else {
           items.push(data);
         }
-      });
-
-      const prev = localStorage.getItem(localStorageKey);
-      const str = JSON.stringify(items);
-      if (prev !== str) {
-        localStorage.setItem(localStorageKey, str);
-        window.dispatchEvent(new CustomEvent('db-sync-update'));
       }
+    });
+
+    if (items.length === 0) {
+      console.log(`Seeding empty ${collectionName} in Firestore (mapped to ${firestoreCollectionName})...`);
+      const batch = writeBatch(db);
+      initialData.forEach((item) => {
+        const docRef = doc(db, firestoreCollectionName, item.id);
+        const seededItem = isRegisteredTailors ? { ...item, isRegisteredTailor: true, role: 'Tailor' } : item;
+        batch.set(docRef, seededItem);
+        items.push(seededItem as T);
+      });
+      batch.commit().catch((err) => {
+        handleFirestoreError(err, OperationType.WRITE, firestoreCollectionName);
+      });
+    }
+
+    const prev = localStorage.getItem(localStorageKey);
+    const str = JSON.stringify(items);
+    if (prev !== str) {
+      localStorage.setItem(localStorageKey, str);
+      window.dispatchEvent(new CustomEvent('db-sync-update'));
     }
   }, (err) => {
     try {
-      handleFirestoreError(err, OperationType.LIST, collectionName);
+      handleFirestoreError(err, OperationType.LIST, firestoreCollectionName);
     } catch (e) {
-      console.warn(`Firestore sync for ${collectionName} is currently offline or waiting for permissions. Sync will retry automatically.`);
+      console.warn(`Firestore sync for ${collectionName} (mapped to ${firestoreCollectionName}) is offline/waiting.`);
     }
   });
 };
@@ -95,6 +103,17 @@ if (typeof window !== 'undefined') {
   setupSync('orders', KEYS.ORDERS, INITIAL_ORDERS);
   setupSync('notifications', KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
   setupSync('activities', KEYS.ACTIVITIES, INITIAL_ACTIVITIES);
+  setupSync('registered_tailors', KEYS.REGISTERED_TAILORS, [
+    {
+      id: 'TAILOR-101',
+      name: 'Arthur S. Row',
+      email: 'owner@tailorshoperp.com',
+      phone: '+44 20 7123 4567',
+      location: 'Savile Row, London',
+      password: 'password123',
+      createdAt: new Date().toISOString()
+    }
+  ]);
 }
 
 // Helper to recursively strip any properties with 'undefined' status because Firestore rejects undefined
@@ -122,34 +141,59 @@ const syncListToFirestore = async <T extends { id: string }>(
   collectionName: string,
   items: T[]
 ) => {
+  const isRegisteredTailors = (collectionName === 'registered_tailors');
+  const firestoreCollectionName = isRegisteredTailors ? 'workers' : collectionName;
   const ids = new Set(items.map(item => item.id));
 
   // Write new or updated docs
   for (const item of items) {
     try {
-      const cleaned = cleanUndefined(item);
-      await setDoc(doc(db, collectionName, item.id), cleaned);
+      let cleaned = cleanUndefined(item);
+      if (isRegisteredTailors) {
+        cleaned = { ...cleaned, isRegisteredTailor: true, role: 'Tailor' };
+      }
+      await setDoc(doc(db, firestoreCollectionName, item.id), cleaned);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `${collectionName}/${item.id}`);
+      handleFirestoreError(err, OperationType.WRITE, `${firestoreCollectionName}/${item.id}`);
     }
   }
 
   // Query database in background to clean up deleted records (skip append-only logs)
   if (collectionName !== 'activities' && collectionName !== 'notifications') {
     try {
-      const colRef = collection(db, collectionName);
+      const colRef = collection(db, firestoreCollectionName);
       const snapshot = await getDocs(colRef);
       for (const docSnap of snapshot.docs) {
-        if (!ids.has(docSnap.id)) {
-          try {
-            await deleteDoc(docSnap.ref);
-          } catch (err) {
-            handleFirestoreError(err, OperationType.DELETE, `${collectionName}/${docSnap.id}`);
+        const data = docSnap.data();
+        
+        if (isRegisteredTailors) {
+          if (data.isRegisteredTailor === true && !ids.has(docSnap.id)) {
+            try {
+              await deleteDoc(docSnap.ref);
+            } catch (err) {
+              handleFirestoreError(err, OperationType.DELETE, `${firestoreCollectionName}/${docSnap.id}`);
+            }
+          }
+        } else if (firestoreCollectionName === 'workers') {
+          if (data.isRegisteredTailor !== true && !ids.has(docSnap.id)) {
+            try {
+              await deleteDoc(docSnap.ref);
+            } catch (err) {
+              handleFirestoreError(err, OperationType.DELETE, `${firestoreCollectionName}/${docSnap.id}`);
+            }
+          }
+        } else {
+          if (!ids.has(docSnap.id)) {
+            try {
+              await deleteDoc(docSnap.ref);
+            } catch (err) {
+              handleFirestoreError(err, OperationType.DELETE, `${firestoreCollectionName}/${docSnap.id}`);
+            }
           }
         }
       }
     } catch (err) {
-      handleFirestoreError(err, OperationType.LIST, collectionName);
+      handleFirestoreError(err, OperationType.LIST, firestoreCollectionName);
     }
   }
 };
@@ -162,6 +206,26 @@ export const getCustomers = (): Customer[] => {
 export const saveCustomers = (customers: Customer[]) => {
   localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(customers));
   syncListToFirestore('customers', customers);
+};
+
+export const getRegisteredTailors = (): any[] => {
+  const data = localStorage.getItem(KEYS.REGISTERED_TAILORS);
+  return data ? JSON.parse(data) : [
+    {
+      id: 'TAILOR-101',
+      name: 'Arthur S. Row',
+      email: 'owner@tailorshoperp.com',
+      phone: '+44 20 7123 4567',
+      location: 'Savile Row, London',
+      password: 'password123',
+      createdAt: new Date().toISOString()
+    }
+  ];
+};
+
+export const saveRegisteredTailors = (list: any[]) => {
+  localStorage.setItem(KEYS.REGISTERED_TAILORS, JSON.stringify(list));
+  syncListToFirestore('registered_tailors', list);
 };
 
 export const getWorkers = (): Worker[] => {
@@ -264,6 +328,27 @@ export const purgeAllDatabaseRecords = async () => {
 
   // Clear local storage keys
   Object.values(KEYS).forEach((k) => {
+    localStorage.removeItem(k);
+  });
+
+  // Also remove custom user/branding preferences so everything starts completely fresh
+  const extraKeys = [
+    'tailor_logged_in_user',
+    'tailorshop_name',
+    'logo_url',
+    'landing_title',
+    'landing_description',
+    'tailor_title',
+    'tailor_description',
+    'tailor_image',
+    'customer_title',
+    'customer_description',
+    'customer_image',
+    'custom_clothing_emojis',
+    'custom_clothing_prices',
+    'voucher_main_title'
+  ];
+  extraKeys.forEach((k) => {
     localStorage.removeItem(k);
   });
 

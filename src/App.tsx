@@ -56,6 +56,8 @@ import {
   triggerSystemNotification,
   getWorkers,
   saveWorkers,
+  getRegisteredTailors,
+  saveRegisteredTailors,
   purgeAllDatabaseRecords
 } from './utils/storage';
 import { Customer, MeasurementRecord, Order, OrderStatus, Worker } from './types';
@@ -269,31 +271,6 @@ const renderGenreIcon = (
   }
 };
 
-// Seeding registered tailors database helper
-const getRegisteredTailors = () => {
-  const data = localStorage.getItem('registered_tailors');
-  if (!data) {
-    const list = [
-      {
-        id: 'TAILOR-101',
-        name: 'Arthur S. Row',
-        email: 'owner@tailorshoperp.com',
-        phone: '+44 20 7123 4567',
-        location: 'Savile Row, London',
-        password: 'password123',
-        createdAt: new Date().toISOString()
-      }
-    ];
-    localStorage.setItem('registered_tailors', JSON.stringify(list));
-    return list;
-  }
-  return JSON.parse(data);
-};
-
-const saveRegisteredTailors = (list: any[]) => {
-  localStorage.setItem('registered_tailors', JSON.stringify(list));
-};
-
 // Clean raw measurement values to strip trailing double quotes or inches markings
 const cleanMeasurementValue = (v: any, unitSys?: 'Inches' | 'Centimeters'): string => {
   if (v === undefined || v === null) return '';
@@ -419,6 +396,32 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const sizeCardId = params.get('viewSizeCard');
     const billId = params.get('viewBill');
+    const resetDbNow = params.get('resetDb');
+    
+    if (resetDbNow === 'true') {
+      triggerToast("Resetting database, cleaning collections and purging accounts...", "info");
+      purgeAllDatabaseRecords().then(() => {
+        setCustomers([]);
+        setMeasurements([]);
+        setOrders([]);
+        setWorkers([]);
+        setRegisteredTailors([]);
+        setCurrentUser(null);
+        setTailorShopNameInput('TAILORSHOP ERP');
+        setTailorshopName('TAILORSHOP ERP');
+        setCustomLogoUrl('');
+        setSetupShopName('');
+        setAdminShopName('');
+        triggerToast("System successfully cleared! Pristine start activated.", "success");
+        setTimeout(() => {
+          // Remove query parameter and reload
+          window.location.href = window.location.pathname;
+        }, 1500);
+      }).catch((err) => {
+        triggerToast("Error resetting database records.", "error");
+      });
+    }
+
     if (sizeCardId) {
       setUrlViewSizeCard(sizeCardId);
     }
@@ -1173,6 +1176,10 @@ export default function App() {
     };
     setCurrentUser(updatedUser);
     localStorage.setItem('tailor_logged_in_user', JSON.stringify(updatedUser));
+    setTailorshopName(newShopName);
+    localStorage.setItem('tailorshop_name', newShopName);
+    setCustomLogoUrl(newLogoUrl);
+    localStorage.setItem('logo_url', newLogoUrl);
 
     const tailors = getRegisteredTailors();
     const updatedTailors = tailors.map((t: any) => {
@@ -1455,25 +1462,6 @@ export default function App() {
       setVoucherMainTitle(tailorshopName);
     }
   }, [tailorshopName]);
-
-  // Real-time synchronization of any typed shop name to active branding and printed bill
-  useEffect(() => {
-    if (tailorShopNameInput && tailorShopNameInput.trim()) {
-      setTailorshopName(tailorShopNameInput.trim());
-    }
-  }, [tailorShopNameInput]);
-
-  useEffect(() => {
-    if (setupShopName && setupShopName.trim()) {
-      setTailorshopName(setupShopName.trim());
-    }
-  }, [setupShopName]);
-
-  useEffect(() => {
-    if (adminShopName && adminShopName.trim()) {
-      setTailorshopName(adminShopName.trim());
-    }
-  }, [adminShopName]);
 
   // Sync real-time branding changes from Firestore (via the "branding" record inside the workers collection)
   useEffect(() => {
@@ -4752,11 +4740,6 @@ export default function App() {
                     }`}>
                       Sign In
                     </h2>
-                    <p className={`text-xs mt-1 font-semibold ${
-                      isDarkMode ? 'text-zinc-400' : 'text-zinc-505'
-                    }`}>
-                      Unified Sign-In for Master Admins, Tailor Shop Owners &amp; Customers
-                    </p>
                   </div>
 
                   {/* Form */}

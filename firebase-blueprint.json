@@ -99,6 +99,26 @@
         "userName": { "type": "string" }
       },
       "required": ["id", "action", "timestamp", "userName"]
+    },
+    "RegisteredTailor": {
+      "title": "RegisteredTailor",
+      "description": "Tailor shop workstations registered in the enterprise catalog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "location": { "type": "string" },
+        "password": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "hasRegisteredShop": { "type": "boolean" },
+        "shopName": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "coordinateLatitude": { "type": "string" },
+        "coordinateLongitude": { "type": "string" }
+      },
+      "required": ["id", "name"]
     }
   },
   "firestore": {
@@ -125,6 +145,10 @@
     "activities": {
       "schema": "RecentActivity",
       "description": "Audit logging for staff and admin operations"
+    },
+    "registered_tailors": {
+      "schema": "RegisteredTailor",
+      "description": "Directory of registered workstations and storefronts in the system"
     }
   }
 }
