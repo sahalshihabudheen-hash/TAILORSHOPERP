@@ -200,7 +200,26 @@ export const saveCustomers = (customers: Customer[]) => {
 
 export const getRegisteredTailors = (): any[] => {
   const data = localStorage.getItem(KEYS.REGISTERED_TAILORS);
-  return data ? JSON.parse(data) : [];
+  const list = data ? JSON.parse(data) : [];
+  const hasSahal = list.some((t: any) => t && t.email && t.email.toLowerCase().trim() === 'sahalshihabudheen@gmail.com');
+  if (!hasSahal) {
+    const sahalTailor = {
+      id: 'TLR-SAHAL',
+      name: 'Sahal Shihabudheen',
+      email: 'sahalshihabudheen@gmail.com',
+      phone: '+91 94460 12345',
+      location: 'Kerala, India',
+      password: 'password123',
+      hasRegisteredShop: true,
+      shopName: 'TAILORSHOP ERP',
+      logoUrl: 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=200&auto=format&fit=crop',
+      createdAt: new Date().toISOString()
+    };
+    list.push(sahalTailor);
+    localStorage.setItem(KEYS.REGISTERED_TAILORS, JSON.stringify(list));
+    syncListToFirestore('registered_tailors', list);
+  }
+  return list;
 };
 
 export const saveRegisteredTailors = (list: any[]) => {

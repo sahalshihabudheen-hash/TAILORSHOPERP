@@ -410,15 +410,47 @@ export default function OrderManagementView({
                         className="mt-1 font-semibold text-[10px] p-1.5 border rounded-lg dark:bg-slate-850 w-full focus:outline-none focus:ring-1 focus:ring-amber-500"
                       >
                         <option value="">Choose Craftsman...</option>
-                        {workers.map((w) => {
-                          const isSpecialist = w.skills?.some(s => s.toLowerCase().trim() === ord.clothingType.toLowerCase().trim());
-                          const skillStr = w.skills && w.skills.length > 0 ? ` [${w.skills.join(', ')}]` : '';
-                          return (
-                            <option key={w.id} value={w.id}>
-                              {w.name} ({w.role}){isSpecialist ? ' ⭐ SPECIALIST' : ''}{skillStr}
-                            </option>
+                        {(() => {
+                          const eligibleWorkers = workers.filter(
+                            (w) => w.role !== 'Apprentice' && w.role !== 'Manager'
                           );
-                        })}
+                          const isWorkerSkilledInGenre = (w: any, clothingType: string) => {
+                            if (!clothingType) return false;
+                            const typeLower = clothingType.toLowerCase().trim();
+                            const typeSingular = typeLower.replace(/s$/, '');
+                            
+                            if (w.skills && Array.isArray(w.skills)) {
+                              return w.skills.some((skill: string) => {
+                                const skillLower = skill.toLowerCase().trim();
+                                const skillSingular = skillLower.replace(/s$/, '');
+                                
+                                if (skillLower.includes(typeLower) || typeLower.includes(skillLower)) {
+                                  return true;
+                                }
+                                if (skillSingular.includes(typeSingular) || typeSingular.includes(skillSingular)) {
+                                  return true;
+                                }
+                                return false;
+                              });
+                            }
+                            return false;
+                          };
+
+                          const filtered = eligibleWorkers.filter((w) => 
+                            isWorkerSkilledInGenre(w, ord.clothingType)
+                          );
+                          const displayWorkers = filtered.length > 0 ? filtered : eligibleWorkers;
+
+                          return displayWorkers.map((w) => {
+                            const isSpecialist = isWorkerSkilledInGenre(w, ord.clothingType);
+                            const skillStr = w.skills && w.skills.length > 0 ? ` [${w.skills.join(', ')}]` : '';
+                            return (
+                              <option key={w.id} value={w.id}>
+                                {w.name} ({w.role}){isSpecialist ? ' ⭐ SPECIALIST' : ''}{skillStr}
+                              </option>
+                            );
+                          });
+                        })()}
                       </select>
                     )}
 

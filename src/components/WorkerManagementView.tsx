@@ -57,6 +57,9 @@ export default function WorkerManagementView({
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [workerToDelete, setWorkerToDelete] = useState<Worker | null>(null);
 
+  const [workerPage, setWorkerPage] = useState(1);
+  const workerPageSize = 10;
+
   // States for Editing Tailor details
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
   const [editName, setEditName] = useState('');
@@ -73,6 +76,11 @@ export default function WorkerManagementView({
   const [filterSearch, setFilterSearch] = useState('');
   const [filterRole, setFilterRole] = useState('All');
   const [filterGenre, setFilterGenre] = useState('All');
+
+  // Reset pagination on search/filters change
+  React.useEffect(() => {
+    setWorkerPage(1);
+  }, [filterSearch, filterRole, filterGenre]);
 
   // Admin shop configuration states for setup shop
   const [selectedSetupWorker, setSelectedSetupWorker] = useState<Worker | null>(null);
@@ -651,122 +659,172 @@ export default function WorkerManagementView({
           // Only show Owner in list if no roll filters or if the role filter matches Shop Owner (conceptually and visually clean)
           const showOwner = filterRole === 'All' && filterGenre === 'All';
           const listToRender = (ownerListItem && showOwner) ? [ownerListItem, ...filteredWorkers] : filteredWorkers;
+          const totalWorkersCount = listToRender.length;
+          const totalWorkerPages = Math.ceil(totalWorkersCount / workerPageSize) || 1;
+          const paginatedList = listToRender.slice((workerPage - 1) * workerPageSize, workerPage * workerPageSize);
 
-          return listToRender.map((worker) => {
-            const isOwner = 'isOwner' in worker && worker.isOwner;
-            const shopStatus = isOwner ? null : getShopRegistrationStatus(worker as any);
-            const displayAvatar = isOwner 
-              ? (worker.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120')
-              : ((shopStatus && shopStatus.status === 'Registered' && shopStatus.logoUrl) ? shopStatus.logoUrl : worker.avatar);
+          return (
+            <>
+              {paginatedList.length > 0 ? (
+                paginatedList.map((worker) => {
+                  const isOwner = 'isOwner' in worker && worker.isOwner;
+                  const shopStatus = isOwner ? null : getShopRegistrationStatus(worker as any);
+                  const displayAvatar = isOwner 
+                    ? (worker.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120')
+                    : ((shopStatus && shopStatus.status === 'Registered' && shopStatus.logoUrl) ? shopStatus.logoUrl : worker.avatar);
 
-            return (
-              <div
-                key={worker.id}
-                className={`p-4 sm:p-5 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between transition-all relative gap-4 ${
-                  isOwner
-                    ? (isDarkMode ? 'bg-gradient-to-r from-amber-950/20 via-slate-900/40 to-slate-900/30 border-amber-500/30 shadow-amber-950/15' : 'bg-gradient-to-r from-amber-50/50 via-white to-stone-50/60 border-amber-350 shadow-md shadow-amber-500/5')
-                    : (isDarkMode ? 'bg-slate-900/50 border-slate-800 text-white' : 'bg-white border-stone-200 shadow-sm')
-                }`}
-              >
-                {/* Profile Details (Left side) */}
-                <div className="flex items-center space-x-4">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-sm font-black tracking-wider shrink-0 select-none border-2 ${
-                    isOwner 
-                      ? 'bg-gradient-to-br from-amber-500 to-orange-600 text-white border-amber-300 dark:border-amber-500/30 shadow-md shadow-amber-500/10' 
-                      : (isDarkMode ? 'bg-slate-805 text-amber-500 border-slate-800' : 'bg-amber-50 text-amber-700 border-amber-100 shadow-3xs')
-                  }`}>
-                    {worker.name ? worker.name.trim().substring(0, 2).toUpperCase() : 'TA'}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm tracking-tight text-stone-900 dark:text-stone-100">{worker.name}</h3>
-                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                      {isOwner ? (
-                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-extrabold uppercase tracking-wider flex items-center gap-1 border border-amber-600/20">
-                          👑 Shop Owner &amp; Founder
-                        </span>
-                      ) : (
-                        <>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 font-bold uppercase tracking-wider border border-blue-500/10">
-                            Employee
-                          </span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-stone-100 dark:bg-slate-800 text-stone-500 dark:text-stone-300 font-bold uppercase tracking-wider">
-                            {worker.role}
-                          </span>
-                          {(worker as any).skills && (worker as any).skills.length > 0 && (
-                            <div className="flex flex-wrap gap-1 items-center">
-                              {(worker as any).skills.map((skill: string) => (
-                                <span key={skill} className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 font-semibold uppercase">
-                                  {skill}
+                  return (
+                    <div
+                      key={worker.id}
+                      className={`p-4 sm:p-5 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between transition-all relative gap-4 ${
+                        isOwner
+                          ? (isDarkMode ? 'bg-gradient-to-r from-amber-950/20 via-slate-900/40 to-slate-900/30 border-amber-500/30 shadow-amber-950/15' : 'bg-gradient-to-r from-amber-50/50 via-white to-stone-50/60 border-amber-350 shadow-md shadow-amber-500/5')
+                          : (isDarkMode ? 'bg-slate-900/50 border-slate-800 text-white' : 'bg-white border-stone-200 shadow-sm')
+                      }`}
+                    >
+                      {/* Profile Details (Left side) */}
+                      <div className="flex items-center space-x-4">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-sm font-black tracking-wider shrink-0 select-none border-2 ${
+                          isOwner 
+                            ? 'bg-gradient-to-br from-amber-500 to-orange-600 text-white border-amber-300 dark:border-amber-500/30 shadow-md shadow-amber-500/10' 
+                            : (isDarkMode ? 'bg-slate-805 text-amber-500 border-slate-800' : 'bg-amber-50 text-amber-700 border-amber-100 shadow-3xs')
+                        }`}>
+                          {worker.name ? worker.name.trim().substring(0, 2).toUpperCase() : 'TA'}
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-sm tracking-tight text-stone-900 dark:text-stone-100">{worker.name}</h3>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            {isOwner ? (
+                              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-extrabold uppercase tracking-wider flex items-center gap-1 border border-amber-600/20">
+                                👑 Shop Owner &amp; Founder
+                              </span>
+                            ) : (
+                              <>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 font-bold uppercase tracking-wider border border-blue-500/10">
+                                  Employee
                                 </span>
-                              ))}
-                            </div>
-                          )}
-                        </>
-                      )}
-                      
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-stone-100 dark:bg-slate-800 text-stone-500 dark:text-stone-300 font-bold uppercase tracking-wider">
+                                  {worker.role}
+                                </span>
+                                {(worker as any).skills && (worker as any).skills.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 items-center">
+                                    {(worker as any).skills.map((skill: string) => (
+                                      <span key={skill} className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 font-semibold uppercase">
+                                        {skill}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                            
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Contact Data (Middle side) */}
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 text-xs text-stone-500 dark:text-stone-400 md:ml-auto md:mr-12">
+                        <div className="flex items-center space-x-2">
+                          <Phone className="h-3.5 w-3.5 text-stone-400 shrink-0" />
+                          <span>{worker.phone}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Mail className="h-3.5 w-3.5 text-stone-400 shrink-0" />
+                          <span className="truncate max-w-[200px]">{worker.email}</span>
+                        </div>
+                        {worker.location && (
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                            <span>{worker.location}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons (Right side) */}
+                      <div className="flex items-center space-x-2 shrink-0 md:static relative self-end md:self-auto top-[-8px] md:top-auto">
+
+                        {!isOwner && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingWorker(worker as any);
+                              setEditName(worker.name);
+                              setEditPhone(worker.phone || '');
+                              setEditEmail(worker.email || '');
+                              setEditLocation(worker.location || '');
+                              setEditRole(worker.role || 'Tailor');
+                              setEditBaseSalary((worker as any).baseSalary || 2200);
+                              setEditPerOrderBonus((worker as any).perOrderBonus || 20);
+                              setEditSkills((worker as any).skills || []);
+                            }}
+                            className="px-3 py-1.5 border border-stone-300 hover:border-amber-600 hover:bg-amber-500 hover:text-white dark:border-slate-800 dark:text-stone-300 dark:hover:bg-amber-600 rounded-xl text-xs font-bold transition flex items-center space-x-1 cursor-pointer shrink-0 shadow-3xs"
+                            title="Edit tailor profile details"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            <span>Edit details</span>
+                          </button>
+                        )}
+
+                        {!isOwner && onDeleteWorker && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setWorkerToDelete(worker as any);
+                            }}
+                            title="Remove tailor profile"
+                            className="p-2 rounded-xl text-stone-400 hover:text-red-500 hover:bg-stone-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+                          >
+                            <Trash2 className="h-4.5 w-4.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  );
+                })
+              ) : (
+                <div className="text-center p-8 text-stone-400">
+                  No tailors found matching filters.
                 </div>
+              )}
 
-                {/* Contact Data (Middle side) */}
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 text-xs text-stone-500 dark:text-stone-400 md:ml-auto md:mr-12">
+              {totalWorkersCount > workerPageSize && (
+                <div className="flex flex-col items-center justify-center gap-3 pt-4 mt-2 border-t border-stone-100 dark:border-slate-800 font-sans text-xs">
                   <div className="flex items-center space-x-2">
-                    <Phone className="h-3.5 w-3.5 text-stone-400 shrink-0" />
-                    <span>{worker.phone}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Mail className="h-3.5 w-3.5 text-stone-400 shrink-0" />
-                    <span className="truncate max-w-[200px]">{worker.email}</span>
-                  </div>
-                  {worker.location && (
-                    <div className="flex items-center space-x-2">
-                      <MapPin className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                      <span>{worker.location}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Action Buttons (Right side) */}
-                <div className="flex items-center space-x-2 shrink-0 md:static relative self-end md:self-auto top-[-8px] md:top-auto">
-
-                  {!isOwner && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setEditingWorker(worker as any);
-                        setEditName(worker.name);
-                        setEditPhone(worker.phone || '');
-                        setEditEmail(worker.email || '');
-                        setEditLocation(worker.location || '');
-                        setEditRole(worker.role || 'Tailor');
-                        setEditBaseSalary((worker as any).baseSalary || 2200);
-                        setEditPerOrderBonus((worker as any).perOrderBonus || 20);
-                        setEditSkills((worker as any).skills || []);
-                      }}
-                      className="px-3 py-1.5 border border-stone-300 hover:border-amber-600 hover:bg-amber-500 hover:text-white dark:border-slate-800 dark:text-stone-300 dark:hover:bg-amber-600 rounded-xl text-xs font-bold transition flex items-center space-x-1 cursor-pointer shrink-0 shadow-3xs"
-                      title="Edit tailor profile details"
+                      disabled={workerPage === 1}
+                      onClick={() => setWorkerPage(prev => Math.max(prev - 1, 1))}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                        workerPage === 1
+                          ? 'bg-stone-50 text-stone-300 border-stone-200 dark:bg-slate-900 dark:text-slate-700 dark:border-slate-800 cursor-not-allowed'
+                          : 'bg-white text-stone-700 hover:bg-stone-50 border-stone-200 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-850 dark:border-slate-800 cursor-pointer'
+                      }`}
                     >
-                      <Pencil className="h-3.5 w-3.5" />
-                      <span>Edit details</span>
+                      Previous
                     </button>
-                  )}
-
-                  {!isOwner && onDeleteWorker && (
+                    <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">
+                      Page {workerPage} of {totalWorkerPages}
+                    </span>
                     <button
                       type="button"
-                      onClick={() => {
-                        setWorkerToDelete(worker as any);
-                      }}
-                      title="Remove tailor profile"
-                      className="p-2 rounded-xl text-stone-400 hover:text-red-500 hover:bg-stone-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+                      disabled={workerPage === totalWorkerPages}
+                      onClick={() => setWorkerPage(prev => Math.min(prev + 1, totalWorkerPages))}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                        workerPage === totalWorkerPages
+                          ? 'bg-stone-50 text-stone-300 border-stone-200 dark:bg-slate-900 dark:text-slate-700 dark:border-slate-800 cursor-not-allowed'
+                          : 'bg-white text-stone-700 hover:bg-stone-50 border-stone-200 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-850 dark:border-slate-800 cursor-pointer'
+                      }`}
                     >
-                      <Trash2 className="h-4.5 w-4.5" />
+                      Next
                     </button>
-                  )}
+                  </div>
+                  <div className="text-stone-400">
+                    Showing <span className="font-bold text-stone-600 dark:text-stone-300">{(workerPage - 1) * workerPageSize + 1}</span> to <span className="font-bold text-stone-600 dark:text-stone-300">{Math.min(workerPage * workerPageSize, totalWorkersCount)}</span> of <span className="font-bold text-stone-600 dark:text-stone-300">{totalWorkersCount}</span> employees
+                  </div>
                 </div>
-              </div>
-            );
-          });
+              )}
+            </>
+          );
         })()}
       </div>
 

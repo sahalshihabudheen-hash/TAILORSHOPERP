@@ -64,6 +64,7 @@ import { Customer, MeasurementRecord, Order, OrderStatus, Worker } from './types
 import WorkerManagementView from './components/WorkerManagementView';
 import { fetchIPLocation } from './utils/geolocation';
 import CustomerManagementView from './components/CustomerManagementView';
+import { INITIAL_CUSTOMERS, INITIAL_WORKERS, INITIAL_MEASUREMENTS, INITIAL_ORDERS } from './data/initialData';
 
 // Custom elegant vector icon components for clothing categories
 export const PantIcon = ({ className = "h-3.5 w-3.5" }: { className?: string }) => (
@@ -400,6 +401,7 @@ export default function App() {
     
     if (resetDbNow === 'true') {
       triggerToast("Resetting database, cleaning collections and purging accounts...", "info");
+      localStorage.removeItem('sahal_data_seeded');
       purgeAllDatabaseRecords().then(() => {
         setCustomers([]);
         setMeasurements([]);
@@ -1367,6 +1369,24 @@ export default function App() {
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('All');
   const [orderPaymentFilter, setOrderPaymentFilter] = useState('All');
+  const [orderGenreFilter, setOrderGenreFilter] = useState('All');
+
+  const [orderPage, setOrderPage] = useState(1);
+  const orderPageSize = 10;
+
+  // Reset page when filter or search changes
+  useEffect(() => {
+    setOrderPage(1);
+  }, [orderSearch, orderStatusFilter, orderPaymentFilter, orderGenreFilter]);
+
+  const [tailorPendingPage, setTailorPendingPage] = useState(1);
+  const [tailorPendingGenreFilter, setTailorPendingGenreFilter] = useState('All');
+  const tailorPendingPageSize = 10;
+
+  // Reset page when tailor pending genre filter changes
+  useEffect(() => {
+    setTailorPendingPage(1);
+  }, [tailorPendingGenreFilter]);
 
   // Focus reference for smooth workshop transitions
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -1431,6 +1451,30 @@ export default function App() {
       }
     }
   }, [currentUser, ownerTab]);
+
+  // Automatically seed Sahal's 50 customers and 10 workers on first log in or database clear
+  useEffect(() => {
+    if (currentUser && currentUser.email && currentUser.email.toLowerCase().trim() === 'sahalshihabudheen@gmail.com') {
+      const isSeeded = localStorage.getItem('sahal_data_seeded');
+      if (isSeeded !== 'true') {
+        // Seed Sahal's lists
+        setCustomers(INITIAL_CUSTOMERS);
+        saveCustomers(INITIAL_CUSTOMERS);
+
+        setWorkers(INITIAL_WORKERS);
+        saveWorkers(INITIAL_WORKERS);
+
+        setMeasurements(INITIAL_MEASUREMENTS);
+        saveMeasurements(INITIAL_MEASUREMENTS);
+
+        setOrders(INITIAL_ORDERS);
+        saveOrders(INITIAL_ORDERS);
+
+        localStorage.setItem('sahal_data_seeded', 'true');
+        triggerToast("Loaded 50 customers and 10 expert workers for Sahal's Bespoke Atelier!", "success");
+      }
+    }
+  }, [currentUser]);
 
   const getShopBrandingKey = () => {
     const shopInfo = getCurrentUserShopInfo();
@@ -1898,25 +1942,6 @@ export default function App() {
       }
       return false;
     };
-
-    // 1. Check Master Admin/Owner Bypass
-    if (emailClean === 'owner@gmail.com' && passwordClean === 'TAILORSHOP_ERPOwner2026!') {
-      const user = {
-        id: 'TAILOR-OWNER-MASTER',
-        name: 'TAILORSHOP ERP Master Admin',
-        email: 'owner@gmail.com',
-        phone: '+91 9876543210',
-        location: 'HQ Central Suite',
-        role: 'Owner' as const
-      };
-      setCurrentUser(user);
-      if (rememberMe) {
-        localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
-      }
-      addActivity('Sign In', 'TAILORSHOP ERP Master logged in via secure bypass credentials', 'Owner', user.name);
-      triggerToast(`Master Executive Access Granted. Welcome, Admin Owner!`, 'success');
-      return;
-    }
 
     // 2. Check Tailor List from registered_tailors and workers (direct staff tailors) lists
     const registeredTailorsList = getRegisteredTailors();
@@ -7930,24 +7955,51 @@ export default function App() {
           <section className={`p-6 rounded-2xl border transition-all fade-in font-sans ${
             isDarkMode ? 'bg-slate-900/50 border-slate-900 text-white' : 'bg-white border-stone-200 shadow-sm text-stone-900'
           }`}>
-            <div className="border-b border-stone-200 dark:border-slate-800 pb-4 mb-6">
-              <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                <span className="p-2 bg-amber-500/10 text-amber-600 rounded-lg"><Briefcase className="h-4.5 w-4.5" /></span>
-                <span>My Pending Bespoke Commissions</span>
-              </h2>
-              <p className="text-xs text-stone-400 mt-1">
-                Below are the commissions assigned to you by the studio shop owner. Review the client body measurements, fabric instructions, and log your progress.
-              </p>
+            <div className="border-b border-stone-200 dark:border-slate-800 pb-4 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                  <span className="p-2 bg-amber-500/10 text-amber-600 rounded-lg"><Briefcase className="h-4.5 w-4.5" /></span>
+                  <span>My Pending Bespoke Commissions</span>
+                </h2>
+                <p className="text-xs text-stone-400 mt-1">
+                  Below are the commissions assigned to you by the studio shop owner. Review the client body measurements, fabric instructions, and log your progress.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-stone-500 font-bold font-sans">Genre:</span>
+                <select
+                  value={tailorPendingGenreFilter}
+                  onChange={(e) => setTailorPendingGenreFilter(e.target.value)}
+                  className={`p-2 py-1.5 px-3 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer font-sans ${
+                    isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
+                  }`}
+                >
+                  <option value="All">All Genres</option>
+                  {clothingCategories.map((genre) => (
+                    <option key={genre} value={genre}>
+                      {genre}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="space-y-6">
               {(() => {
-                // Filter orders assigned directly to this worker
-                const workerOrders = orders.filter(
+                // Filter orders assigned directly to this worker and matching genre filter
+                const totalWorkerOrders = orders.filter(
                   (o) => o.assignedWorkerId === currentUser?.id
                 );
+                const workerOrders = totalWorkerOrders.filter((o) =>
+                  tailorPendingGenreFilter === 'All' || o.clothingType.toLowerCase().trim() === tailorPendingGenreFilter.toLowerCase().trim()
+                );
+                const paginatedWorkerOrders = workerOrders.slice(
+                  (tailorPendingPage - 1) * tailorPendingPageSize,
+                  tailorPendingPage * tailorPendingPageSize
+                );
+                const totalPendingPages = Math.ceil(workerOrders.length / tailorPendingPageSize) || 1;
 
-                if (workerOrders.length === 0) {
+                if (totalWorkerOrders.length === 0) {
                   return (
                      <div className="p-12 text-center border border-dashed rounded-xl border-stone-200 dark:border-slate-800">
                        <p className="text-stone-400 text-sm font-serif italic mb-2">No pending works currently assigned.</p>
@@ -7956,9 +8008,19 @@ export default function App() {
                   );
                 }
 
+                if (workerOrders.length === 0) {
+                  return (
+                     <div className="p-12 text-center border border-dashed rounded-xl border-stone-200 dark:border-slate-800">
+                       <p className="text-stone-400 text-sm font-serif italic mb-2">No pending commissions found.</p>
+                       <p className="text-xs text-stone-500">Try changing the genre filter to view other assigned jobs.</p>
+                     </div>
+                  );
+                }
+
                 return (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {workerOrders.map((order) => {
+                  <>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {paginatedWorkerOrders.map((order) => {
                       const customer = customers.find((c) => c.id === order.customerId);
                       // Look up the measurements for this client and this garment type
                       const matchingMeasurement = measurements.find(
@@ -8233,7 +8295,45 @@ export default function App() {
                         </div>
                       );
                     })}
-                  </div>
+                    </div>
+
+                    {workerOrders.length > tailorPendingPageSize && (
+                      <div className="flex flex-col items-center justify-center gap-3 pt-4 mt-4 border-t border-stone-100 dark:border-slate-800 font-sans text-xs">
+                        <div className="flex items-center space-x-2 font-sans">
+                          <button
+                            type="button"
+                            disabled={tailorPendingPage === 1}
+                            onClick={() => setTailorPendingPage(prev => Math.max(prev - 1, 1))}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                              tailorPendingPage === 1
+                                ? 'bg-stone-50 text-stone-300 border-stone-200 dark:bg-slate-900 dark:text-slate-700 dark:border-slate-800 cursor-not-allowed'
+                                : 'bg-white text-stone-700 hover:bg-stone-50 border-stone-200 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-850 dark:border-slate-800 cursor-pointer'
+                            }`}
+                          >
+                            Previous
+                          </button>
+                          <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">
+                            Page {tailorPendingPage} of {totalPendingPages}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={tailorPendingPage === totalPendingPages}
+                            onClick={() => setTailorPendingPage(prev => Math.min(prev + 1, totalPendingPages))}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                              tailorPendingPage === totalPendingPages
+                                ? 'bg-stone-50 text-stone-300 border-stone-200 dark:bg-slate-900 dark:text-slate-700 dark:border-slate-800 cursor-not-allowed'
+                                : 'bg-white text-stone-700 hover:bg-stone-50 border-stone-200 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-850 dark:border-slate-800 cursor-pointer'
+                            }`}
+                          >
+                            Next
+                          </button>
+                        </div>
+                        <div className="text-stone-400 font-sans text-center">
+                          Showing <span className="font-bold text-stone-600 dark:text-stone-300">{(tailorPendingPage - 1) * tailorPendingPageSize + 1}</span> to <span className="font-bold text-stone-600 dark:text-stone-300">{Math.min(tailorPendingPage * tailorPendingPageSize, workerOrders.length)}</span> of <span className="font-bold text-stone-600 dark:text-stone-300">{workerOrders.length}</span> commissions
+                        </div>
+                      </div>
+                    )}
+                  </>
                 );
               })()}
             </div>
@@ -8970,6 +9070,21 @@ export default function App() {
                   <option value="Partially Paid">Partially Paid</option>
                   <option value="Fully Paid">Fully Paid</option>
                 </select>
+
+                <select
+                  value={orderGenreFilter}
+                  onChange={(e) => setOrderGenreFilter(e.target.value)}
+                  className={`p-2 py-1.5 px-3 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer ${
+                    isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
+                  }`}
+                >
+                  <option value="All">All Genres</option>
+                  {clothingCategories.map((genre) => (
+                    <option key={genre} value={genre}>
+                      {genre}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -8985,16 +9100,29 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100 dark:divide-slate-850">
-                  {visibleOrders
-                    .filter((order) => {
+                  {(() => {
+                    const filtered = visibleOrders.filter((order) => {
                       const customer = customers.find((c) => c.id === order.customerId);
                       const searchStr = `${order.id} ${order.clothingType} ${customer?.name || ''} ${customer?.phone || ''}`.toLowerCase();
                       const matchesSearch = searchStr.includes(orderSearch.toLowerCase());
                       const matchesStatus = orderStatusFilter === 'All' || order.status === orderStatusFilter;
                       const matchesPayment = orderPaymentFilter === 'All' || order.paymentStatus === orderPaymentFilter;
-                      return matchesSearch && matchesStatus && matchesPayment;
-                    })
-                    .map((order) => {
+                      const matchesGenre = orderGenreFilter === 'All' || order.clothingType.toLowerCase().trim() === orderGenreFilter.toLowerCase().trim();
+                      return matchesSearch && matchesStatus && matchesPayment && matchesGenre;
+                    });
+                    const paginated = filtered.slice((orderPage - 1) * orderPageSize, orderPage * orderPageSize);
+
+                    if (filtered.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={5} className="py-10 text-center text-stone-400 font-serif italic">
+                            Zero orders booked in TAILORSHOP ERP system matching criteria. Set up client coordinates to log customized orders.
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return paginated.map((order) => {
                       const customer = customers.find((c) => c.id === order.customerId);
                       const matchingRecord = measurements.find(
                         (m) => m.customerId === order.customerId && m.clothingType.toLowerCase() === order.clothingType.toLowerCase()
@@ -9138,13 +9266,43 @@ export default function App() {
                                 >
                                   <option value="">Choose Craftsman...</option>
                                   {(() => {
-                                    const filtered = workers.filter((w) => 
-                                      w.skills?.some(s => s.toLowerCase().trim() === order.clothingType.toLowerCase().trim())
+                                    // 1. Exclude Apprentice and Manager entirely
+                                    const eligibleWorkers = workers.filter(
+                                      (w) => w.role !== 'Apprentice' && w.role !== 'Manager'
                                     );
-                                    const displayWorkers = filtered.length > 0 ? filtered : workers;
+                                    
+                                    // 2. Filter for those skilled in this specific genre
+                                    const isWorkerSkilledInGenre = (w: any, clothingType: string) => {
+                                      if (!clothingType) return false;
+                                      const typeLower = clothingType.toLowerCase().trim();
+                                      const typeSingular = typeLower.replace(/s$/, '');
+                                      
+                                      if (w.skills && Array.isArray(w.skills)) {
+                                        return w.skills.some((skill: string) => {
+                                          const skillLower = skill.toLowerCase().trim();
+                                          const skillSingular = skillLower.replace(/s$/, '');
+                                          
+                                          if (skillLower.includes(typeLower) || typeLower.includes(skillLower)) {
+                                            return true;
+                                          }
+                                          if (skillSingular.includes(typeSingular) || typeSingular.includes(skillSingular)) {
+                                            return true;
+                                          }
+                                          return false;
+                                        });
+                                      }
+                                      return false;
+                                    };
+
+                                    const filtered = eligibleWorkers.filter((w) => 
+                                      isWorkerSkilledInGenre(w, order.clothingType)
+                                    );
+                                    
+                                    // Only show skilled workers if we found any; otherwise fallback to other eligible workers
+                                    const displayWorkers = filtered.length > 0 ? filtered : eligibleWorkers;
+                                    
                                     return displayWorkers.map((w) => {
-                                      const isSpecialist = w.skills?.some(s => s.toLowerCase().trim() === order.clothingType.toLowerCase().trim());
-                                      const skillStr = w.skills && w.skills.length > 0 ? ` [${w.skills.join(', ')}]` : '';
+                                      const isSpecialist = isWorkerSkilledInGenre(w, order.clothingType);
                                       return (
                                         <option key={w.id} value={w.id}>
                                           {w.name} ({w.role}){isSpecialist ? ' ⭐' : ''}
@@ -9218,18 +9376,63 @@ export default function App() {
                           </td>
                         </tr>
                       );
-                    })}
-
-                  {visibleOrders.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="py-10 text-center text-stone-400 font-serif italic">
-                        Zero orders booked in TAILORSHOP ERP system yet. Set up client coordinates to log customized orders.
-                      </td>
-                    </tr>
-                  )}
+                    });
+                  })()}
                 </tbody>
               </table>
             </div>
+
+            {(() => {
+              const filteredCount = visibleOrders.filter((order) => {
+                const customer = customers.find((c) => c.id === order.customerId);
+                const searchStr = `${order.id} ${order.clothingType} ${customer?.name || ''} ${customer?.phone || ''}`.toLowerCase();
+                const matchesSearch = searchStr.includes(orderSearch.toLowerCase());
+                const matchesStatus = orderStatusFilter === 'All' || order.status === orderStatusFilter;
+                const matchesPayment = orderPaymentFilter === 'All' || order.paymentStatus === orderPaymentFilter;
+                const matchesGenre = orderGenreFilter === 'All' || order.clothingType.toLowerCase().trim() === orderGenreFilter.toLowerCase().trim();
+                return matchesSearch && matchesStatus && matchesPayment && matchesGenre;
+              }).length;
+              const totalOrderPages = Math.ceil(filteredCount / orderPageSize) || 1;
+
+              if (filteredCount <= orderPageSize) return null;
+
+              return (
+                <div className="flex flex-col items-center justify-center gap-3 pt-4 mt-4 border-t border-stone-100 dark:border-slate-800 font-sans text-xs">
+                  <div className="flex items-center space-x-2 font-sans">
+                    <button
+                      type="button"
+                      disabled={orderPage === 1}
+                      onClick={() => setOrderPage(prev => Math.max(prev - 1, 1))}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                        orderPage === 1
+                          ? 'bg-stone-50 text-stone-300 border-stone-200 dark:bg-slate-900 dark:text-slate-700 dark:border-slate-800 cursor-not-allowed'
+                          : 'bg-white text-stone-700 hover:bg-stone-50 border-stone-200 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-850 dark:border-slate-800 cursor-pointer'
+                      }`}
+                    >
+                      Previous
+                    </button>
+                    <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">
+                      Page {orderPage} of {totalOrderPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={orderPage === totalOrderPages}
+                      onClick={() => setOrderPage(prev => Math.min(prev + 1, totalOrderPages))}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                        orderPage === totalOrderPages
+                          ? 'bg-stone-50 text-stone-300 border-stone-200 dark:bg-slate-900 dark:text-slate-700 dark:border-slate-800 cursor-not-allowed'
+                          : 'bg-white text-stone-700 hover:bg-stone-50 border-stone-200 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-850 dark:border-slate-800 cursor-pointer'
+                      }`}
+                    >
+                      Next
+                    </button>
+                  </div>
+                  <div className="text-stone-400 font-sans text-center">
+                    Showing <span className="font-bold text-stone-600 dark:text-stone-300">{(orderPage - 1) * orderPageSize + 1}</span> to <span className="font-bold text-stone-600 dark:text-stone-300">{Math.min(orderPage * orderPageSize, filteredCount)}</span> of <span className="font-bold text-stone-600 dark:text-stone-300">{filteredCount}</span> orders
+                  </div>
+                </div>
+              );
+            })()}
           </section>
         ) : tailorPage === 'tailors' ? (
           /* Tailors List/Registry Page Section */
