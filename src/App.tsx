@@ -41,7 +41,8 @@ import {
   RotateCcw,
   Download,
   QrCode,
-  Smartphone
+  Smartphone,
+  Database
 } from 'lucide-react';
 import {
   getCustomers,
@@ -65,6 +66,7 @@ import WorkerManagementView from './components/WorkerManagementView';
 import { fetchIPLocation } from './utils/geolocation';
 import CustomerManagementView from './components/CustomerManagementView';
 import { INITIAL_CUSTOMERS, INITIAL_WORKERS, INITIAL_MEASUREMENTS, INITIAL_ORDERS } from './data/initialData';
+import PaginationByNumber from './components/PaginationByNumber';
 
 // Custom elegant vector icon components for clothing categories
 export const PantIcon = ({ className = "h-3.5 w-3.5" }: { className?: string }) => (
@@ -1083,7 +1085,7 @@ export default function App() {
 
   const [tailorShopNameInput, setTailorShopNameInput] = useState('');
   const [tailorLogoUrlInput, setTailorLogoUrlInput] = useState('');
-  const [selectedSettingsSubTab, setSelectedSettingsSubTab] = useState<'general' | 'shop_profile' | 'add_worker'>('general');
+  const [selectedSettingsSubTab, setSelectedSettingsSubTab] = useState<'general' | 'shop_profile' | 'add_worker' | 'database_admin'>('general');
   const [tailorOwnerNameInput, setTailorOwnerNameInput] = useState('');
   const [tailorPhoneInput, setTailorPhoneInput] = useState('');
   const [tailorCountryInput, setTailorCountryInput] = useState('India');
@@ -1372,21 +1374,21 @@ export default function App() {
   const [orderGenreFilter, setOrderGenreFilter] = useState('All');
 
   const [orderPage, setOrderPage] = useState(1);
-  const orderPageSize = 10;
+  const [orderPageSize, setOrderPageSize] = useState(10);
 
   // Reset page when filter or search changes
   useEffect(() => {
     setOrderPage(1);
-  }, [orderSearch, orderStatusFilter, orderPaymentFilter, orderGenreFilter]);
+  }, [orderSearch, orderStatusFilter, orderPaymentFilter, orderGenreFilter, orderPageSize]);
 
   const [tailorPendingPage, setTailorPendingPage] = useState(1);
   const [tailorPendingGenreFilter, setTailorPendingGenreFilter] = useState('All');
-  const tailorPendingPageSize = 10;
+  const [tailorPendingPageSize, setTailorPendingPageSize] = useState(10);
 
   // Reset page when tailor pending genre filter changes
   useEffect(() => {
     setTailorPendingPage(1);
-  }, [tailorPendingGenreFilter]);
+  }, [tailorPendingGenreFilter, tailorPendingPageSize]);
 
   // Focus reference for smooth workshop transitions
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -1452,11 +1454,11 @@ export default function App() {
     }
   }, [currentUser, ownerTab]);
 
-  // Automatically seed Sahal's 50 customers and 10 workers on first log in or database clear
+  // Automatically seed Sahal's 400 customers and 400 orders on log in if they are not yet populated
   useEffect(() => {
     if (currentUser && currentUser.email && currentUser.email.toLowerCase().trim() === 'sahalshihabudheen@gmail.com') {
-      const isSeeded = localStorage.getItem('sahal_data_seeded');
-      if (isSeeded !== 'true') {
+      const isSeeded400 = localStorage.getItem('sahal_data_seeded_400');
+      if (isSeeded400 !== 'true' || orders.length < 350) {
         // Seed Sahal's lists
         setCustomers(INITIAL_CUSTOMERS);
         saveCustomers(INITIAL_CUSTOMERS);
@@ -1470,11 +1472,12 @@ export default function App() {
         setOrders(INITIAL_ORDERS);
         saveOrders(INITIAL_ORDERS);
 
+        localStorage.setItem('sahal_data_seeded_400', 'true');
         localStorage.setItem('sahal_data_seeded', 'true');
-        triggerToast("Loaded 50 customers and 10 expert workers for Sahal's Bespoke Atelier!", "success");
+        triggerToast("Loaded 400 customers and 400 orders for Sahal's Bespoke Atelier!", "success");
       }
     }
-  }, [currentUser]);
+  }, [currentUser, orders.length]);
 
   const getShopBrandingKey = () => {
     const shopInfo = getCurrentUserShopInfo();
@@ -7982,6 +7985,25 @@ export default function App() {
                   ))}
                 </select>
               </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-stone-500 font-bold font-sans">Show:</span>
+                <select
+                  value={tailorPendingPageSize}
+                  onChange={(e) => {
+                    setTailorPendingPageSize(Number(e.target.value));
+                    setTailorPendingPage(1);
+                  }}
+                  className={`p-2 py-1.5 px-3 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer font-sans font-bold ${
+                    isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
+                  }`}
+                >
+                  <option value={5}>5 Per Page</option>
+                  <option value={10}>10 Per Page</option>
+                  <option value={20}>20 Per Page</option>
+                  <option value={55}>55 Per Page</option>
+                </select>
+              </div>
             </div>
 
             <div className="space-y-6">
@@ -8299,35 +8321,12 @@ export default function App() {
 
                     {workerOrders.length > tailorPendingPageSize && (
                       <div className="flex flex-col items-center justify-center gap-3 pt-4 mt-4 border-t border-stone-100 dark:border-slate-800 font-sans text-xs">
-                        <div className="flex items-center space-x-2 font-sans">
-                          <button
-                            type="button"
-                            disabled={tailorPendingPage === 1}
-                            onClick={() => setTailorPendingPage(prev => Math.max(prev - 1, 1))}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                              tailorPendingPage === 1
-                                ? 'bg-stone-50 text-stone-300 border-stone-200 dark:bg-slate-900 dark:text-slate-700 dark:border-slate-800 cursor-not-allowed'
-                                : 'bg-white text-stone-700 hover:bg-stone-50 border-stone-200 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-850 dark:border-slate-800 cursor-pointer'
-                            }`}
-                          >
-                            Previous
-                          </button>
-                          <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">
-                            Page {tailorPendingPage} of {totalPendingPages}
-                          </span>
-                          <button
-                            type="button"
-                            disabled={tailorPendingPage === totalPendingPages}
-                            onClick={() => setTailorPendingPage(prev => Math.min(prev + 1, totalPendingPages))}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                              tailorPendingPage === totalPendingPages
-                                ? 'bg-stone-50 text-stone-300 border-stone-200 dark:bg-slate-900 dark:text-slate-700 dark:border-slate-800 cursor-not-allowed'
-                                : 'bg-white text-stone-700 hover:bg-stone-50 border-stone-200 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-850 dark:border-slate-800 cursor-pointer'
-                            }`}
-                          >
-                            Next
-                          </button>
-                        </div>
+                        <PaginationByNumber
+                          currentPage={tailorPendingPage}
+                          totalPages={totalPendingPages}
+                          onPageChange={(p) => setTailorPendingPage(p)}
+                          isDarkMode={isDarkMode}
+                        />
                         <div className="text-stone-400 font-sans text-center">
                           Showing <span className="font-bold text-stone-600 dark:text-stone-300">{(tailorPendingPage - 1) * tailorPendingPageSize + 1}</span> to <span className="font-bold text-stone-600 dark:text-stone-300">{Math.min(tailorPendingPage * tailorPendingPageSize, workerOrders.length)}</span> of <span className="font-bold text-stone-600 dark:text-stone-300">{workerOrders.length}</span> commissions
                         </div>
@@ -9006,7 +9005,7 @@ export default function App() {
           <section className={`p-6 rounded-2xl border transition-all ${
             isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'
           }`}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6 font-sans">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 font-sans">
               <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-stone-50 border-stone-150'}`}>
                 <span className="text-[10px] text-stone-450 dark:text-stone-400 font-bold uppercase tracking-wider block">Total Booked Jobs</span>
                 <span className="text-2xl font-sans font-black text-stone-900 dark:text-white mt-1 block">{visibleOrders.length}</span>
@@ -9014,10 +9013,6 @@ export default function App() {
               <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-amber-500/10 border-amber-500/20'}`}>
                 <span className="text-[10px] text-amber-700 dark:text-amber-400 font-bold uppercase tracking-wider block">Active Production</span>
                 <span className="text-2xl font-sans font-black text-amber-600 dark:text-amber-500 mt-1 block">{visibleOrders.filter(o => o.status !== 'Delivered').length} active</span>
-              </div>
-              <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
-                <span className="text-[10px] text-emerald-700 dark:text-emerald-500 font-bold uppercase tracking-wider block">Value Collected</span>
-                <span className="text-2xl font-sans font-black text-emerald-600 dark:text-emerald-500 mt-1 block">₹{visibleOrders.reduce((sum, o) => sum + o.advancePayment, 0).toLocaleString()}</span>
               </div>
             </div>
 
@@ -9085,6 +9080,28 @@ export default function App() {
                     </option>
                   ))}
                 </select>
+
+                <div className="flex items-center space-x-1">
+                  <span className="text-[10px] text-stone-400 font-bold uppercase tracking-wider hidden sm:inline">Show:</span>
+                  <select
+                    value={orderPageSize}
+                    onChange={(e) => {
+                      setOrderPageSize(Number(e.target.value));
+                      setOrderPage(1);
+                    }}
+                    className={`p-2 py-1.5 px-3 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer font-bold ${
+                      isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
+                    }`}
+                  >
+                    <option value={5}>5 Per Page</option>
+                    <option value={10}>10 Per Page</option>
+                    <option value={20}>20 Per Page</option>
+                    <option value={50}>50 Per Page</option>
+                    <option value={100}>100 Per Page</option>
+                    <option value={250}>250 Per Page</option>
+                    <option value={400}>400 Per Page</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -9163,43 +9180,51 @@ export default function App() {
                           </td>
 
                           <td className="py-4 px-4 max-w-sm">
-                            {matchingRecord ? (
-                              <div className="space-y-1.5">
-                                {order.notes?.instructions && (
-                                  <div className="text-[11px] leading-tight text-stone-700 dark:text-stone-200 font-medium">
-                                    <span className="font-semibold text-[8px] text-stone-500 dark:text-stone-300 uppercase tracking-wider block mb-0.5">Design & Cut Spec</span>
-                                    <span className="text-stone-900 dark:text-white font-bold line-clamp-1">{order.notes.instructions}</span>
-                                  </div>
-                                )}
-                                <div className="pt-1">
+                            <div className="space-y-2">
+                              {/* Always show instructions if they exist */}
+                              {order.notes?.instructions ? (
+                                <div className="text-[11px] leading-tight text-stone-700 dark:text-stone-200 font-medium">
+                                  <span className="font-semibold text-[8px] text-stone-500 dark:text-stone-300 uppercase tracking-wider block mb-0.5">Design & Cut Spec</span>
+                                  <span className="text-stone-900 dark:text-white font-bold block line-clamp-2">{order.notes.instructions}</span>
+                                </div>
+                              ) : (
+                                <div className="text-[11px] leading-tight text-stone-400 dark:text-stone-500 italic">
+                                  <span className="font-semibold text-[8px] text-stone-400 dark:text-stone-550 uppercase tracking-wider block mb-0.5">Design & Cut Spec</span>
+                                  Standard luxury atelier cut guidelines.
+                                </div>
+                              )}
+
+                              {/* Measurement Info */}
+                              {matchingRecord ? (
+                                <div className="pt-0.5">
                                   <span className="inline-flex items-center space-x-1.5 px-2 py-1 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 group-hover:bg-amber-500/20 transition-colors shadow-2xs font-extrabold text-[9px]">
                                     <span>View {Object.keys(matchingRecord.fields).length} Measurement Specs</span>
                                   </span>
                                 </div>
-                              </div>
-                            ) : (
-                              <div className="space-y-1.5">
-                                <p className="text-stone-400 dark:text-stone-500 text-[10.5px] italic">No active size measurements locked</p>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (currentUser?.role === 'Owner' || currentUser?.role === 'Manager') {
-                                      setOwnerTab('tailor_measurements');
-                                    } else {
-                                      setTailorPage('sizing');
-                                    }
-                                    setCustomerName(customer?.name || '');
-                                    setCustomerPhone(customer?.phone || '');
-                                    setCustomerEmail(customer?.email || '');
-                                    setClothingType(order.clothingType);
-                                    triggerToast('Ready to record sizing specifications!', 'info');
-                                  }}
-                                  className="text-amber-600 dark:text-amber-450 font-bold text-[10px] hover:underline flex items-center space-x-1"
-                                >
-                                  <span>Measure Customer</span>
-                                </button>
-                              </div>
-                            )}
+                              ) : (
+                                <div className="pt-0.5 space-y-1">
+                                  <p className="text-stone-400 dark:text-stone-500 text-[10px] italic">No active size measurements locked</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (currentUser?.role === 'Owner' || currentUser?.role === 'Manager') {
+                                        setOwnerTab('tailor_measurements');
+                                      } else {
+                                        setTailorPage('sizing');
+                                      }
+                                      setCustomerName(customer?.name || '');
+                                      setCustomerPhone(customer?.phone || '');
+                                      setCustomerEmail(customer?.email || '');
+                                      setClothingType(order.clothingType);
+                                      triggerToast('Ready to record sizing specifications!', 'info');
+                                    }}
+                                    className="text-amber-600 dark:text-amber-450 font-bold text-[10px] hover:underline flex items-center space-x-1"
+                                  >
+                                    <span>Measure Customer</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </td>
 
                           <td className="py-4 px-4">
@@ -9398,35 +9423,12 @@ export default function App() {
 
               return (
                 <div className="flex flex-col items-center justify-center gap-3 pt-4 mt-4 border-t border-stone-100 dark:border-slate-800 font-sans text-xs">
-                  <div className="flex items-center space-x-2 font-sans">
-                    <button
-                      type="button"
-                      disabled={orderPage === 1}
-                      onClick={() => setOrderPage(prev => Math.max(prev - 1, 1))}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                        orderPage === 1
-                          ? 'bg-stone-50 text-stone-300 border-stone-200 dark:bg-slate-900 dark:text-slate-700 dark:border-slate-800 cursor-not-allowed'
-                          : 'bg-white text-stone-700 hover:bg-stone-50 border-stone-200 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-850 dark:border-slate-800 cursor-pointer'
-                      }`}
-                    >
-                      Previous
-                    </button>
-                    <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">
-                      Page {orderPage} of {totalOrderPages}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={orderPage === totalOrderPages}
-                      onClick={() => setOrderPage(prev => Math.min(prev + 1, totalOrderPages))}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                        orderPage === totalOrderPages
-                          ? 'bg-stone-50 text-stone-300 border-stone-200 dark:bg-slate-900 dark:text-slate-700 dark:border-slate-800 cursor-not-allowed'
-                          : 'bg-white text-stone-700 hover:bg-stone-50 border-stone-200 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-850 dark:border-slate-800 cursor-pointer'
-                      }`}
-                    >
-                      Next
-                    </button>
-                  </div>
+                  <PaginationByNumber
+                    currentPage={orderPage}
+                    totalPages={totalOrderPages}
+                    onPageChange={(p) => setOrderPage(p)}
+                    isDarkMode={isDarkMode}
+                  />
                   <div className="text-stone-400 font-sans text-center">
                     Showing <span className="font-bold text-stone-600 dark:text-stone-300">{(orderPage - 1) * orderPageSize + 1}</span> to <span className="font-bold text-stone-600 dark:text-stone-300">{Math.min(orderPage * orderPageSize, filteredCount)}</span> of <span className="font-bold text-stone-600 dark:text-stone-300">{filteredCount}</span> orders
                   </div>
@@ -9693,6 +9695,18 @@ export default function App() {
                   >
                     <Users className="h-3.5 w-3.5" />
                     <span>Tailor Registry</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSettingsSubTab('database_admin')}
+                    className={`pb-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer flex items-center space-x-1.5 ${
+                      selectedSettingsSubTab === 'database_admin'
+                        ? 'border-amber-600 text-amber-600 dark:border-amber-500 dark:text-amber-500 font-extrabold'
+                        : 'border-transparent text-stone-400 hover:text-stone-650 dark:hover:text-stone-200'
+                    }`}
+                  >
+                    <Database className="h-3.5 w-3.5" />
+                    <span>Database Control Panel</span>
                   </button>
                 </>
               )}
@@ -10991,7 +11005,7 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : selectedSettingsSubTab === 'add_worker' ? (
               <div className="space-y-6 fade-in font-sans">
                 <WorkerManagementView
                   clothingCategories={clothingCategories}
@@ -11016,6 +11030,92 @@ export default function App() {
                   isDarkMode={isDarkMode}
                   currentUser={currentUser}
                 />
+              </div>
+            ) : (
+              <div className="space-y-6 fade-in font-sans animate-fadeIn">
+                <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-900' : 'bg-white border-stone-200 shadow-sm'}`}>
+                  <div className="border-b border-stone-150 dark:border-slate-800 pb-3 mb-5">
+                    <h3 className="font-sans text-base font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                      <span className="p-1.5 bg-amber-500/10 text-amber-500 rounded-lg"><Database className="h-4.5 w-4.5" /></span>
+                      <span>System Database Management Panel</span>
+                    </h3>
+                    <p className="text-[11.5px] text-stone-400 mt-1 font-medium leading-relaxed">
+                      Administrative facility to populate the database with extensive dummy logs for pagination demonstration, or perform physical clearings of records.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                    {/* Seed Card */}
+                    <div className={`p-5 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-slate-950/40 border-slate-800/80' : 'bg-stone-50 border-stone-150'}`}>
+                      <div>
+                        <span className="text-[9px] uppercase tracking-wider font-extrabold text-amber-600 dark:text-amber-500 block mb-1 font-mono">Demo Accelerator</span>
+                        <h4 className="text-sm font-bold text-stone-850 dark:text-stone-100">Seed 400 Client &amp; 400 Commission Blueprints</h4>
+                        <p className="text-[11px] text-stone-400 mt-1.5 leading-relaxed font-medium">
+                          Fills the workspace with exactly 400 real-looking customers (including names, unique emails, and contact coordinates) and 400 matching sewing orders. Excellent for exploring high-performance pagination list navigation in real time.
+                        </p>
+                      </div>
+                      <div className="mt-5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            saveCustomers(INITIAL_CUSTOMERS);
+                            setCustomers(INITIAL_CUSTOMERS);
+                            saveOrders(INITIAL_ORDERS);
+                            setOrders(INITIAL_ORDERS);
+                            saveMeasurements(INITIAL_MEASUREMENTS);
+                            setMeasurements(INITIAL_MEASUREMENTS);
+                            triggerToast("Successfully seeded 400 customer records and 400 dummy commissions across Firestore and LocalStorage!", "success");
+                          }}
+                          className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition duration-150 shadow-xs cursor-pointer text-center block"
+                        >
+                          Populate 400 Customers &amp; 400 Orders
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Purge Card */}
+                    <div className={`p-5 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-slate-950/40 border-slate-800/80' : 'bg-stone-50 border-stone-150'}`}>
+                      <div>
+                        <span className="text-[9px] uppercase tracking-wider font-extrabold text-red-500 block mb-1 font-mono">Factory Cleanup</span>
+                        <h4 className="text-sm font-bold text-stone-850 dark:text-stone-100">Permanently Wipe Workspace Database</h4>
+                        <p className="text-[11px] text-stone-400 mt-1.5 leading-relaxed font-medium">
+                          Completely purges all custom profiles, active orders, worker commission trackers, and measurement specifications from local cache and cloud registers. Wipes everything clean. This action cannot be undone.
+                        </p>
+                      </div>
+                      <div className="mt-5">
+                        {confirmPurgeDatabase ? (
+                          <div className="flex gap-2 w-full animate-fadeIn">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handlePurgeAllDatabase();
+                                setConfirmPurgeDatabase(false);
+                              }}
+                              className="flex-1 px-3 py-2 bg-red-650 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition duration-150 cursor-pointer"
+                            >
+                              Yes, Confirm Wipe
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmPurgeDatabase(false)}
+                              className="flex-1 px-3 py-2 bg-stone-500 hover:bg-stone-600 text-white rounded-xl text-xs font-bold transition duration-150 cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmPurgeDatabase(true)}
+                            className="w-full px-4 py-2 border border-red-500/35 text-red-500 hover:bg-red-500/10 rounded-xl text-xs font-bold transition duration-150 cursor-pointer text-center block"
+                          >
+                            Reset &amp; Wipe All Records
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>

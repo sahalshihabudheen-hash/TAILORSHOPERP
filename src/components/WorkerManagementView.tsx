@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Worker, Order } from '../types';
 import { fetchIPLocation } from '../utils/geolocation';
+import PaginationByNumber from './PaginationByNumber';
 
 interface WorkerManagementProps {
   workers: Worker[];
@@ -58,7 +59,7 @@ export default function WorkerManagementView({
   const [workerToDelete, setWorkerToDelete] = useState<Worker | null>(null);
 
   const [workerPage, setWorkerPage] = useState(1);
-  const workerPageSize = 10;
+  const [workerPageSize, setWorkerPageSize] = useState(10);
 
   // States for Editing Tailor details
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
@@ -80,7 +81,7 @@ export default function WorkerManagementView({
   // Reset pagination on search/filters change
   React.useEffect(() => {
     setWorkerPage(1);
-  }, [filterSearch, filterRole, filterGenre]);
+  }, [filterSearch, filterRole, filterGenre, workerPageSize]);
 
   // Admin shop configuration states for setup shop
   const [selectedSetupWorker, setSelectedSetupWorker] = useState<Worker | null>(null);
@@ -597,6 +598,25 @@ export default function WorkerManagementView({
               ))}
             </select>
           </div>
+
+          <div className="flex items-center space-x-2">
+            <span className="text-stone-400 font-bold shrink-0 uppercase tracking-wider text-[10px]">Show:</span>
+            <select
+              value={workerPageSize}
+              onChange={(e) => {
+                setWorkerPageSize(Number(e.target.value));
+                setWorkerPage(1);
+              }}
+              className={`p-2 rounded-xl border focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer font-semibold ${
+                isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-250 text-stone-955'
+              }`}
+            >
+              <option value={5}>5 Per Page</option>
+              <option value={10}>10 Per Page</option>
+              <option value={20}>20 Per Page</option>
+              <option value={50}>50 Per Page</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -789,36 +809,13 @@ export default function WorkerManagementView({
 
               {totalWorkersCount > workerPageSize && (
                 <div className="flex flex-col items-center justify-center gap-3 pt-4 mt-2 border-t border-stone-100 dark:border-slate-800 font-sans text-xs">
-                  <div className="flex items-center space-x-2">
-                    <button
-                      type="button"
-                      disabled={workerPage === 1}
-                      onClick={() => setWorkerPage(prev => Math.max(prev - 1, 1))}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                        workerPage === 1
-                          ? 'bg-stone-50 text-stone-300 border-stone-200 dark:bg-slate-900 dark:text-slate-700 dark:border-slate-800 cursor-not-allowed'
-                          : 'bg-white text-stone-700 hover:bg-stone-50 border-stone-200 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-850 dark:border-slate-800 cursor-pointer'
-                      }`}
-                    >
-                      Previous
-                    </button>
-                    <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">
-                      Page {workerPage} of {totalWorkerPages}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={workerPage === totalWorkerPages}
-                      onClick={() => setWorkerPage(prev => Math.min(prev + 1, totalWorkerPages))}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                        workerPage === totalWorkerPages
-                          ? 'bg-stone-50 text-stone-300 border-stone-200 dark:bg-slate-900 dark:text-slate-700 dark:border-slate-800 cursor-not-allowed'
-                          : 'bg-white text-stone-700 hover:bg-stone-50 border-stone-200 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-850 dark:border-slate-800 cursor-pointer'
-                      }`}
-                    >
-                      Next
-                    </button>
-                  </div>
-                  <div className="text-stone-400">
+                  <PaginationByNumber
+                    currentPage={workerPage}
+                    totalPages={totalWorkerPages}
+                    onPageChange={(p) => setWorkerPage(p)}
+                    isDarkMode={isDarkMode}
+                  />
+                  <div className="text-stone-400 font-sans text-center">
                     Showing <span className="font-bold text-stone-600 dark:text-stone-300">{(workerPage - 1) * workerPageSize + 1}</span> to <span className="font-bold text-stone-600 dark:text-stone-300">{Math.min(workerPage * workerPageSize, totalWorkersCount)}</span> of <span className="font-bold text-stone-600 dark:text-stone-300">{totalWorkersCount}</span> employees
                   </div>
                 </div>

@@ -26,9 +26,9 @@ const cities = [
 
 const clothingTypes = ["Shirt", "Suit", "Trousers", "Korta", "Sherwani", "Blouse", "Lehenga"];
 
-// Generate 50 unique customers
+// Generate 400 unique customers
 const customersList: Customer[] = [];
-for (let i = 1; i <= 50; i++) {
+for (let i = 1; i <= 400; i++) {
   const isMale = i % 2 === 0;
   const firstName = isMale 
     ? maleFirstNames[(i - 1) % maleFirstNames.length] 
@@ -131,7 +131,7 @@ customersList.forEach((cust, idx) => {
   }
 });
 
-// Generate 40 active/delivered orders across customers
+// Generate 120 active/delivered orders across customers
 const ordersList: Order[] = [];
 const orderStatuses: Array<any> = [
   'Order Received',
@@ -143,7 +143,7 @@ const orderStatuses: Array<any> = [
   'Delivered'
 ];
 
-for (let i = 1; i <= 40; i++) {
+for (let i = 1; i <= 400; i++) {
   const custIdx = (i * 13) % customersList.length;
   const customer = customersList[custIdx];
   const clothType = clothingTypes[i % clothingTypes.length];

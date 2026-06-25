@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Plus,
@@ -17,6 +17,7 @@ import {
   Scissors
 } from 'lucide-react';
 import { Customer, Order } from '../types';
+import PaginationByNumber from './PaginationByNumber';
 
 interface CustomerManagementProps {
   customers: Customer[];
@@ -52,6 +53,9 @@ export default function CustomerManagementView({
     avatar: ''
   });
 
+  const [customerPage, setCustomerPage] = useState(1);
+  const [customerPageSize, setCustomerPageSize] = useState(10);
+
   const [editFormData, setEditFormData] = useState<Customer | null>(null);
 
   // Filter customers based on search query
@@ -62,6 +66,16 @@ export default function CustomerManagementView({
       c.id.toLowerCase().includes(combinedSearchQuery) ||
       c.phone.includes(combinedSearchQuery) ||
       c.email.toLowerCase().includes(combinedSearchQuery)
+  );
+
+  useEffect(() => {
+    setCustomerPage(1);
+  }, [combinedSearchQuery, customerPageSize]);
+
+  const totalCustomerPages = Math.ceil(filteredCustomers.length / customerPageSize) || 1;
+  const paginatedCustomers = filteredCustomers.slice(
+    (customerPage - 1) * customerPageSize,
+    customerPage * customerPageSize
   );
 
   const handleOpenAddModal = () => {
@@ -166,6 +180,24 @@ export default function CustomerManagementView({
             <p className="text-[11px] text-stone-400">Total {filteredCustomers.length} bespoke profiles</p>
           </div>
           <div className="flex items-center gap-1.5">
+            <select
+              value={customerPageSize}
+              onChange={(e) => {
+                setCustomerPageSize(Number(e.target.value));
+                setCustomerPage(1);
+              }}
+              title="Clients per page"
+              className={`p-1.5 px-2 rounded-xl border text-[10.5px] font-bold focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer ${
+                isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
+              }`}
+            >
+              <option value={5}>5 / Page</option>
+              <option value={10}>10 / Page</option>
+              <option value={20}>20 / Page</option>
+              <option value={50}>50 / Page</option>
+              <option value={100}>100 / Page</option>
+              <option value={400}>400 / Page</option>
+            </select>
             <button
               onClick={handleOpenAddModal}
               className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 transition-all font-semibold text-xs rounded-xl text-white flex items-center space-x-1"
@@ -193,11 +225,11 @@ export default function CustomerManagementView({
         </div>
 
         {/* Clients table/list */}
-        <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1 mb-2">
           {filteredCustomers.length === 0 ? (
             <p className="text-stone-400 text-center text-xs py-10">No matching client profiles located.</p>
           ) : (
-            filteredCustomers.map((cust) => {
+            paginatedCustomers.map((cust) => {
               const isActive = selectedCustomer?.id === cust.id;
               return (
                 <div
@@ -247,6 +279,20 @@ export default function CustomerManagementView({
             })
           )}
         </div>
+
+        {totalCustomerPages > 1 && (
+          <div className="pt-3 border-t border-stone-100 dark:border-slate-800 flex flex-col items-center justify-center gap-2">
+            <PaginationByNumber
+              currentPage={customerPage}
+              totalPages={totalCustomerPages}
+              onPageChange={(p) => setCustomerPage(p)}
+              isDarkMode={isDarkMode}
+            />
+            <div className="text-[10px] text-stone-400 font-sans text-center">
+              Showing <span className="font-bold text-stone-600 dark:text-stone-300">{(customerPage - 1) * customerPageSize + 1}</span> to <span className="font-bold text-stone-600 dark:text-stone-300">{Math.min(customerPage * customerPageSize, filteredCustomers.length)}</span> of <span className="font-bold text-stone-600 dark:text-stone-300">{filteredCustomers.length}</span> clients
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Customer dossier/profile Page Column */}
