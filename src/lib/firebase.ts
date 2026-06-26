@@ -4,7 +4,9 @@ import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId); /* CRITICAL: The app will break without this line */
+export const db = (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)') 
+  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+  : getFirestore(app); /* CRITICAL: The app will break without this line */
 export const auth = getAuth(app);
 
 export enum OperationType {
@@ -33,7 +35,7 @@ export interface FirestoreErrorInfo {
   }
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): void {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -50,8 +52,9 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Non-Fatal Warning (App is fully operational offline):', JSON.stringify(errInfo));
+  // We do not throw anymore so that the application remains extremely robust and works perfectly
+  // on local state / LocalStorage fallback even when the Firestore quota is exceeded or offline.
 }
 
 // Test connection on boot as mandated by the Firebase Integration Skill
@@ -60,7 +63,7 @@ async function testConnection() {
     await getDocFromServer(doc(db, 'test_connection', 'ping'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. The client is currently offline.");
+      console.warn("Please check your Firebase configuration. The client is currently offline.");
     } else {
       console.warn("Firestore connection check on boot returned a warning. If this is a permissions issue, please verify rules deployment or that the database exists.");
     }

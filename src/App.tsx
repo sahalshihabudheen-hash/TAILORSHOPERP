@@ -557,7 +557,7 @@ export default function App() {
     return orders;
   }, [orders, currentUser, registeredTailors, workers]);
 
-  const [ownerTab, setOwnerTab] = useState<'branding' | 'staffs_erp' | 'customer_patrons' | 'customer_orders' | 'tailor_measurements'>('tailor_measurements');
+  const [ownerTab, setOwnerTab] = useState<'branding' | 'staffs_erp' | 'customer_patrons' | 'customer_orders' | 'tailor_measurements'>('customer_orders');
   const [logoInputType, setLogoInputType] = useState<'url' | 'upload'>('url');
 
   // New admin form states
@@ -1409,9 +1409,20 @@ export default function App() {
           u.role = 'Tailor';
           localStorage.setItem('tailor_logged_in_user', JSON.stringify(u));
         }
+        if (u && u.email && u.email.toLowerCase().trim() === 'owner@gmail.com' && u.id !== 'TAILOR-OWNER-MASTER') {
+          u.id = 'TAILOR-OWNER-MASTER';
+          u.name = 'Sartorial Design ERP (Master Admin)';
+          localStorage.setItem('tailor_logged_in_user', JSON.stringify(u));
+        }
         setCurrentUser(u);
         if (u && u.role !== 'Owner' && u.role !== 'Manager') {
           setTailorPage('pending_tasks');
+        } else if (u && (u.role === 'Owner' || u.role === 'Manager')) {
+          if (u.id === 'TAILOR-OWNER-MASTER') {
+            setOwnerTab('staffs_erp');
+          } else {
+            setOwnerTab('customer_orders');
+          }
         }
       } catch (err) {
         console.error("Failed to restore current user", err);
@@ -1456,7 +1467,7 @@ export default function App() {
 
   // Automatically seed Sahal's 400 customers and 400 orders on log in if they are not yet populated
   useEffect(() => {
-    if (currentUser && currentUser.email && currentUser.email.toLowerCase().trim() === 'sahalshihabudheen@gmail.com') {
+    if (currentUser && currentUser.email && (currentUser.email.toLowerCase().trim() === 'sahalshihabudheen@gmail.com' || currentUser.email.toLowerCase().trim() === 'owner@gmail.com')) {
       const isSeeded400 = localStorage.getItem('sahal_data_seeded_400');
       if (isSeeded400 !== 'true' || orders.length < 350) {
         // Seed Sahal's lists
@@ -2010,13 +2021,13 @@ export default function App() {
            (w.email && tailor.email && w.email.toLowerCase().trim() === tailor.email.toLowerCase().trim()) ||
            (w.phone && tailor.phone && isPhoneMatch(w.phone, tailor.phone))
          );
-         const isAWorker = !tailor.id.startsWith('TLR-') && (tailor.id.startsWith('WRK-') || !!matchedWorker);
+         const isAWorker = !tailor.id.startsWith('TLR-') && tailor.id !== 'TAILOR-OWNER-MASTER' && (tailor.id.startsWith('WRK-') || !!matchedWorker);
          if (isAWorker) {
            setTailorPage('pending_tasks');
          }
          
          let resolvedRole = 'Tailor';
-         if (!isAWorker && (tailor.id.startsWith('TLR-') || tailor.role === 'Owner' || tailor.hasRegisteredShop)) {
+         if (!isAWorker && (tailor.id.startsWith('TLR-') || tailor.id === 'TAILOR-OWNER-MASTER' || tailor.role === 'Owner' || tailor.hasRegisteredShop)) {
            resolvedRole = 'Owner';
          } else if ((matchedWorker && matchedWorker.role === 'Manager') || tailor.role === 'Manager') {
            resolvedRole = 'Manager';
@@ -2035,6 +2046,13 @@ export default function App() {
          setCurrentUser(user);
          if (rememberMe) {
            localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
+         }
+         if (user.role === 'Owner' || user.role === 'Manager') {
+           if (user.id === 'TAILOR-OWNER-MASTER') {
+             setOwnerTab('staffs_erp');
+           } else {
+             setOwnerTab('customer_orders');
+           }
          }
          addActivity('Sign In', `TAILORSHOP ERP Owner / Tailor logged in successfully`, 'Owner', tailor.name);
          triggerToast(`Welcome back to the studio, ${tailor.name}!`, 'success');
@@ -6986,7 +7004,7 @@ export default function App() {
                      <span>Active Shop Owners / Tailors</span>
                      <div className="flex items-center space-x-2 shrink-0">
                        <span className="text-[10px] bg-amber-600/10 text-amber-600 px-2 py-0.5 rounded-full font-bold">
-                         {getRegisteredTailors().length} Active
+                         {getRegisteredTailors().filter((t: any) => t && t.id !== 'TAILOR-OWNER-MASTER').length} Active
                        </span>
                        <button
                          type="button"
@@ -7003,7 +7021,7 @@ export default function App() {
                      </div>
                    </h3>
                    <div className="space-y-3">
-                      {getRegisteredTailors().map((t: any) => {
+                      {getRegisteredTailors().filter((t: any) => t && t.id !== 'TAILOR-OWNER-MASTER').map((t: any) => {
                         const isConfiguringThisTailor = adminConfiguringTailorId === t.id;
                         return (
                           <div key={t.id} className={`p-4 rounded-xl border flex flex-col gap-3 transition-all ${

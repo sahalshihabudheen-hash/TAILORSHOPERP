@@ -1,10 +1,10 @@
 {
-  "projectId": "gen-lang-client-0726527776",
-  "appId": "1:991687971140:web:97bb3dcc364e73d17d0711",
-  "apiKey": "AIzaSyAoURpI5Dr-ZnG216rXOwqLyzV25XfkPvo",
-  "authDomain": "gen-lang-client-0726527776.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-34c7863d-0613-4f30-bdc2-62d5dbfcaab9",
-  "storageBucket": "gen-lang-client-0726527776.firebasestorage.app",
-  "messagingSenderId": "991687971140",
-  "measurementId": ""
+  "projectId": "tailor-shop-erp",
+  "appId": "1:747456822790:web:caa076a891cfa7e3430d87",
+  "apiKey": "AIzaSyCrH7_Hbqx9nPD6JcKt1PbzJbSvOJY9vZI",
+  "authDomain": "tailor-shop-erp.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "tailor-shop-erp.firebasestorage.app",
+  "messagingSenderId": "747456822790",
+  "measurementId": "G-9RG1J7LCZK"
 }

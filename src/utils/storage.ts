@@ -66,10 +66,62 @@ const setupSync = <T extends { id: string }>(
       }
     });
 
+    if (isRegisteredTailors) {
+      const seenEmails = new Set<string>();
+      const seenIds = new Set<string>();
+      const deduplicated: T[] = [];
+      
+      // Sort to prioritize TAILOR-OWNER-MASTER and TLR-SAHAL
+      items.sort((a: any, b: any) => {
+        if (a.id === 'TAILOR-OWNER-MASTER') return -1;
+        if (b.id === 'TAILOR-OWNER-MASTER') return 1;
+        if (a.id === 'TLR-SAHAL') return -1;
+        if (b.id === 'TLR-SAHAL') return 1;
+        return 0;
+      });
+
+      for (const item of items) {
+        if (!item) continue;
+        const id = item.id;
+        const email = (item as any).email ? (item as any).email.toLowerCase().trim() : '';
+
+        // Auto-purge any old/obsolete TLR-OWNER ID
+        if (id === 'TLR-OWNER') {
+          deleteDoc(doc(db, firestoreCollectionName, id)).catch((err) => {});
+          continue;
+        }
+
+        if (email) {
+          if (seenEmails.has(email) || seenIds.has(id)) {
+            // Found duplicate - delete the duplicate document from Firestore to clean up database!
+            deleteDoc(doc(db, firestoreCollectionName, id)).catch((err) => {});
+            continue;
+          }
+          seenEmails.add(email);
+          seenIds.add(id);
+        }
+        deduplicated.push(item);
+      }
+      items.length = 0;
+      items.push(...deduplicated);
+    }
+
     if (items.length === 0) {
-      console.log(`Seeding empty ${collectionName} in Firestore (mapped to ${firestoreCollectionName})...`);
+      const localDataStr = localStorage.getItem(localStorageKey);
+      let localData: T[] = [];
+      if (localDataStr) {
+        try {
+          localData = JSON.parse(localDataStr);
+        } catch (e) {
+          localData = [];
+        }
+      }
+
+      const dataToSeed = (Array.isArray(localData) && localData.length > 0) ? localData : initialData;
+      console.log(`Seeding empty ${collectionName} in Firestore (mapped to ${firestoreCollectionName}) using data from ${dataToSeed === localData ? 'localStorage' : 'initialData'}...`);
+      
       const batch = writeBatch(db);
-      initialData.forEach((item) => {
+      dataToSeed.forEach((item) => {
         const docRef = doc(db, firestoreCollectionName, item.id);
         const seededItem = isRegisteredTailors ? { ...item, isRegisteredTailor: true, role: 'Tailor' } : item;
         batch.set(docRef, seededItem);
@@ -200,9 +252,52 @@ export const saveCustomers = (customers: Customer[]) => {
 
 export const getRegisteredTailors = (): any[] => {
   const data = localStorage.getItem(KEYS.REGISTERED_TAILORS);
-  const list = data ? JSON.parse(data) : [];
+  const isFirstTime = data === null;
+  let list = data ? JSON.parse(data) : [];
+  if (!Array.isArray(list)) {
+    list = [];
+  }
+  
+  let changed = false;
+
+  // De-duplicate list by email and ID, prioritizing critical profiles
+  const initialLength = list.length;
+  const seenEmails = new Set<string>();
+  const seenIds = new Set<string>();
+
+  // Sort list to prioritize TAILOR-OWNER-MASTER and TLR-SAHAL
+  list.sort((a: any, b: any) => {
+    if (a && a.id === 'TAILOR-OWNER-MASTER') return -1;
+    if (b && b.id === 'TAILOR-OWNER-MASTER') return 1;
+    if (a && a.id === 'TLR-SAHAL') return -1;
+    if (b && b.id === 'TLR-SAHAL') return 1;
+    return 0;
+  });
+
+  list = list.filter((t: any) => {
+    if (!t || !t.email) return false;
+    const email = t.email.toLowerCase().trim();
+    const id = t.id;
+
+    if (id === 'TLR-OWNER') {
+      return false; // clean up migrated profile
+    }
+
+    if (seenEmails.has(email) || seenIds.has(id)) {
+      return false;
+    }
+
+    seenEmails.add(email);
+    seenIds.add(id);
+    return true;
+  });
+
+  if (list.length !== initialLength) {
+    changed = true;
+  }
+  
   const hasSahal = list.some((t: any) => t && t.email && t.email.toLowerCase().trim() === 'sahalshihabudheen@gmail.com');
-  if (!hasSahal) {
+  if (!hasSahal && isFirstTime) {
     const sahalTailor = {
       id: 'TLR-SAHAL',
       name: 'Sahal Shihabudheen',
@@ -216,6 +311,42 @@ export const getRegisteredTailors = (): any[] => {
       createdAt: new Date().toISOString()
     };
     list.push(sahalTailor);
+    changed = true;
+  }
+
+  const ownerIndex = list.findIndex((t: any) => t && t.email && t.email.toLowerCase().trim() === 'owner@gmail.com');
+  if (ownerIndex >= 0) {
+    let subChanged = false;
+    if (list[ownerIndex].id !== 'TAILOR-OWNER-MASTER') {
+      list[ownerIndex].id = 'TAILOR-OWNER-MASTER';
+      list[ownerIndex].name = 'Sartorial Design ERP (Master Admin)';
+      subChanged = true;
+    }
+    if (list[ownerIndex].hasRegisteredShop !== false) {
+      list[ownerIndex].hasRegisteredShop = false;
+      delete list[ownerIndex].shopName;
+      delete list[ownerIndex].logoUrl;
+      subChanged = true;
+    }
+    if (subChanged) {
+      changed = true;
+    }
+  } else {
+    const ownerTailor = {
+      id: 'TAILOR-OWNER-MASTER',
+      name: 'Sartorial Design ERP (Master Admin)',
+      email: 'owner@gmail.com',
+      phone: '+91 94460 12345',
+      location: 'Kerala, India',
+      password: 'TAILORSHOP_ERPOwner2026!',
+      hasRegisteredShop: false,
+      createdAt: new Date().toISOString()
+    };
+    list.push(ownerTailor);
+    changed = true;
+  }
+
+  if (changed) {
     localStorage.setItem(KEYS.REGISTERED_TAILORS, JSON.stringify(list));
     syncListToFirestore('registered_tailors', list);
   }
