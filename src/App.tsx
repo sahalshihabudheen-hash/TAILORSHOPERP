@@ -475,6 +475,7 @@ export default function App() {
     const userName = (currentUser.name || '').toLowerCase().trim();
 
     const tailorMatch = registeredTailors.find((t: any) => {
+      if (t && currentUser && t.id === currentUser.id) return true;
       const tEmail = (t.email || '').toLowerCase().trim();
       const tPhone = (t.phone || '').trim();
       const tName = (t.name || '').toLowerCase().trim();
@@ -1104,6 +1105,7 @@ export default function App() {
     const userName = (currentUser.name || '').toLowerCase().trim();
 
     const tailorMatch = (registeredTailors || []).find((t: any) => {
+      if (t && currentUser && t.id === currentUser.id) return true;
       const tEmail = (t.email || '').toLowerCase().trim();
       const tPhone = (t.phone || '').trim();
       const tName = (t.name || '').toLowerCase().trim();
@@ -1440,6 +1442,7 @@ export default function App() {
       setMeasurements(getMeasurements());
       setOrders(getOrders());
       setWorkers(getWorkers());
+      setRegisteredTailors(getRegisteredTailors());
     };
     window.addEventListener('db-sync-update', handleSync);
     return () => {
@@ -1455,6 +1458,35 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDarkMode]);
+
+  // Synchronize currentUser details with the corresponding tailor's record when registeredTailors updates
+  useEffect(() => {
+    if (!currentUser || currentUser.id === 'TAILOR-OWNER-MASTER' || currentUser.isWorker) return;
+    
+    const freshTailor = (registeredTailors || []).find((t: any) => t && t.id === currentUser.id);
+    if (freshTailor) {
+      if (freshTailor.name !== currentUser.name || 
+          freshTailor.shopName !== currentUser.shopName || 
+          freshTailor.logoUrl !== currentUser.logoUrl ||
+          freshTailor.phone !== currentUser.phone ||
+          freshTailor.location !== currentUser.location ||
+          !!freshTailor.hasRegisteredShop !== !!currentUser.hasRegisteredShop) {
+        
+        const updatedUser = {
+          ...currentUser,
+          name: freshTailor.name,
+          shopName: freshTailor.shopName,
+          logoUrl: freshTailor.logoUrl,
+          shopLogoUrl: freshTailor.logoUrl,
+          phone: freshTailor.phone || '',
+          location: freshTailor.location || 'Studio Workspace',
+          hasRegisteredShop: !!freshTailor.hasRegisteredShop
+        };
+        setCurrentUser(updatedUser);
+        localStorage.setItem('tailor_logged_in_user', JSON.stringify(updatedUser));
+      }
+    }
+  }, [registeredTailors, currentUser]);
 
   // Automatically switch tab for Master Admin so they default to the workstation settings settings view
   useEffect(() => {
@@ -2008,12 +2040,8 @@ export default function App() {
 
       const isPasswordMatch = 
         (tPassword && tPassword.toLowerCase().trim() === passwordClean.toLowerCase().trim()) ||
-        (tPhone && isPhoneMatch(tPhone, passwordClean)) ||
         (tPassword && isPhoneMatch(tPassword, passwordClean)) ||
-        (tPhone && tPhone.replace(/\D/g, '') === passwordClean.replace(/\D/g, '')) ||
-        (tPassword && tPassword.replace(/\D/g, '') === passwordClean.replace(/\D/g, '')) ||
-        (tName && tName.toLowerCase() === passwordClean.toLowerCase()) ||
-        (tName && tName.toLowerCase().replace(/\s+/g, '') === passwordClean.toLowerCase().replace(/\s+/g, ''));
+        (tPassword && tPassword.replace(/\D/g, '') === passwordClean.replace(/\D/g, ''));
 
       if (isPasswordMatch) {
          const matchedWorker = workers.find((w: any) => 

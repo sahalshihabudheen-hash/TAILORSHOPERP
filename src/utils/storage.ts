@@ -240,14 +240,105 @@ const syncListToFirestore = async <T extends { id: string }>(
   }
 };
 
+const isPhoneMatchLocal = (phone1: string, phone2: string): boolean => {
+  const c1 = (phone1 || '').replace(/\D/g, '');
+  const c2 = (phone2 || '').replace(/\D/g, '');
+  if (!c1 || !c2) return false;
+  if (c1 === c2) return true;
+  if (c1.length >= 6 && c2.length >= 6) {
+    if (c1.endsWith(c2) || c2.endsWith(c1)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+export const getActiveShopOwnerEmail = (): string => {
+  if (typeof window === 'undefined') return 'sahalshihabudheen@gmail.com';
+  const saved = localStorage.getItem('tailor_logged_in_user');
+  if (!saved) return 'sahalshihabudheen@gmail.com';
+  try {
+    const u = JSON.parse(saved);
+    if (!u) return 'sahalshihabudheen@gmail.com';
+
+    const userEmail = (u.email || '').toLowerCase().trim();
+    const userPhone = (u.phone || '').trim();
+    const userName = (u.name || '').toLowerCase().trim();
+
+    if (u.role !== 'Owner' && u.role !== 'Manager') {
+      const workersData = localStorage.getItem(KEYS.WORKERS);
+      const workersList = workersData ? JSON.parse(workersData) : [];
+      if (Array.isArray(workersList)) {
+        const match = workersList.find((w: any) => {
+          if (!w) return false;
+          const wEmail = (w.email || '').toLowerCase().trim();
+          const wPhone = (w.phone || '').trim();
+          const wName = (w.name || '').toLowerCase().trim();
+          return (userEmail && wEmail === userEmail) ||
+                 (userPhone && isPhoneMatchLocal(userPhone, wPhone)) ||
+                 (userName && wName === userName);
+        });
+        if (match && match.shopOwnerEmail) {
+          return match.shopOwnerEmail.toLowerCase().trim();
+        }
+      }
+    }
+
+    if (u.email) {
+      const email = u.email.toLowerCase().trim();
+      if (email === 'owner@gmail.com') return 'sahalshihabudheen@gmail.com';
+      return email;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return 'sahalshihabudheen@gmail.com';
+};
+
+const getFilteredCollection = <T>(localStorageKey: string, initialData: T[]): T[] => {
+  const data = localStorage.getItem(localStorageKey);
+  const list: T[] = data ? JSON.parse(data) : initialData;
+  const ownerEmail = getActiveShopOwnerEmail();
+  
+  return list.filter((item: any) => {
+    const itemOwner = (item.shopOwnerEmail || 'sahalshihabudheen@gmail.com').toLowerCase().trim();
+    return itemOwner === ownerEmail;
+  });
+};
+
+const saveFilteredCollection = <T extends { id: string }>(
+  collectionName: string,
+  localStorageKey: string,
+  initialData: T[],
+  activeShopItems: T[]
+) => {
+  const ownerEmail = getActiveShopOwnerEmail();
+  
+  const cleanedActiveShopItems = activeShopItems.map(item => ({
+    ...item,
+    shopOwnerEmail: ownerEmail
+  }));
+
+  const rawData = localStorage.getItem(localStorageKey);
+  const fullList: any[] = rawData ? JSON.parse(rawData) : initialData;
+
+  const otherShopsItems = fullList.filter(item => {
+    const itemOwner = (item.shopOwnerEmail || 'sahalshihabudheen@gmail.com').toLowerCase().trim();
+    return itemOwner !== ownerEmail;
+  });
+
+  const mergedList = [...otherShopsItems, ...cleanedActiveShopItems];
+
+  localStorage.setItem(localStorageKey, JSON.stringify(mergedList));
+  syncListToFirestore(collectionName, mergedList);
+};
+
 export const getCustomers = (): Customer[] => {
-  const data = localStorage.getItem(KEYS.CUSTOMERS);
-  return data ? JSON.parse(data) : INITIAL_CUSTOMERS;
+  return getFilteredCollection<Customer>(KEYS.CUSTOMERS, INITIAL_CUSTOMERS);
 };
 
 export const saveCustomers = (customers: Customer[]) => {
-  localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(customers));
-  syncListToFirestore('customers', customers);
+  saveFilteredCollection<Customer>('customers', KEYS.CUSTOMERS, INITIAL_CUSTOMERS, customers);
 };
 
 export const getRegisteredTailors = (): any[] => {
@@ -322,6 +413,10 @@ export const getRegisteredTailors = (): any[] => {
       list[ownerIndex].name = 'Sartorial Design ERP (Master Admin)';
       subChanged = true;
     }
+    if (list[ownerIndex].phone === '+91 94460 12345') {
+      list[ownerIndex].phone = '+91 99999 99999';
+      subChanged = true;
+    }
     if (list[ownerIndex].hasRegisteredShop !== false) {
       list[ownerIndex].hasRegisteredShop = false;
       delete list[ownerIndex].shopName;
@@ -336,7 +431,7 @@ export const getRegisteredTailors = (): any[] => {
       id: 'TAILOR-OWNER-MASTER',
       name: 'Sartorial Design ERP (Master Admin)',
       email: 'owner@gmail.com',
-      phone: '+91 94460 12345',
+      phone: '+91 99999 99999',
       location: 'Kerala, India',
       password: 'TAILORSHOP_ERPOwner2026!',
       hasRegisteredShop: false,
@@ -359,53 +454,43 @@ export const saveRegisteredTailors = (list: any[]) => {
 };
 
 export const getWorkers = (): Worker[] => {
-  const data = localStorage.getItem(KEYS.WORKERS);
-  return data ? JSON.parse(data) : INITIAL_WORKERS;
+  return getFilteredCollection<Worker>(KEYS.WORKERS, INITIAL_WORKERS);
 };
 
 export const saveWorkers = (workers: Worker[]) => {
-  localStorage.setItem(KEYS.WORKERS, JSON.stringify(workers));
-  syncListToFirestore('workers', workers);
+  saveFilteredCollection<Worker>('workers', KEYS.WORKERS, INITIAL_WORKERS, workers);
 };
 
 export const getMeasurements = (): MeasurementRecord[] => {
-  const data = localStorage.getItem(KEYS.MEASUREMENTS);
-  return data ? JSON.parse(data) : INITIAL_MEASUREMENTS;
+  return getFilteredCollection<MeasurementRecord>(KEYS.MEASUREMENTS, INITIAL_MEASUREMENTS);
 };
 
 export const saveMeasurements = (records: MeasurementRecord[]) => {
-  localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(records));
-  syncListToFirestore('measurements', records);
+  saveFilteredCollection<MeasurementRecord>('measurements', KEYS.MEASUREMENTS, INITIAL_MEASUREMENTS, records);
 };
 
 export const getOrders = (): Order[] => {
-  const data = localStorage.getItem(KEYS.ORDERS);
-  return data ? JSON.parse(data) : INITIAL_ORDERS;
+  return getFilteredCollection<Order>(KEYS.ORDERS, INITIAL_ORDERS);
 };
 
 export const saveOrders = (orders: Order[]) => {
-  localStorage.setItem(KEYS.ORDERS, JSON.stringify(orders));
-  syncListToFirestore('orders', orders);
+  saveFilteredCollection<Order>('orders', KEYS.ORDERS, INITIAL_ORDERS, orders);
 };
 
 export const getNotifications = (): NotificationLog[] => {
-  const data = localStorage.getItem(KEYS.NOTIFICATIONS);
-  return data ? JSON.parse(data) : INITIAL_NOTIFICATIONS;
+  return getFilteredCollection<NotificationLog>(KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
 };
 
 export const saveNotifications = (logs: NotificationLog[]) => {
-  localStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(logs));
-  syncListToFirestore('notifications', logs);
+  saveFilteredCollection<NotificationLog>('notifications', KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS, logs);
 };
 
 export const getActivities = (): RecentActivity[] => {
-  const data = localStorage.getItem(KEYS.ACTIVITIES);
-  return data ? JSON.parse(data) : INITIAL_ACTIVITIES;
+  return getFilteredCollection<RecentActivity>(KEYS.ACTIVITIES, INITIAL_ACTIVITIES);
 };
 
 export const saveActivities = (activities: RecentActivity[]) => {
-  localStorage.setItem(KEYS.ACTIVITIES, JSON.stringify(activities));
-  syncListToFirestore('activities', activities);
+  saveFilteredCollection<RecentActivity>('activities', KEYS.ACTIVITIES, INITIAL_ACTIVITIES, activities);
 };
 
 export const addActivity = (action: string, details: string, userRole: string, userName: string) => {
