@@ -42,7 +42,8 @@ import {
   Download,
   QrCode,
   Smartphone,
-  Database
+  Database,
+  Layers
 } from 'lucide-react';
 import {
   getCustomers,
@@ -984,6 +985,16 @@ export default function App() {
   });
   const [fieldUnits, setFieldUnits] = useState<Record<string, 'in' | 'cm'>>({});
   
+  // Multi-garment measurement session state
+  const [sessionGarments, setSessionGarments] = useState<{
+    clothingType: string;
+    fields: Record<string, string>;
+    notes: string;
+    price: number;
+    garmentLabel: string;
+  }[]>([]);
+  const [garmentLabel, setGarmentLabel] = useState('');
+
   // Custom sizing parameter addition
   const [customFieldName, setCustomFieldName] = useState('');
   const [notes, setNotes] = useState(() => localStorage.getItem('tailorshop_draft_notes') || '');
@@ -1002,6 +1013,8 @@ export default function App() {
     customer: Customer;
     measurement: MeasurementRecord;
     order: Order;
+    measurements?: MeasurementRecord[];
+    orders?: Order[];
     whatsappAlert: string;
     emailAlert: string;
   } | null>(null);
@@ -1035,7 +1048,7 @@ export default function App() {
     }
   };
 
-  const handleSaveEditMeasurement = (orderId: string, customerId: string, clothingType: string, measurementId?: string) => {
+  const handleSaveEditMeasurement = (orderId: string, customerId: string, clothingType: string, measurementId?: string, garmentLabel?: string) => {
     const finalFields: Record<string, string> = {};
     Object.entries(editingFields).forEach(([k, v]) => {
       const unit = fieldUnits[k] || 'in';
@@ -1068,6 +1081,7 @@ export default function App() {
         id: `MSR-${Date.now()}`,
         customerId: customerId,
         clothingType: clothingType,
+        garmentLabel: garmentLabel,
         date: new Date().toISOString(),
         fields: finalFields,
         notes: editingNotes.trim() || 'Classic bespoke fit.',
@@ -1386,11 +1400,15 @@ export default function App() {
   const [tailorPendingPage, setTailorPendingPage] = useState(1);
   const [tailorPendingGenreFilter, setTailorPendingGenreFilter] = useState('All');
   const [tailorPendingPageSize, setTailorPendingPageSize] = useState(10);
+  const [tailorPendingSearch, setTailorPendingSearch] = useState('');
+  const [tailorPendingSort, setTailorPendingSort] = useState('deadline_asc');
+  const [completedSizingKeys, setCompletedSizingKeys] = useState<Record<string, boolean>>({});
+  const [expandedCompanionSpecs, setExpandedCompanionSpecs] = useState<Record<string, boolean>>({});
 
-  // Reset page when tailor pending genre filter changes
+  // Reset page when tailor pending genre filter or search changes
   useEffect(() => {
     setTailorPendingPage(1);
-  }, [tailorPendingGenreFilter, tailorPendingPageSize]);
+  }, [tailorPendingGenreFilter, tailorPendingPageSize, tailorPendingSearch, tailorPendingSort]);
 
   // Focus reference for smooth workshop transitions
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -2513,6 +2531,26 @@ export default function App() {
     setPrice(clothingPrices[type] || clothingPrices['Custom'] || 300);
   };
 
+  const handleAddGarmentToSession = () => {
+    const newGarment = {
+      clothingType,
+      fields: { ...sizingFields },
+      notes: notes.trim() || 'Classic standard fit.',
+      price,
+      garmentLabel: garmentLabel.trim() || `${clothingType} ${sessionGarments.length + 1}`
+    };
+    setSessionGarments([...sessionGarments, newGarment]);
+    setGarmentLabel('');
+    setNotes('');
+    triggerToast(`Added ${newGarment.garmentLabel} to the session list!`, 'success');
+  };
+
+  const handleRemoveGarmentFromSession = (index: number) => {
+    const updated = sessionGarments.filter((_, idx) => idx !== index);
+    setSessionGarments(updated);
+    triggerToast('Garment removed from session.', 'info');
+  };
+
   const handleAddCategory = () => {
     const cleanName = newCategoryName.trim();
     if (!cleanName) {
@@ -2645,57 +2683,94 @@ export default function App() {
       setCustomers(updatedCustomers);
     }
 
-    // 2. Register Measurement Record
-    const finalFields: Record<string, string> = {};
-    Object.entries(sizingFields).forEach(([k, v]) => {
-      const unit = fieldUnits[k] || 'in';
-      finalFields[k] = `${v} ${unit}`;
+    // 2. Resolve the list of garments to register
+    let garmentsToSave = [...sessionGarments];
+    if (sessionGarments.length === 0) {
+      garmentsToSave = [{
+        clothingType,
+        fields: { ...sizingFields },
+        notes: notes.trim(),
+        price,
+        garmentLabel: garmentLabel.trim() || `${clothingType}`
+      }];
+    } else {
+      // Check if the current active fields represent a genuinely new garment that they forgot to "Add" before clicking Complete Sizing
+      const lastStagedOfSameType = [...sessionGarments].reverse().find(g => g.clothingType === clothingType);
+      
+      const isNewGarmentType = !sessionGarments.some(g => g.clothingType === clothingType);
+      const isDifferentMeasurements = lastStagedOfSameType && JSON.stringify(lastStagedOfSameType.fields) !== JSON.stringify(sizingFields);
+      const hasCustomLabelOrNotes = garmentLabel.trim().length > 0 || notes.trim().length > 0;
+
+      if (isNewGarmentType || isDifferentMeasurements || hasCustomLabelOrNotes) {
+        garmentsToSave.push({
+          clothingType,
+          fields: { ...sizingFields },
+          notes: notes.trim() || 'Classic standard fit.',
+          price,
+          garmentLabel: garmentLabel.trim() || `${clothingType} ${sessionGarments.length + 1}`
+        });
+      }
+    }
+
+    const createdMeasurements: MeasurementRecord[] = [];
+    const createdOrders: Order[] = [];
+    const activeShopDetails = getCurrentUserShopInfo();
+
+    garmentsToSave.forEach((g, index) => {
+      const finalFields: Record<string, string> = {};
+      Object.entries(g.fields).forEach(([k, v]) => {
+        const unit = fieldUnits[k] || 'in';
+        finalFields[k] = `${v} ${unit}`;
+      });
+
+      const newMeasureRecord: MeasurementRecord = {
+        id: `MSR-${Date.now() + index}`,
+        customerId: currentCust!.id,
+        clothingType: g.clothingType,
+        garmentLabel: g.garmentLabel,
+        date: new Date().toISOString(),
+        fields: finalFields,
+        notes: g.notes || 'Classic bespoke fit.',
+        tailorId: currentUser?.id || 'TAILOR-OWNER-MASTER',
+        shopName: activeShopDetails?.shopName || 'TAILORSHOP ERP'
+      };
+      createdMeasurements.push(newMeasureRecord);
+
+      const newOrder: Order = {
+        id: `ORD-${orders.length + 9841 + index}`,
+        customerId: currentCust!.id,
+        clothingType: g.clothingType,
+        quantity: 1,
+        deliveryDate: readyDate,
+        status: 'Measurement Taken',
+        price: g.price,
+        advancePayment: Math.round(g.price * 0.5),
+        remainingBalance: Math.round(g.price * 0.5),
+        paymentStatus: 'Partially Paid',
+        createdAt: new Date().toISOString(),
+        assignedWorkerId: currentUser?.role === 'Tailor' ? currentUser?.id : undefined,
+        notes: {
+          instructions: g.notes || 'Classic bespoke fit.',
+          fabricDetails: `Garment item: ${g.garmentLabel}. Handled by TAILORSHOP ERP Cutter Room`,
+          urgentNotes: 'Captured during live workshop sizing',
+          tailorNotes: 'Pattern indices locked successfully',
+          privateNotes: 'Bespoke client session logged'
+        },
+        images: { reference: [], fabric: [], finished: [] },
+        shopName: activeShopDetails?.shopName || undefined
+      };
+      createdOrders.push(newOrder);
     });
 
-    const activeShopDetails = getCurrentUserShopInfo();
-    const newMeasureRecord: MeasurementRecord = {
-      id: `MSR-${Date.now()}`,
-      customerId: currentCust.id,
-      clothingType: clothingType,
-      date: new Date().toISOString(),
-      fields: finalFields,
-      notes: notes.trim() || 'Classic bespoke fit.',
-      tailorId: currentUser?.id || 'TAILOR-OWNER-MASTER',
-      shopName: activeShopDetails?.shopName || 'TAILORSHOP ERP'
-    };
-    const updatedMeasurements = [newMeasureRecord, ...measurements];
+    const updatedMeasurements = [...createdMeasurements, ...measurements];
     saveMeasurements(updatedMeasurements);
     setMeasurements(updatedMeasurements);
 
-    // 3. Register Commission Order representing the delivery timelines
-    const orderShopInfo = getCurrentUserShopInfo();
-    const newOrder: Order = {
-      id: `ORD-${orders.length + 9841}`,
-      customerId: currentCust.id,
-      clothingType: clothingType,
-      quantity: 1,
-      deliveryDate: readyDate,
-      status: 'Measurement Taken',
-      price: price,
-      advancePayment: Math.round(price * 0.5),
-      remainingBalance: Math.round(price * 0.5),
-      paymentStatus: 'Partially Paid',
-      createdAt: new Date().toISOString(),
-      notes: {
-        instructions: notes,
-        fabricDetails: 'Handled by TAILORSHOP ERP Cutter Room',
-        urgentNotes: 'Captured during live workshop sizing',
-        tailorNotes: 'Pattern indices locked successfully',
-        privateNotes: 'Bespoke client session logged'
-      },
-      images: { reference: [], fabric: [], finished: [] },
-      shopName: orderShopInfo?.shopName || undefined
-    };
-    const updatedOrders = [newOrder, ...orders];
+    const updatedOrders = [...createdOrders, ...orders];
     saveOrders(updatedOrders);
     setOrders(updatedOrders);
 
-    // 4. Trigger dispatch warnings & alert copy (WhatsApp + Email logs)
+    // 4. Trigger alert copy (WhatsApp + Email logs)
     const formattedDate = new Date(readyDate).toLocaleDateString(undefined, {
       weekday: 'long',
       year: 'numeric',
@@ -2703,18 +2778,25 @@ export default function App() {
       day: 'numeric'
     });
 
-    const whatsappAlert = `Hello ${currentCust.name}, your bespoke tailoring session for custom ${clothingType} measurements is completed! Fitting scheduled to be ready on ${formattedDate}. Advance deposit: ₹${newOrder.advancePayment}. Outstanding: ₹${newOrder.remainingBalance}. Thank you, Sartorial TAILORSHOP ERP!`;
-    const emailAlert = `Dear ${currentCust.name},\n\nWe have successfully logged your custom ${clothingType} measurements today in our TAILORSHOP ERP Ledger. Sizing indices are archived under token reference ${newMeasureRecord.id}.\n\nYour customized tailoring package is scheduled to be completed and ready for final fitting on ${formattedDate}.\n\nWarmest regards,\nSartorial Luxury Tailoring team\nEST. 2026`;
+    const garmentSummaries = garmentsToSave.map(g => `${g.clothingType} [${g.garmentLabel}]`).join(', ');
+    const totalPrice = garmentsToSave.reduce((sum, g) => sum + g.price, 0);
+    const totalAdvance = Math.round(totalPrice * 0.5);
+    const totalOutstanding = totalPrice - totalAdvance;
+
+    const whatsappAlert = `Hello ${currentCust.name}, your bespoke tailoring session for custom garments (${garmentSummaries}) is completed! Fitting scheduled to be ready on ${formattedDate}. Advance deposit: ₹${totalAdvance}. Outstanding: ₹${totalOutstanding}. Thank you, Sartorial TAILORSHOP ERP!`;
+    const emailAlert = `Dear ${currentCust.name},\n\nWe have successfully logged your custom measurements today for the following garments:\n${garmentsToSave.map(g => `- ${g.clothingType} [Label: ${g.garmentLabel}] at ₹${g.price}`).join('\n')}\n\nSizing indices are archived under reference token ${createdMeasurements[0]?.id}.\n\nYour customized tailoring package is scheduled to be completed and ready for final fitting on ${formattedDate}.\n\nWarmest regards,\nSartorial Luxury Tailoring team\nEST. 2026`;
 
     triggerSystemNotification('WhatsApp', currentCust.phone, whatsappAlert);
     triggerSystemNotification('Email', currentCust.email, emailAlert);
-    addActivity('Session Logged', `Recorded measurements matching order reference ${newOrder.id} for patron ${currentCust.name}`, 'Owner', 'Sartorial Master');
+    addActivity('Session Logged', `Recorded measurements matching ${createdOrders.length} order references for patron ${currentCust.name}`, 'Owner', 'Sartorial Master');
 
     // 5. Place current active pointers into memory & advance workflow to completed screen
     setLastSavedSession({
       customer: currentCust,
-      measurement: newMeasureRecord,
-      order: newOrder,
+      measurement: createdMeasurements[0],
+      order: createdOrders[0],
+      measurements: createdMeasurements,
+      orders: createdOrders,
       whatsappAlert,
       emailAlert
     });
@@ -2736,6 +2818,8 @@ export default function App() {
     setSizingFields({ ...clothingTemplates.Shirt });
     setPrice(180);
     setReadyDate(getDefaultReadyDate());
+    setSessionGarments([]);
+    setGarmentLabel('');
 
     // Switch back stage to Active Entry
     setSessionStage('active');
@@ -3515,6 +3599,31 @@ export default function App() {
     setOrders(updated);
     triggerToast(`Order ${orderId} updated to ${newStatus}`, 'success');
     addActivity('Order Updated', `Updated order status of ref ${orderId} to ${newStatus}`, 'Owner', 'Sartorial Master');
+  };
+
+  // Append customized workshop comment from tailor desk
+  const handleAppendWorkshopNote = (orderId: string, customNote: string) => {
+    if (!customNote.trim()) return;
+    const updated = orders.map((o) => {
+      if (o.id === orderId) {
+        const currentNotes = o.notes || {};
+        const updatedInstructions = currentNotes.instructions 
+          ? `${currentNotes.instructions}\n[Workshop update]: ${customNote}`
+          : `[Workshop update]: ${customNote}`;
+        return {
+          ...o,
+          notes: {
+            ...currentNotes,
+            instructions: updatedInstructions
+          }
+        };
+      }
+      return o;
+    });
+    saveOrders(updated);
+    setOrders(updated);
+    triggerToast(`Workshop note added to ${orderId}`, 'success');
+    addActivity('Order Notes Appended', `Appended workshop comment on order ${orderId}`, 'Tailor', currentUser?.name || 'Tailor');
   };
 
   // Assign worker/tailor to order
@@ -8004,7 +8113,7 @@ export default function App() {
           <section className={`p-6 rounded-2xl border transition-all fade-in font-sans ${
             isDarkMode ? 'bg-slate-900/50 border-slate-900 text-white' : 'bg-white border-stone-200 shadow-sm text-stone-900'
           }`}>
-            <div className="border-b border-stone-200 dark:border-slate-800 pb-4 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="border-b border-stone-200 dark:border-slate-800 pb-4 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100 flex items-center gap-2">
                   <span className="p-2 bg-amber-500/10 text-amber-600 rounded-lg"><Briefcase className="h-4.5 w-4.5" /></span>
@@ -8014,41 +8123,87 @@ export default function App() {
                   Below are the commissions assigned to you by the studio shop owner. Review the client body measurements, fabric instructions, and log your progress.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-stone-500 font-bold font-sans">Genre:</span>
-                <select
-                  value={tailorPendingGenreFilter}
-                  onChange={(e) => setTailorPendingGenreFilter(e.target.value)}
-                  className={`p-2 py-1.5 px-3 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer font-sans ${
-                    isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
+            </div>
+
+            {/* Premium Worker Control Deck with Search and Sort */}
+            <div className={`p-4 rounded-xl border mb-6 flex flex-col lg:flex-row gap-3 items-center justify-between text-xs ${
+              isDarkMode ? 'bg-slate-950/60 border-slate-900' : 'bg-stone-50 border-stone-200'
+            }`}>
+              <div className="relative w-full lg:w-80">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-stone-400" />
+                <input
+                  type="text"
+                  placeholder="Search client, commission #, fabrics..."
+                  value={tailorPendingSearch}
+                  onChange={(e) => setTailorPendingSearch(e.target.value)}
+                  className={`w-full pl-9 pr-8 py-2 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 ${
+                    isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-250 text-stone-900'
                   }`}
-                >
-                  <option value="All">All Genres</option>
-                  {clothingCategories.map((genre) => (
-                    <option key={genre} value={genre}>
-                      {genre}
-                    </option>
-                  ))}
-                </select>
+                />
+                {tailorPendingSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setTailorPendingSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 font-bold text-xs"
+                  >
+                    &times;
+                  </button>
+                )}
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-stone-500 font-bold font-sans">Show:</span>
-                <select
-                  value={tailorPendingPageSize}
-                  onChange={(e) => {
-                    setTailorPendingPageSize(Number(e.target.value));
-                    setTailorPendingPage(1);
-                  }}
-                  className={`p-2 py-1.5 px-3 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer font-sans font-bold ${
-                    isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-stone-50 border-stone-200'
-                  }`}
-                >
-                  <option value={5}>5 Per Page</option>
-                  <option value={10}>10 Per Page</option>
-                  <option value={20}>20 Per Page</option>
-                  <option value={55}>55 Per Page</option>
-                </select>
+              <div className="flex flex-wrap gap-3 items-center w-full lg:w-auto justify-end">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-stone-400 font-bold uppercase tracking-wider text-[10px]">Genre:</span>
+                  <select
+                    value={tailorPendingGenreFilter}
+                    onChange={(e) => setTailorPendingGenreFilter(e.target.value)}
+                    className={`p-2 py-1.5 px-3 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer font-bold ${
+                      isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-250 text-stone-900'
+                    }`}
+                  >
+                    <option value="All">All Genres</option>
+                    {clothingCategories.map((genre) => (
+                      <option key={genre} value={genre}>
+                        {genre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-stone-400 font-bold uppercase tracking-wider text-[10px]">Sort:</span>
+                  <select
+                    value={tailorPendingSort}
+                    onChange={(e) => setTailorPendingSort(e.target.value)}
+                    className={`p-2 py-1.5 px-3 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer font-bold ${
+                      isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-250 text-stone-900'
+                    }`}
+                  >
+                    <option value="deadline_asc">🚨 Soonest Deadline</option>
+                    <option value="deadline_desc">📅 Latest Deadline</option>
+                    <option value="id_desc">🆕 Newest Commission</option>
+                    <option value="client_asc">👤 Client Name (A-Z)</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-stone-400 font-bold uppercase tracking-wider text-[10px]">Show:</span>
+                  <select
+                    value={tailorPendingPageSize}
+                    onChange={(e) => {
+                      setTailorPendingPageSize(Number(e.target.value));
+                      setTailorPendingPage(1);
+                    }}
+                    className={`p-2 py-1.5 px-3 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer font-sans font-bold ${
+                      isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-250 text-stone-900'
+                    }`}
+                  >
+                    <option value={5}>5 Per Page</option>
+                    <option value={10}>10 Per Page</option>
+                    <option value={20}>20 Per Page</option>
+                    <option value={55}>55 Per Page</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -8058,9 +8213,45 @@ export default function App() {
                 const totalWorkerOrders = orders.filter(
                   (o) => o.assignedWorkerId === currentUser?.id
                 );
-                const workerOrders = totalWorkerOrders.filter((o) =>
-                  tailorPendingGenreFilter === 'All' || o.clothingType.toLowerCase().trim() === tailorPendingGenreFilter.toLowerCase().trim()
-                );
+                
+                // Match genre and search filter
+                let workerOrders = totalWorkerOrders.filter((o) => {
+                  const matchGenre = tailorPendingGenreFilter === 'All' || o.clothingType.toLowerCase().trim() === tailorPendingGenreFilter.toLowerCase().trim();
+                  if (!matchGenre) return false;
+                  
+                  if (!tailorPendingSearch.trim()) return true;
+                  const query = tailorPendingSearch.toLowerCase().trim();
+                  const cust = customers.find(c => c.id === o.customerId);
+                  const clientName = cust?.name?.toLowerCase() || '';
+                  const clientPhone = cust?.phone?.toLowerCase() || '';
+                  const fabric = o.notes?.fabricDetails?.toLowerCase() || '';
+                  const inst = o.notes?.instructions?.toLowerCase() || '';
+                  const oId = o.id.toLowerCase();
+                  
+                  return clientName.includes(query) || 
+                         clientPhone.includes(query) || 
+                         fabric.includes(query) || 
+                         inst.includes(query) || 
+                         oId.includes(query) || 
+                         o.clothingType.toLowerCase().includes(query);
+                });
+
+                // Apply Sort
+                workerOrders = [...workerOrders].sort((a, b) => {
+                  if (tailorPendingSort === 'deadline_asc') {
+                    return new Date(a.deliveryDate).getTime() - new Date(b.deliveryDate).getTime();
+                  } else if (tailorPendingSort === 'deadline_desc') {
+                    return new Date(b.deliveryDate).getTime() - new Date(a.deliveryDate).getTime();
+                  } else if (tailorPendingSort === 'id_desc') {
+                    return b.id.localeCompare(a.id);
+                  } else if (tailorPendingSort === 'client_asc') {
+                    const custA = customers.find(c => c.id === a.customerId)?.name || '';
+                    const custB = customers.find(c => c.id === b.customerId)?.name || '';
+                    return custA.localeCompare(custB);
+                  }
+                  return 0;
+                });
+
                 const paginatedWorkerOrders = workerOrders.slice(
                   (tailorPendingPage - 1) * tailorPendingPageSize,
                   tailorPendingPage * tailorPendingPageSize
@@ -8087,6 +8278,22 @@ export default function App() {
 
                 return (
                   <>
+                    {tailorPendingSearch.trim() && (
+                      <div className={`mb-5 p-3.5 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-3 ${
+                        isDarkMode ? 'bg-amber-950/20 border-amber-900/40 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800 shadow-3xs'
+                      }`}>
+                        <span className="font-medium">
+                          🔍 Filtering pending works by <strong className="font-bold font-mono">"{tailorPendingSearch}"</strong> — Showing <strong>{workerOrders.length}</strong> of <strong>{totalWorkerOrders.length}</strong> commissions
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setTailorPendingSearch('')}
+                          className="px-2.5 py-1 text-[10px] font-bold rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 cursor-pointer transition uppercase tracking-wider"
+                        >
+                          Clear Search Filter &amp; Show All
+                        </button>
+                      </div>
+                    )}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       {paginatedWorkerOrders.map((order) => {
                       const customer = customers.find((c) => c.id === order.customerId);
@@ -8135,159 +8342,467 @@ export default function App() {
 
                             {/* Garment Genre Title */}
                             <div className="flex items-center space-x-3 bg-amber-500/5 p-3 rounded-xl border border-amber-500/10 text-left">
-                              <span className="p-1.5 bg-amber-500/10 text-amber-500 rounded-lg">
-                                <Shirt className="h-4 w-4" />
+                              <span className="p-1.5 bg-amber-500/10 text-amber-500 rounded-lg flex items-center justify-center shrink-0">
+                                {renderGenreIcon(order.clothingType, clothingCategoryEmojis, "h-4 w-4", "w-4 h-4")}
                               </span>
                               <div>
                                 <span className="text-[10px] text-stone-400 uppercase font-black tracking-wide block">Clothing Genre Spec</span>
-                                <h3 className="text-xs font-bold text-stone-880 dark:text-stone-100">{order.clothingType} (Quantity: {order.quantity})</h3>
+                                <h3 className="text-xs font-bold text-stone-880 dark:text-stone-100">
+                                  {order.clothingType} (Quantity: {order.quantity})
+                                  {(() => {
+                                    const fabricDetails = order.notes?.fabricDetails || '';
+                                    const match = fabricDetails.match(/Garment item:\s*(.*?)\.\s*Handled by/);
+                                    const label = (match && match[1]) ? match[1].trim() : order.clothingType;
+                                    if (label !== order.clothingType) {
+                                      return <span className="ml-1.5 text-amber-600 dark:text-amber-500 font-black font-mono">[{label}]</span>;
+                                    }
+                                    return null;
+                                  })()}
+                                </h3>
                               </div>
                             </div>
 
                             {/* Customer Particulars & Instructions */}
-                            <div className="grid grid-cols-2 gap-4 text-xs text-left">
+                            <div className="text-xs text-left">
                               <div>
                                 <span className="text-[9px] text-stone-400 uppercase font-extrabold tracking-wider block mb-0.5">Client Details</span>
                                 <p className="font-bold text-stone-800 dark:text-stone-100">{customer?.name || 'Walk-in Client'}</p>
                                 <p className="text-[10px] text-stone-500 font-medium">{customer?.phone}</p>
                               </div>
-                              <div>
-                                <span className="text-[9px] text-stone-400 uppercase font-extrabold tracking-wider block mb-0.5">Status &amp; Payment</span>
-                                <span className={`inline-block px-1.5 py-0.5 text-[9px] font-black tracking-wider uppercase rounded-md ${
-                                  order.paymentStatus === 'Fully Paid'
-                                    ? 'bg-emerald-500/10 text-emerald-600'
-                                    : order.paymentStatus === 'Partially Paid'
-                                    ? 'bg-amber-500/10 text-amber-600 font-extrabold animate-pulse'
-                                    : 'bg-rose-500/10 text-rose-500 font-black'
-                                }`}>
-                                  {order.paymentStatus}
-                                </span>
-                              </div>
                             </div>
 
-                            {/* Specific Instructions (instructions, fabricDetails) */}
+                            {/* Companion/Second Garments for Same Customer */}
+                            {(() => {
+                              const currentCustomer = customers.find((c) => c.id === order.customerId);
+                              const currentCustName = currentCustomer?.name?.toLowerCase().trim();
+                              const currentCustPhone = currentCustomer?.phone?.replace(/\D/g, '');
+
+                              const isCustomerMatch = (cId: string) => {
+                                if (cId === order.customerId) return true;
+                                const c = customers.find((cust) => cust.id === cId);
+                                if (!c) return false;
+                                if (currentCustName && c.name?.toLowerCase().trim() === currentCustName) return true;
+                                if (currentCustPhone && c.phone?.replace(/\D/g, '') === currentCustPhone) return true;
+                                return false;
+                              };
+
+                              const companionOrders = orders.filter((o) => isCustomerMatch(o.customerId) && o.id !== order.id);
+                              if (companionOrders.length === 0) return null;
+                              return (
+                                <div className={`p-3 rounded-xl border text-xs text-left ${
+                                  isDarkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50/40 border-indigo-100 shadow-3xs'
+                                }`}>
+                                  <span className="text-[9.5px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-widest block mb-1.5 flex items-center gap-1">
+                                    <Layers className="h-3.5 w-3.5 animate-pulse text-indigo-500" />
+                                    <span>Other Garments for {customer?.name || 'this Patron'} ({companionOrders.length})</span>
+                                  </span>
+                                  <div className="flex flex-col gap-1.5">
+                                    {companionOrders.map((companion) => {
+                                      const compMeasurement = measurements.find(
+                                        (m) => isCustomerMatch(m.customerId) && m.clothingType.toLowerCase().trim() === companion.clothingType.toLowerCase().trim()
+                                      );
+                                      const isExp = !!expandedCompanionSpecs[`${order.id}_${companion.id}`];
+                                      return (
+                                        <div key={companion.id} className="border-b last:border-b-0 border-indigo-100/30 dark:border-indigo-950/30 pb-1.5 last:pb-0">
+                                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                            <div className="flex items-center space-x-1.5 flex-wrap gap-y-0.5">
+                                              <span className="font-bold text-stone-850 dark:text-stone-200">{companion.clothingType}</span>
+                                              <span className="text-[9px] text-stone-400 font-mono">({companion.id})</span>
+                                              <span className={`text-[8px] font-mono px-1.5 rounded-sm uppercase tracking-wide ${
+                                                companion.status === 'Ready for Pickup' || companion.status === 'Delivered'
+                                                  ? 'bg-emerald-500/10 text-emerald-600 font-bold'
+                                                  : 'bg-amber-500/10 text-amber-600 font-bold'
+                                              }`}>
+                                                {companion.status}
+                                              </span>
+                                            </div>
+                                            <div className="flex items-center space-x-1.5 self-end sm:self-auto">
+                                              {compMeasurement ? (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setExpandedCompanionSpecs(prev => ({
+                                                      ...prev,
+                                                      [`${order.id}_${companion.id}`]: !prev[`${order.id}_${companion.id}`]
+                                                    }));
+                                                  }}
+                                                  className="text-[9px] px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-bold cursor-pointer transition"
+                                                >
+                                                  {isExp ? 'Hide Specs' : 'Sizing Specs'}
+                                                </button>
+                                              ) : (
+                                                <span className="text-[9px] text-stone-400 italic font-mono">No specs</span>
+                                              )}
+                                              
+                                              {companion.assignedWorkerId === currentUser?.id ? (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setTailorPendingSearch(companion.id);
+                                                    triggerToast(`Switched active workspace to ${companion.clothingType} (${companion.id})!`, 'success');
+                                                  }}
+                                                  className="text-[9px] px-2 py-0.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold cursor-pointer transition"
+                                                  title="Open this garment in your primary workspace view"
+                                                >
+                                                  Open Garment
+                                                </button>
+                                              ) : (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    const updatedOrders = orders.map(o => {
+                                                      if (o.id === companion.id) {
+                                                        return { ...o, assignedWorkerId: currentUser?.id };
+                                                      }
+                                                      return o;
+                                                    });
+                                                    setOrders(updatedOrders);
+                                                    saveOrders(updatedOrders);
+                                                    setTailorPendingSearch(companion.id);
+                                                    triggerToast(`Claimed and opened workspace for ${companion.clothingType} (${companion.id})!`, 'success');
+                                                    addActivity('Commission Claimed', `Claimed unassigned companion garment ${companion.clothingType} (${companion.id}) for client ${customer?.name}`, currentUser?.role || 'Tailor', currentUser?.name || 'Tailor');
+                                                  }}
+                                                  className="text-[9px] px-2 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 font-bold cursor-pointer transition animate-pulse"
+                                                  title="Claim this unassigned garment to your pending list and open its workspace"
+                                                >
+                                                  Claim &amp; Open
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          {/* Expanded companion sizes render */}
+                                          {isExp && compMeasurement && (
+                                            <div className="mt-2 p-2.5 rounded-lg border border-indigo-200/50 dark:border-indigo-900/50 bg-white dark:bg-slate-900/60 font-mono text-[10px]">
+                                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-center">
+                                                {Object.entries(compMeasurement.fields).map(([k, val]) => (
+                                                  <div key={k} className="p-1 rounded bg-stone-50 dark:bg-slate-950 border border-stone-100 dark:border-slate-800">
+                                                    <span className="text-[8px] text-stone-400 block uppercase font-sans font-bold">{k}</span>
+                                                    <span className="font-extrabold text-amber-700 dark:text-amber-400">{val || '--'}</span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                              {compMeasurement.notes && (
+                                                <p className="text-[9.5px] text-stone-500 dark:text-stone-300 mt-1.5 italic font-sans">
+                                                  *Memo: {compMeasurement.notes}
+                                                </p>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Specific Instructions (instructions) */}
                             <div className="bg-stone-50/50 dark:bg-slate-900/40 p-3 rounded-xl border border-stone-150 dark:border-slate-900 text-xs text-left text-neutral-600 dark:text-slate-300">
-                              <span className="text-[9px] font-bold text-stone-400 uppercase tracking-widest block mb-1">Tailoring &amp; Fabric Instructions</span>
-                              {order.notes?.fabricDetails && (
-                                <p className="mb-1"><strong className="text-[10px] text-stone-550 dark:text-stone-300 font-semibold">Fabrication:</strong> {order.notes.fabricDetails}</p>
-                              )}
-                              {order.notes?.instructions && (
+                              <span className="text-[9px] font-bold text-stone-400 uppercase tracking-widest block mb-1">Tailoring Instructions</span>
+                              {order.notes?.instructions ? (
                                 <p className="mb-1"><strong className="text-[10px] text-stone-550 dark:text-stone-300 font-semibold">Instructions:</strong> {order.notes.instructions}</p>
+                              ) : (
+                                <p className="text-stone-400 italic text-[11px] font-serif">No extra fabrication instructions logged.</p>
                               )}
-                              {order.notes?.urgentNotes && (
-                                <p className="text-rose-500 font-bold"><strong className="text-[10px] uppercase font-mono">Urgent Alert:</strong> {order.notes.urgentNotes}</p>
-                              )}
-                              {!order.notes?.fabricDetails && !order.notes?.instructions && (
-                                <p className="text-stone-400 italic text-[11px] font-serif">No extra fabrication details logged.</p>
-                              )}
+                            </div>
+
+                            {/* ACTIVE GARMENT INDICATOR */}
+                            <div className="flex items-center justify-between p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-left text-xs">
+                              <span className="font-bold text-stone-700 dark:text-stone-300">Active Job Target:</span>
+                              <span className="px-2 py-0.5 rounded-md bg-amber-500 text-white font-black uppercase text-[10px] tracking-wider font-mono">
+                                {(() => {
+                                  const fabricDetails = order.notes?.fabricDetails || '';
+                                  const match = fabricDetails.match(/Garment item:\s*(.*?)\.\s*Handled by/);
+                                  return (match && match[1]) ? match[1].trim() : order.clothingType;
+                                })()}
+                              </span>
                             </div>
 
                             {/* CLIENT MEASUREMENTS PARAMETERS SUITE */}
                             <div className="p-4 rounded-xl border border-stone-200 dark:border-slate-800 bg-[#fbf9f4] dark:bg-slate-950/80 text-xs text-left">
-                              <div className="flex justify-between items-center mb-2.5">
-                                <span className="text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest flex items-center gap-1">
-                                  <Scissors className="h-3.5 w-3.5 shrink-0" />
-                                  <span>Client Sizing Specifications</span>
+                              <div className="flex justify-between items-center mb-3 pb-2 border-b border-stone-200/60 dark:border-slate-800">
+                                <span className="text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest flex items-center gap-1.5">
+                                  <Scissors className="h-3.5 w-3.5 shrink-0 animate-bounce" />
+                                  <span>Client Sizing Specifications Suite</span>
                                 </span>
-                                {matchingMeasurement && (
-                                  <span className="text-[10px] text-stone-400 font-bold font-mono">Synced ({matchingMeasurement.date})</span>
-                                )}
                               </div>
 
-                              {editingMeasurementOrderId === order.id ? (
-                                <div className="space-y-4 pt-1">
-                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                    {Object.keys(editingFields).map((k) => (
-                                      <div key={k} className="relative">
-                                        <label className="text-[9px] text-stone-400 font-mono uppercase tracking-wider block mb-1">
-                                          {k}
-                                        </label>
-                                        <div className="relative">
-                                          <input
-                                            type="text"
-                                            value={editingFields[k] || ''}
-                                            onChange={(e) => setEditingFields({ ...editingFields, [k]: e.target.value })}
-                                            className={`w-full p-2 pr-10 text-xs font-mono font-bold rounded-lg border focus:ring-1 focus:ring-amber-500 focus:outline-none ${
-                                              isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-900'
-                                            }`}
-                                          />
-                                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-amber-600 uppercase">
-                                            {fieldUnits[k] || 'in'}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
+                              {(() => {
+                                // Extract garment label helper
+                                const getGarmentLabel = (o: any) => {
+                                  const fabricDetails = o.notes?.fabricDetails || '';
+                                  const match = fabricDetails.match(/Garment item:\s*(.*?)\.\s*Handled by/);
+                                  if (match && match[1]) {
+                                    return match[1].trim();
+                                  }
+                                  return o.clothingType;
+                                };
 
-                                  <div className="space-y-1.5 pt-1">
-                                    <label className="text-[10px] text-stone-400 uppercase font-mono tracking-wider block">
-                                      Fitting Instructions &amp; Sizing Memo
-                                    </label>
-                                    <textarea
-                                      rows={2}
-                                      value={editingNotes}
-                                      onChange={(e) => setEditingNotes(e.target.value)}
-                                      placeholder="Note specific details (e.g., tight chest, loose sleeve length...)"
-                                      className={`w-full p-2 text-xs rounded-lg border focus:ring-1 focus:ring-amber-500 focus:outline-none ${
-                                        isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-900'
-                                      }`}
-                                    />
-                                  </div>
+                                const orderLabel = getGarmentLabel(order);
 
-                                  <div className="flex items-center space-x-2 pt-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSaveEditMeasurement(order.id, order.customerId, order.clothingType, matchingMeasurement?.id)}
-                                      className="p-2 px-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-extrabold shadow-sm active:scale-[0.98] transition cursor-pointer"
-                                    >
-                                      Save Sizing Specs
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingMeasurementOrderId(null)}
-                                      className="p-2 px-3 rounded-lg bg-stone-200 hover:bg-stone-300 dark:bg-slate-850 dark:hover:bg-slate-800 text-stone-600 dark:text-stone-300 text-[11px] font-bold active:scale-[0.98] transition cursor-pointer"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="text-left space-y-3">
-                                  {matchingMeasurement ? (
-                                    <>
-                                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-center">
-                                        {Object.entries(matchingMeasurement.fields).map(([k, val]) => (
-                                          <div key={k} className="p-1.5 bg-white dark:bg-slate-900 rounded-lg border border-stone-150 dark:border-slate-800/80">
-                                            <span className="text-[9px] text-stone-400 font-mono uppercase tracking-wider block truncate">{k}</span>
-                                            <span className="font-mono text-xs font-black text-amber-700 dark:text-amber-400">{val || '--'}</span>
+                                const currentCustomer = customers.find((c) => c.id === order.customerId);
+                                const currentCustName = currentCustomer?.name?.toLowerCase().trim();
+                                const currentCustPhone = currentCustomer?.phone?.replace(/\D/g, '');
+
+                                const isCustomerMatch = (cId: string) => {
+                                  if (cId === order.customerId) return true;
+                                  const c = customers.find((cust) => cust.id === cId);
+                                  if (!c) return false;
+                                  if (currentCustName && c.name?.toLowerCase().trim() === currentCustName) return true;
+                                  if (currentCustPhone && c.phone?.replace(/\D/g, '') === currentCustPhone) return true;
+                                  return false;
+                                };
+
+                                // 1. Find all measurement records for this customer
+                                const customerMeasurements = measurements.filter((m) => isCustomerMatch(m.customerId));
+
+                                // 2. Find all orders for this customer to detect unsaved sheets
+                                const customerOrders = orders.filter((o) => isCustomerMatch(o.customerId));
+
+                                // 3. Build unified sheets list
+                                const sheetsList: {
+                                  id: string;
+                                  clothingType: string;
+                                  garmentLabel: string;
+                                  mRecord: MeasurementRecord | null;
+                                  isCurrentJob: boolean;
+                                }[] = [];
+
+                                // Track added measurements
+                                const addedMSRIds = new Set<string>();
+
+                                // Add measurements
+                                customerMeasurements.forEach((m) => {
+                                  const mLabel = m.garmentLabel || m.clothingType;
+                                  const isCurrentJob = m.clothingType.toLowerCase().trim() === order.clothingType.toLowerCase().trim() &&
+                                                       mLabel.toLowerCase().trim() === orderLabel.toLowerCase().trim();
+                                  
+                                  sheetsList.push({
+                                    id: m.id,
+                                    clothingType: m.clothingType,
+                                    garmentLabel: mLabel,
+                                    mRecord: m,
+                                    isCurrentJob
+                                  });
+                                  addedMSRIds.add(m.id);
+                                });
+
+                                // Add orders without measurement sheets
+                                customerOrders.forEach((o) => {
+                                  const oLabel = getGarmentLabel(o);
+                                  const exists = sheetsList.some(
+                                    (s) => s.clothingType.toLowerCase().trim() === o.clothingType.toLowerCase().trim() &&
+                                           s.garmentLabel.toLowerCase().trim() === oLabel.toLowerCase().trim()
+                                  );
+                                  
+                                  if (!exists) {
+                                    sheetsList.push({
+                                      id: `UNSAVED-${o.id}`,
+                                      clothingType: o.clothingType,
+                                      garmentLabel: oLabel,
+                                      mRecord: null,
+                                      isCurrentJob: o.id === order.id
+                                    });
+                                  }
+                                });
+
+                                return (
+                                  <div className="space-y-5">
+                                    {sheetsList.map((sheet, sheetIdx) => {
+                                      const type = sheet.clothingType;
+                                      const label = sheet.garmentLabel;
+                                      const mRecord = sheet.mRecord;
+                                      const isEditingThis = editingMeasurementOrderId === `${order.id}_${sheet.id}`;
+
+                                      return (
+                                        <div key={sheet.id} className={`pt-3 first:pt-0 ${sheetIdx > 0 ? 'border-t border-dashed border-stone-300 dark:border-slate-800' : ''}`}>
+                                          {/* Sub-header for this specific garment */}
+                                          <div className="flex items-center justify-between mb-2 pb-1 border-b border-stone-150 dark:border-slate-900/60">
+                                            <span className="text-[11px] font-extrabold text-stone-850 dark:text-stone-100 flex items-center gap-1.5">
+                                              {renderGenreIcon(type, clothingCategoryEmojis, "h-3.5 w-3.5 text-amber-500", "w-3.5 h-3.5")}
+                                              <span className="uppercase tracking-wide">{label} Sizing Sheet</span>
+                                              {false && (
+                                                <span className="text-[8px] font-sans px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 font-black uppercase tracking-wider shrink-0 animate-pulse">
+                                                  This Job
+                                                </span>
+                                              )}
+                                            </span>
+                                            {mRecord && (
+                                              <span className="text-[9px] text-stone-400 font-mono font-medium">Synced ({new Date(mRecord.date).toLocaleDateString()})</span>
+                                            )}
                                           </div>
-                                        ))}
-                                      </div>
-                                      {matchingMeasurement.notes && (
-                                        <p className="text-[10px] text-stone-500 dark:text-stone-300 mt-2 italic font-serif">
-                                          *Sizing Memo: {matchingMeasurement.notes}
-                                        </p>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <div className="py-3 text-center bg-stone-100/50 dark:bg-slate-900/50 rounded-lg border border-stone-150 dark:border-slate-800/50">
-                                      <p className="text-[11px] text-stone-500 italic font-serif mb-1">No custom physical measurement sheet indexed for {order.clothingType}.</p>
-                                      <p className="text-[9px] text-stone-400">Please review standard template sizes or coordinate parameters with the client in person.</p>
-                                    </div>
-                                  )}
 
-                                  <div className="pt-2 border-t border-dashed border-stone-200 dark:border-slate-800 flex justify-end">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleStartEditMeasurement(order.id, matchingMeasurement || null, order.clothingType)}
-                                      className="p-1.5 px-3 rounded-lg bg-amber-500/10 text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-[10.5px] font-extrabold flex items-center space-x-1.5 cursor-pointer transition"
-                                    >
-                                      <Scissors className="h-3 w-3 shrink-0" />
-                                      <span>{matchingMeasurement ? 'Modify Sizing Parameters' : 'Establish Sizing Parameters'}</span>
-                                    </button>
+                                          {isEditingThis ? (
+                                            <div className="space-y-4 pt-1">
+                                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                                {Object.keys(editingFields).map((k) => (
+                                                  <div key={k} className="relative">
+                                                    <label className="text-[9px] text-stone-400 font-mono uppercase tracking-wider block mb-1">
+                                                      {k}
+                                                    </label>
+                                                    <div className="relative">
+                                                      <input
+                                                        type="text"
+                                                        value={editingFields[k] || ''}
+                                                        onChange={(e) => setEditingFields({ ...editingFields, [k]: e.target.value })}
+                                                        className={`w-full p-2 pr-10 text-xs font-mono font-bold rounded-lg border focus:ring-1 focus:ring-amber-500 focus:outline-none ${
+                                                          isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-900'
+                                                        }`}
+                                                      />
+                                                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-amber-600 uppercase">
+                                                        {fieldUnits[k] || 'in'}
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+
+                                              <div className="space-y-1.5 pt-1">
+                                                <label className="text-[10px] text-stone-400 uppercase font-mono tracking-wider block">
+                                                  Fitting Instructions &amp; Sizing Memo ({label})
+                                                </label>
+                                                <textarea
+                                                  rows={2}
+                                                  value={editingNotes}
+                                                  onChange={(e) => setEditingNotes(e.target.value)}
+                                                  placeholder={`Note specific details for ${label} (e.g., tight chest, loose sleeve length...)`}
+                                                  className={`w-full p-2 text-xs rounded-lg border focus:ring-1 focus:ring-amber-500 focus:outline-none ${
+                                                    isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-900'
+                                                  }`}
+                                                />
+                                              </div>
+
+                                              <div className="flex items-center space-x-2 pt-1.5">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleSaveEditMeasurement(order.id, order.customerId, type, mRecord?.id, label)}
+                                                  className="p-2 px-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-extrabold shadow-sm active:scale-[0.98] transition cursor-pointer"
+                                                >
+                                                  Save {label} Specs
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setEditingMeasurementOrderId(null)}
+                                                  className="p-2 px-3 rounded-lg bg-stone-200 hover:bg-stone-300 dark:bg-slate-850 dark:hover:bg-slate-800 text-stone-600 dark:text-stone-300 text-[11px] font-bold active:scale-[0.98] transition cursor-pointer"
+                                                >
+                                                  Cancel
+                                                </button>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <div className="text-left space-y-3">
+                                              {mRecord ? (
+                                                <>
+                                                  <p className="text-[10px] text-stone-400 mb-2 font-medium">
+                                                    💡 <span className="font-bold">Pro-tip for Craftsman:</span> Click/tap any size value below to check it off as you cut or stitch.
+                                                  </p>
+                                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-center">
+                                                    {Object.entries(mRecord.fields).map(([k, val]) => {
+                                                      const specKey = `${order.id}_${sheet.id}_${k}`;
+                                                      const isChecked = !!completedSizingKeys[specKey];
+                                                      return (
+                                                        <button
+                                                          key={k}
+                                                          type="button"
+                                                          onClick={() => {
+                                                            setCompletedSizingKeys(prev => ({
+                                                              ...prev,
+                                                              [specKey]: !prev[specKey]
+                                                            }));
+                                                          }}
+                                                          className={`p-2 rounded-xl border text-center transition-all flex flex-col items-center justify-center relative cursor-pointer group ${
+                                                            isChecked
+                                                              ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-800 dark:text-emerald-300'
+                                                              : 'bg-white dark:bg-slate-900 border-stone-150 dark:border-slate-800/80 hover:border-amber-500/50'
+                                                          }`}
+                                                        >
+                                                          {isChecked && (
+                                                            <div className="absolute top-1 right-1.5 text-emerald-600 dark:text-emerald-400">
+                                                              <Check className="h-3 w-3" />
+                                                            </div>
+                                                          )}
+                                                          <span className={`text-[8.5px] font-mono uppercase tracking-wider block truncate ${isChecked ? 'text-emerald-650/70 dark:text-emerald-400/70 line-through' : 'text-stone-400'}`}>
+                                                            {k}
+                                                          </span>
+                                                          <span className={`font-mono text-xs font-black ${isChecked ? 'text-emerald-600 dark:text-emerald-400 line-through' : 'text-amber-700 dark:text-amber-400'}`}>
+                                                            {val || '--'}
+                                                          </span>
+                                                          <span className="absolute bottom-0.5 text-[7px] text-stone-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            {isChecked ? 'Tap to undo' : 'Tap to mark done'}
+                                                          </span>
+                                                        </button>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                  {mRecord.notes && (
+                                                    <p className="text-[10px] text-stone-500 dark:text-stone-300 mt-2 italic font-serif">
+                                                      *Sizing Memo: {mRecord.notes}
+                                                    </p>
+                                                  )}
+                                                </>
+                                              ) : (
+                                                <div className="py-3 text-center bg-stone-100/50 dark:bg-slate-900/50 rounded-lg border border-stone-150 dark:border-slate-800/50">
+                                                  <p className="text-[11px] text-stone-500 italic font-serif mb-1">No custom physical measurement sheet indexed for {label}.</p>
+                                                  <p className="text-[9px] text-stone-400">Please review standard template sizes or coordinate parameters with the client in person.</p>
+                                                </div>
+                                              )}
+
+                                              <div className="pt-2 flex justify-end">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    handleStartEditMeasurement(order.id, mRecord || null, type);
+                                                    setEditingMeasurementOrderId(`${order.id}_${sheet.id}`);
+                                                  }}
+                                                  className="p-1 px-2.5 rounded bg-amber-500/10 text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-[10px] font-extrabold flex items-center space-x-1 cursor-pointer transition"
+                                                >
+                                                  <Scissors className="h-2.5 w-2.5 shrink-0" />
+                                                  <span>{mRecord ? `Modify ${label} Specs` : `Establish ${label} Specs`}</span>
+                                                </button>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
-                                </div>
-                              )}
+                                );
+                              })()}
+                            </div>
+
+                            {/* Workshop Progress Notes Memo Log */}
+                            <div className={`p-4 rounded-xl border text-xs text-left ${
+                              isDarkMode ? 'bg-slate-950/60 border-slate-900' : 'bg-stone-50 border-stone-200'
+                            }`}>
+                              <span className="text-[9px] font-bold text-stone-400 uppercase tracking-widest block mb-2">Append Workshop Progress Memo</span>
+                              <form
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  const form = e.currentTarget;
+                                  const input = form.elements.namedItem(`workshopNote_${order.id}`) as HTMLInputElement;
+                                  if (input && input.value.trim()) {
+                                    handleAppendWorkshopNote(order.id, input.value.trim());
+                                    input.value = '';
+                                  }
+                                }}
+                                className="flex gap-2"
+                              >
+                                <input
+                                  type="text"
+                                  name={`workshopNote_${order.id}`}
+                                  placeholder="Type quick workshop comment (e.g., 'Draft pattern drawn', 'First stitch test done')..."
+                                  className={`flex-1 p-2 rounded-xl border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none ${
+                                    isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-200'
+                                  }`}
+                                />
+                                <button
+                                  type="submit"
+                                  className="p-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs active:scale-[0.98] transition cursor-pointer shrink-0"
+                                >
+                                  Post Note
+                                </button>
+                              </form>
                             </div>
 
                             {/* Fabrication Milestones Step Visual */}
@@ -8421,6 +8936,39 @@ export default function App() {
                       <div>
                         <h2 className="font-sans text-lg font-bold tracking-tight">1. Measurements</h2>
                         <p className="text-xs text-stone-400">Specify sizes matching selected fabric drape</p>
+                        
+                        {sessionGarments.length > 0 && (
+                          <div className={`mt-2.5 p-3 rounded-xl border text-xs max-w-md ${
+                            isDarkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50/40 border-indigo-100 shadow-3xs'
+                          }`}>
+                            <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-indigo-100/50 dark:border-indigo-950/50">
+                              <span className="font-serif font-bold text-indigo-900 dark:text-indigo-200 flex items-center space-x-1.5">
+                                <Shirt className="h-4 w-4 text-amber-500 animate-pulse" />
+                                <span>Staged in Session ({sessionGarments.length})</span>
+                              </span>
+                              <span className="font-mono font-bold text-indigo-700 dark:text-indigo-400">
+                                Total: ₹{sessionGarments.reduce((sum, g) => sum + g.price, 0)}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                              {sessionGarments.map((g, idx) => (
+                                <span key={idx} className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-lg bg-indigo-100 dark:bg-slate-900 text-indigo-800 dark:text-indigo-300 font-bold border dark:border-slate-800 text-[10px]">
+                                  <span>{g.clothingType}</span>
+                                  <span className="text-[9px] opacity-75 font-mono">({g.garmentLabel})</span>
+                                  <span>• ₹{g.price}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveGarmentFromSession(idx)}
+                                    className="ml-1 text-indigo-500 hover:text-red-500 font-bold transition cursor-pointer"
+                                    title="Remove item"
+                                  >
+                                    &times;
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex flex-col items-start md:items-end gap-2.5 w-fit max-w-full md:w-auto">
@@ -8692,32 +9240,110 @@ export default function App() {
                       />
                     </div>
 
-                    {/* Quoted Price Adjustment */}
-                    <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-xs transition-all ${
-                      isDarkMode ? 'bg-slate-950/40 border-slate-850' : 'bg-stone-50/50 border-stone-200 shadow-3xs'
-                    }`}>
-                      <span className="font-bold text-stone-600 dark:text-stone-300">Quoted Price:</span>
-                      <div className="relative">
-                        <IndianRupee className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-emerald-500" />
+                    {/* Garment custom label and price override inside a clean grid */}
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Garment Tag/Label */}
+                      <div className="text-xs space-y-1.5">
+                        <label className="block text-stone-400 font-semibold">Garment Custom Label / Tag</label>
                         <input
-                          type="number"
-                          min="1"
-                          value={price}
-                          onChange={(e) => setPrice(parseInt(e.target.value) || 0)}
-                          className={`pl-7 pr-2.5 py-1.5 rounded-lg border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none font-extrabold w-28 text-left ${
-                            isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-250 shadow-sm'
+                          type="text"
+                          placeholder="e.g. Slim Fit, Regular Pant, Blue Linen, Chinos"
+                          value={garmentLabel}
+                          onChange={(e) => setGarmentLabel(e.target.value)}
+                          className={`w-full p-2.5 rounded-xl border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none font-bold ${
+                            isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-900'
                           }`}
                         />
                       </div>
+
+                      {/* Quoted Price */}
+                      <div className="text-xs space-y-1.5">
+                        <label className="block text-stone-400 font-semibold">Quoted Garment Price (₹)</label>
+                        <div className="relative">
+                          <IndianRupee className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-emerald-500" />
+                          <input
+                            type="number"
+                            min="1"
+                            value={price}
+                            onChange={(e) => setPrice(parseInt(e.target.value) || 0)}
+                            className={`w-full pl-7 pr-2.5 py-2.5 rounded-xl border text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none font-extrabold text-left ${
+                              isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-900'
+                            }`}
+                          />
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Button to Add Garment to Active Session list */}
+                    <div className="mt-4">
+                      <button
+                        type="button"
+                        onClick={handleAddGarmentToSession}
+                        className="w-full py-2.5 rounded-xl font-bold text-xs bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900/50 hover:bg-indigo-600/20 active:scale-[0.99] transition flex items-center justify-center space-x-1.5 cursor-pointer"
+                      >
+                        <Plus className="h-4 w-4 text-emerald-500 animate-bounce" />
+                        <span>Add {clothingType} to {customerName ? `${customerName}'s` : "the client's"} garment package ({sessionGarments.length + 1} item(s))</span>
+                      </button>
+                    </div>
+
+                    {/* Session's staged garments summary card */}
+                    {sessionGarments.length > 0 && (
+                      <div className={`mt-5 p-4 rounded-xl border text-xs ${
+                        isDarkMode ? 'bg-slate-950/60 border-slate-900' : 'bg-stone-50 border-stone-200'
+                      }`}>
+                        <div className="flex items-center justify-between border-b pb-2 mb-2">
+                          <span className="font-serif font-bold text-stone-800 dark:text-stone-200 flex items-center space-x-1.5">
+                            <Shirt className="h-4 w-4 text-amber-500" />
+                            <span>Prepared Garments in Session ({sessionGarments.length})</span>
+                          </span>
+                          <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            Total: ₹{sessionGarments.reduce((sum, g) => sum + g.price, 0)}
+                          </span>
+                        </div>
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {sessionGarments.map((g, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-stone-100 dark:bg-slate-900 text-xs border dark:border-slate-800">
+                              <div className="space-y-0.5">
+                                <div className="flex items-center space-x-1.5">
+                                  <span className="font-extrabold text-stone-800 dark:text-stone-100">{g.clothingType}</span>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-400 font-mono">
+                                    {g.garmentLabel}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-stone-400 italic line-clamp-1">Notes: {g.notes}</p>
+                              </div>
+                              <div className="flex items-center space-x-3">
+                                <span className="font-bold font-mono">₹{g.price}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveGarmentFromSession(idx)}
+                                  className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-950/40 rounded transition"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Authorize Save Button */}
                     <div className="mt-6 pt-4 border-t border-stone-100 dark:border-slate-800 flex justify-end items-center gap-4">
+                      {sessionGarments.length > 0 && (
+                        <span className="text-[11px] text-stone-400 font-bold uppercase font-mono">
+                          Staging {sessionGarments.length} Garment(s)
+                        </span>
+                      )}
                       <button
                         type="submit"
                         className="p-3 px-8 bg-amber-600 hover:bg-amber-700 transition-all font-bold text-xs rounded-xl text-white shadow-lg shadow-amber-600/10 flex items-center space-x-2 cursor-pointer active:scale-[0.98]"
                       >
-                        <span>Continue to Client Details</span>
+                        <span>
+                          {sessionGarments.length > 0 
+                            ? `Continue with ${sessionGarments.length} staged garments`
+                            : 'Continue to Client Details'}
+                        </span>
                         <ArrowRight className="h-4 w-4" />
                       </button>
                     </div>
@@ -8991,16 +9617,60 @@ export default function App() {
                 </div>
 
                 {/* Sizing Blueprint */}
-                <div className="space-y-2">
-                  <h4 className="font-bold text-stone-400 uppercase tracking-widest text-[9.5px]">Captured Size values:</h4>
-                  <div className="grid grid-cols-4 gap-2 text-center font-mono">
-                    {lastSavedSession && Object.entries(lastSavedSession.measurement.fields).map(([k, v]) => (
-                      <div key={k} className={`p-2 rounded-lg border ${isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-stone-50'}`}>
-                        <span className="text-[8px] text-stone-400 block uppercase font-sans font-bold">{k}</span>
-                        <span className="text-sm font-extrabold">{cleanMeasurementValue(v)}</span>
+                <div className="space-y-4">
+                  <h4 className="font-bold text-stone-400 uppercase tracking-widest text-[9.5px]">Staged Garments &amp; Patterns Captured:</h4>
+                  {(lastSavedSession?.measurements || [lastSavedSession?.measurement]).filter(Boolean).map((msr, idx) => {
+                    const respectiveOrder = lastSavedSession?.orders?.[idx] || lastSavedSession?.order;
+                    return (
+                      <div key={msr!.id} className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-950/70 border-slate-900' : 'bg-stone-50/50 border-stone-200'}`}>
+                        <div className="flex items-center justify-between border-b pb-2 mb-3">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-extrabold text-stone-800 dark:text-stone-100">{msr!.clothingType}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-amber-150 dark:bg-amber-950 text-amber-800 dark:text-amber-400 font-mono font-bold">
+                              {msr!.garmentLabel || 'Standard'}
+                            </span>
+                            <span className="text-[9px] text-stone-400 font-mono">({msr!.id})</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="font-extrabold text-emerald-600 dark:text-emerald-400 font-mono text-xs">
+                              ₹{respectiveOrder?.price || '0'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => triggerPrintVoucher(msr!.id, lastSavedSession?.customer.id || '', respectiveOrder?.id)}
+                              className="p-1 text-stone-400 hover:text-amber-500 rounded transition cursor-pointer"
+                              title="Print Voucher"
+                            >
+                              <Printer className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => downloadVoucherAsHtml(msr!.id, lastSavedSession?.customer.id || '', respectiveOrder?.id)}
+                              className="p-1 text-stone-400 hover:text-indigo-500 rounded transition cursor-pointer"
+                              title="Download Bill"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {msr!.notes && (
+                          <p className="text-[11px] text-stone-400 italic mb-2.5">
+                            Post notes: {msr!.notes}
+                          </p>
+                        )}
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono">
+                          {Object.entries(msr!.fields).map(([k, v]) => (
+                            <div key={k} className={`p-2 rounded-lg border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white shadow-3xs'}`}>
+                              <span className="text-[8px] text-stone-400 block uppercase font-sans font-bold">{k}</span>
+                              <span className="text-xs font-extrabold">{cleanMeasurementValue(v)}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
 
                 {/* Settle Action Desk */}
@@ -9008,20 +9678,40 @@ export default function App() {
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => triggerPrintVoucher(lastSavedSession?.measurement.id || '', lastSavedSession?.customer.id || '', lastSavedSession?.order?.id)}
+                      onClick={() => {
+                        const garments = lastSavedSession?.measurements || [];
+                        if (garments.length > 0) {
+                          garments.forEach((g, idx) => {
+                            const ord = lastSavedSession?.orders?.[idx];
+                            triggerPrintVoucher(g.id, lastSavedSession?.customer.id || '', ord?.id);
+                          });
+                        } else {
+                          triggerPrintVoucher(lastSavedSession?.measurement.id || '', lastSavedSession?.customer.id || '', lastSavedSession?.order?.id);
+                        }
+                      }}
                       className="p-3 px-5 border hover:bg-stone-100 dark:hover:bg-slate-800 transition rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5 cursor-pointer"
                     >
                       <Printer className="h-4.5 w-4.5 text-amber-500" />
-                      <span>Print Voucher</span>
+                      <span>Print All Vouchers</span>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => downloadVoucherAsHtml(lastSavedSession?.measurement.id || '', lastSavedSession?.customer.id || '', lastSavedSession?.order?.id)}
+                      onClick={() => {
+                        const garments = lastSavedSession?.measurements || [];
+                        if (garments.length > 0) {
+                          garments.forEach((g, idx) => {
+                            const ord = lastSavedSession?.orders?.[idx];
+                            downloadVoucherAsHtml(g.id, lastSavedSession?.customer.id || '', ord?.id);
+                          });
+                        } else {
+                          downloadVoucherAsHtml(lastSavedSession?.measurement.id || '', lastSavedSession?.customer.id || '', lastSavedSession?.order?.id);
+                        }
+                      }}
                       className="p-3 px-5 border bg-indigo-50/20 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/35 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition text-indigo-600 dark:text-indigo-400 rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5 cursor-pointer"
                     >
                       <Download className="h-4 w-4" />
-                      <span>Download Bill</span>
+                      <span>Download All Bills</span>
                     </button>
                   </div>
 

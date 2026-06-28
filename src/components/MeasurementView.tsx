@@ -474,8 +474,13 @@ export default function MeasurementView({
                     }`}
                   >
                     <div>
-                      <div className="flex items-center space-x-1.5">
+                      <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
                         <span className="font-bold text-stone-850 dark:text-stone-200">{rec.clothingType} Pattern</span>
+                        {rec.garmentLabel && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">
+                            {rec.garmentLabel}
+                          </span>
+                        )}
                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-mono">{rec.id}</span>
                       </div>
                       <p className="text-[10px] text-stone-400 mt-0.5">

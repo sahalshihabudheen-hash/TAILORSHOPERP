@@ -18,6 +18,7 @@ export interface MeasurementRecord {
   id: string;
   customerId: string;
   clothingType: string;
+  garmentLabel?: string; // Optional custom name/label (e.g. Slim Fit, Regular Pant, Blue Linen, Chinos)
   date: string;
   fields: Record<string, string>; // Length, Chest, Waist, Collar, Sleeve, Inseam, Hips, Shoulder, etc.
   notes?: string;
