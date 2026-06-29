@@ -57,6 +57,7 @@ export interface Order {
   deliveryDate: string;
   status: OrderStatus;
   assignedWorkerId?: string;
+  measurementId?: string;
   notes: OrderNotes;
   images: OrderImages;
   price: number;

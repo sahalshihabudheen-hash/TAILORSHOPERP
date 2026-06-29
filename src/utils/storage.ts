@@ -20,6 +20,128 @@ const KEYS = {
   REGISTERED_TAILORS: 'registered_tailors',
 };
 
+// Pure TS SHA-256 implementation for secure password hashing
+export function sha256(ascii: string): string {
+  function rightRotate(value: number, amount: number) {
+    return (value >>> amount) | (value << (32 - amount));
+  }
+  
+  const lengthProperty = 'length';
+  let i, j;
+  
+  const words: number[] = [];
+  const asciiLength = ascii[lengthProperty];
+  
+  const hash = [
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+  ];
+  const k = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  ];
+  
+  const wordsLength = ((asciiLength + 8) >> 6) + 1;
+  const totalWords = wordsLength * 16;
+  for (i = 0; i < totalWords; i++) words[i] = 0;
+  for (i = 0; i < asciiLength; i++) {
+    words[i >> 2] |= ascii.charCodeAt(i) << (24 - (i & 3) * 8);
+  }
+  words[asciiLength >> 2] |= 0x80 << (24 - (asciiLength & 3) * 8);
+  words[totalWords - 1] = asciiLength * 8;
+  
+  for (j = 0; j < totalWords; j += 16) {
+    const w = words.slice(j, j + 16);
+    const oldHash = hash.slice(0);
+    
+    for (i = 0; i < 64; i++) {
+      if (i >= 16) {
+        const s0 = rightRotate(w[i - 15], 7) ^ rightRotate(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+        const s1 = rightRotate(w[i - 2], 17) ^ rightRotate(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+      }
+      
+      const ch = (hash[4] & hash[5]) ^ (~hash[4] & hash[6]);
+      const maj = (hash[0] & hash[1]) ^ (hash[0] & hash[2]) ^ (hash[1] & hash[2]);
+      const sigma0 = rightRotate(hash[0], 2) ^ rightRotate(hash[0], 13) ^ rightRotate(hash[0], 22);
+      const sigma1 = rightRotate(hash[4], 6) ^ rightRotate(hash[4], 11) ^ rightRotate(hash[4], 25);
+      
+      const temp1 = hash[7] + sigma1 + ch + k[i] + w[i];
+      const temp2 = sigma0 + maj;
+      
+      hash[7] = hash[6];
+      hash[6] = hash[5];
+      hash[5] = hash[4];
+      hash[4] = (hash[3] + temp1) | 0;
+      hash[3] = hash[2];
+      hash[2] = hash[1];
+      hash[1] = hash[0];
+      hash[0] = (temp1 + temp2) | 0;
+    }
+    
+    for (i = 0; i < 8; i++) {
+      hash[i] = (hash[i] + oldHash[i]) | 0;
+    }
+  }
+  
+  let hex = '';
+  for (i = 0; i < 8; i++) {
+    const h = hash[i];
+    for (j = 3; j >= 0; j--) {
+      const b = (h >>> (j * 8)) & 255;
+      hex += (b < 16 ? '0' : '') + b.toString(16);
+    }
+  }
+  return hex;
+}
+
+export function hashPassword(plainText: string): string {
+  if (!plainText) return '';
+  if (/^[0-9a-f]{64}$/i.test(plainText)) return plainText; // already hashed
+  return sha256(plainText);
+}
+
+export interface DbStatus {
+  connected: boolean;
+  error: string | null;
+  lastSync: Date | null;
+}
+
+let dbStatus: DbStatus = {
+  connected: true, // assume connected on start
+  error: null,
+  lastSync: null
+};
+
+const dbStatusListeners = new Set<(status: DbStatus) => void>();
+
+export function getDbStatus(): DbStatus {
+  return dbStatus;
+}
+
+export function subscribeDbStatus(listener: (status: DbStatus) => void) {
+  dbStatusListeners.add(listener);
+  listener(dbStatus);
+  return () => {
+    dbStatusListeners.delete(listener);
+  };
+}
+
+export function updateDbStatus(status: Partial<DbStatus>) {
+  dbStatus = { ...dbStatus, ...status };
+  dbStatusListeners.forEach(l => l(dbStatus));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('db-status-update'));
+  }
+}
+
+const isCollectionLoadedFromFirestore: Record<string, boolean> = {};
+
 // Generic Sync setup function to sync Firestore collections to LocalStorage securely
 const setupSync = <T extends { id: string }>(
   collectionName: string,
@@ -31,6 +153,8 @@ const setupSync = <T extends { id: string }>(
   const colRef = collection(db, firestoreCollectionName);
   
   onSnapshot(colRef, (snapshot) => {
+    isCollectionLoadedFromFirestore[collectionName] = true;
+    updateDbStatus({ connected: true, error: null, lastSync: new Date() });
     const items: T[] = [];
     snapshot.forEach((docSnap) => {
       const data = docSnap.data() as T;
@@ -139,6 +263,7 @@ const setupSync = <T extends { id: string }>(
       window.dispatchEvent(new CustomEvent('db-sync-update'));
     }
   }, (err) => {
+    updateDbStatus({ connected: false, error: err instanceof Error ? err.message : String(err) });
     try {
       handleFirestoreError(err, OperationType.LIST, firestoreCollectionName);
     } catch (e) {
@@ -200,16 +325,26 @@ const syncListToFirestore = async <T extends { id: string }>(
     }
   }
 
+  // Guard: If we haven't loaded the real snapshot from Firestore yet, do NOT attempt background deletions.
+  if (!isCollectionLoadedFromFirestore[collectionName]) {
+    console.log(`Skipping sync-deletion for ${collectionName} since Firestore snapshot has not loaded yet.`);
+    return;
+  }
+
   // Query database in background to clean up deleted records (skip append-only logs)
   if (collectionName !== 'activities' && collectionName !== 'notifications') {
     try {
       const colRef = collection(db, firestoreCollectionName);
       const snapshot = await getDocs(colRef);
+      const activeOwner = getActiveShopOwnerEmail().toLowerCase().trim();
+      const isMasterAdmin = (activeOwner === 'owner@gmail.com' || activeOwner === 'sahalshihabudheen@gmail.com');
+
       for (const docSnap of snapshot.docs) {
         const data = docSnap.data();
         
         if (isRegisteredTailors) {
-          if (data.isRegisteredTailor === true && !ids.has(docSnap.id)) {
+          // Only master admin is permitted to delete tailor profiles
+          if (isMasterAdmin && data.isRegisteredTailor === true && !ids.has(docSnap.id)) {
             try {
               await deleteDoc(docSnap.ref);
             } catch (err) {
@@ -217,7 +352,9 @@ const syncListToFirestore = async <T extends { id: string }>(
             }
           }
         } else if (firestoreCollectionName === 'workers') {
-          if (data.isRegisteredTailor !== true && !ids.has(docSnap.id)) {
+          // Normal workers have shopOwnerEmail; only delete if owned by active shop
+          const itemOwner = (data.shopOwnerEmail || 'sahalshihabudheen@gmail.com').toLowerCase().trim();
+          if (itemOwner === activeOwner && data.isRegisteredTailor !== true && !ids.has(docSnap.id)) {
             try {
               await deleteDoc(docSnap.ref);
             } catch (err) {
@@ -225,7 +362,10 @@ const syncListToFirestore = async <T extends { id: string }>(
             }
           }
         } else {
-          if (!ids.has(docSnap.id)) {
+          // Other collections like customers, measurements, orders, etc.
+          // Only delete if owned by the active shop owner to prevent cross-shop wipes
+          const itemOwner = (data.shopOwnerEmail || 'sahalshihabudheen@gmail.com').toLowerCase().trim();
+          if (itemOwner === activeOwner && !ids.has(docSnap.id)) {
             try {
               await deleteDoc(docSnap.ref);
             } catch (err) {
@@ -314,18 +454,44 @@ const saveFilteredCollection = <T extends { id: string }>(
 ) => {
   const ownerEmail = getActiveShopOwnerEmail();
   
-  const cleanedActiveShopItems = activeShopItems.map(item => ({
+  let cleanedActiveShopItems = activeShopItems.map(item => ({
     ...item,
     shopOwnerEmail: ownerEmail
   }));
 
+  // Automatically hash customer passwords on save if collectionName is customers
+  if (collectionName === 'customers') {
+    cleanedActiveShopItems = cleanedActiveShopItems.map((item: any) => {
+      if (item.password) {
+        return {
+          ...item,
+          password: hashPassword(item.password)
+        };
+      }
+      return item;
+    });
+  }
+
   const rawData = localStorage.getItem(localStorageKey);
   const fullList: any[] = rawData ? JSON.parse(rawData) : initialData;
 
-  const otherShopsItems = fullList.filter(item => {
+  let otherShopsItems = fullList.filter(item => {
     const itemOwner = (item.shopOwnerEmail || 'sahalshihabudheen@gmail.com').toLowerCase().trim();
     return itemOwner !== ownerEmail;
   });
+
+  // Make sure other shops' customer passwords are also hashed if they are in customers list
+  if (collectionName === 'customers') {
+    otherShopsItems = otherShopsItems.map((item: any) => {
+      if (item.password) {
+        return {
+          ...item,
+          password: hashPassword(item.password)
+        };
+      }
+      return item;
+    });
+  }
 
   const mergedList = [...otherShopsItems, ...cleanedActiveShopItems];
 
@@ -395,7 +561,7 @@ export const getRegisteredTailors = (): any[] => {
       email: 'sahalshihabudheen@gmail.com',
       phone: '+91 94460 12345',
       location: 'Kerala, India',
-      password: 'password123',
+      password: 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', // password123 hashed
       hasRegisteredShop: true,
       shopName: 'TAILORSHOP ERP',
       logoUrl: 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=200&auto=format&fit=crop',
@@ -423,6 +589,11 @@ export const getRegisteredTailors = (): any[] => {
       delete list[ownerIndex].logoUrl;
       subChanged = true;
     }
+    // Upgrade existing admin password to hash if it is in plain text
+    if (list[ownerIndex].password && !/^[0-9a-f]{64}$/i.test(list[ownerIndex].password)) {
+      list[ownerIndex].password = hashPassword(list[ownerIndex].password);
+      subChanged = true;
+    }
     if (subChanged) {
       changed = true;
     }
@@ -433,7 +604,7 @@ export const getRegisteredTailors = (): any[] => {
       email: 'owner@gmail.com',
       phone: '+91 99999 99999',
       location: 'Kerala, India',
-      password: 'TAILORSHOP_ERPOwner2026!',
+      password: 'd3b6fcf0b3589137824869e7108f66422f0d1da3a481fd2a746dfdb971f098ae', // TAILORSHOP_ERPOwner2026! hashed
       hasRegisteredShop: false,
       createdAt: new Date().toISOString()
     };
@@ -441,16 +612,35 @@ export const getRegisteredTailors = (): any[] => {
     changed = true;
   }
 
+  // Ensure ALL passwords in the list are securely hashed
+  list = list.map((t: any) => {
+    if (t && t.password && !/^[0-9a-f]{64}$/i.test(t.password)) {
+      changed = true;
+      return { ...t, password: hashPassword(t.password) };
+    }
+    return t;
+  });
+
   if (changed) {
     localStorage.setItem(KEYS.REGISTERED_TAILORS, JSON.stringify(list));
-    syncListToFirestore('registered_tailors', list);
+    // To prevent async lag from a blank PC B blanking out the database:
+    // Only write sync if this is NOT a completely new, uninitialized local storage instance!
+    if (!isFirstTime) {
+      syncListToFirestore('registered_tailors', list);
+    }
   }
   return list;
 };
 
 export const saveRegisteredTailors = (list: any[]) => {
-  localStorage.setItem(KEYS.REGISTERED_TAILORS, JSON.stringify(list));
-  syncListToFirestore('registered_tailors', list);
+  const hashedList = list.map((t: any) => {
+    if (t && t.password) {
+      return { ...t, password: hashPassword(t.password) };
+    }
+    return t;
+  });
+  localStorage.setItem(KEYS.REGISTERED_TAILORS, JSON.stringify(hashedList));
+  syncListToFirestore('registered_tailors', hashedList);
 };
 
 export const getWorkers = (): Worker[] => {

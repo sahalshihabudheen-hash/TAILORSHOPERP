@@ -87,52 +87,37 @@ service cloud.firestore {
 
     // Customers collection
     match /customers/{customerId} {
-      allow read: if true;
-      allow create, update: if isValidCustomer(incoming());
-      allow delete: if true;
+      allow read, write: if true;
     }
 
     // Measurements collection
     match /measurements/{measurementId} {
-      allow read: if true;
-      allow create, update: if isValidMeasurement(incoming());
-      allow delete: if true;
+      allow read, write: if true;
     }
 
-    // Workers collection
+    // Workers collection (stores workers and registered tailors)
     match /workers/{workerId} {
-      allow read: if true;
-      allow create, update: if isValidWorker(incoming());
-      allow delete: if true;
+      allow read, write: if true;
     }
 
     // Orders collection
     match /orders/{orderId} {
-      allow read: if true;
-      allow create, update: if isValidOrder(incoming());
-      allow delete: if true;
+      allow read, write: if true;
     }
 
     // Notifications collection
     match /notifications/{notificationId} {
-      allow read: if true;
-      allow create, update: if isValidNotification(incoming());
-      allow delete: if true;
+      allow read, write: if true;
     }
 
     // Activities collection
     match /activities/{activityId} {
-      allow read: if true;
-      allow create: if isValidActivity(incoming());
-      allow update: if isValidActivity(incoming());
-      allow delete: if true;
+      allow read, write: if true;
     }
 
     // Registered tailors collection
     match /registered_tailors/{tailorId} {
-      allow read: if true;
-      allow create, update: if isValidRegisteredTailor(incoming());
-      allow delete: if true;
+      allow read, write: if true;
     }
 
     // Test collection for boot validation

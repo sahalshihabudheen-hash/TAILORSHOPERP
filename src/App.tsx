@@ -60,7 +60,11 @@ import {
   saveWorkers,
   getRegisteredTailors,
   saveRegisteredTailors,
-  purgeAllDatabaseRecords
+  purgeAllDatabaseRecords,
+  sha256,
+  getDbStatus,
+  subscribeDbStatus,
+  DbStatus
 } from './utils/storage';
 import { Customer, MeasurementRecord, Order, OrderStatus, Worker } from './types';
 import WorkerManagementView from './components/WorkerManagementView';
@@ -335,9 +339,19 @@ function Typewriter({ text, speed = 40, isDark = true }: { text: string; speed?:
 export default function App() {
   // Appearance
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
+  
+  // Database status states
+  const [dbStatus, setDbStatus] = useState<DbStatus>(getDbStatus());
+  const [isDbStatusModalOpen, setIsDbStatusModalOpen] = useState(false);
 
   useEffect(() => {
     document.title = "tailorSHOP ERP";
+    
+    // Subscribe to database connection status changes
+    const unsubscribe = subscribeDbStatus((status) => {
+      setDbStatus(status);
+    });
+    return unsubscribe;
   }, []);
 
   // Authentication & Session structures
@@ -1404,6 +1418,7 @@ export default function App() {
   const [tailorPendingSort, setTailorPendingSort] = useState('deadline_asc');
   const [completedSizingKeys, setCompletedSizingKeys] = useState<Record<string, boolean>>({});
   const [expandedCompanionSpecs, setExpandedCompanionSpecs] = useState<Record<string, boolean>>({});
+  const [activeOrderViewOverride, setActiveOrderViewOverride] = useState<Record<string, string>>({});
 
   // Reset page when tailor pending genre filter or search changes
   useEffect(() => {
@@ -1467,6 +1482,15 @@ export default function App() {
       window.removeEventListener('db-sync-update', handleSync);
     };
   }, []);
+
+  // Sync effect when currentUser (active shop/worker) changes
+  useEffect(() => {
+    setCustomers(getCustomers());
+    setMeasurements(getMeasurements());
+    setOrders(getOrders());
+    setWorkers(getWorkers());
+    setRegisteredTailors(getRegisteredTailors());
+  }, [currentUser]);
 
   // Sync effect when dark mode changes
   useEffect(() => {
@@ -2057,6 +2081,7 @@ export default function App() {
       const tPassword = (tailor.password || '').trim();
 
       const isPasswordMatch = 
+        (tPassword && tPassword === sha256(passwordClean)) ||
         (tPassword && tPassword.toLowerCase().trim() === passwordClean.toLowerCase().trim()) ||
         (tPassword && isPhoneMatch(tPassword, passwordClean)) ||
         (tPassword && tPassword.replace(/\D/g, '') === passwordClean.replace(/\D/g, ''));
@@ -2151,6 +2176,7 @@ export default function App() {
       const isOrderIdPassword = customerOrders.some(o => o.id.toUpperCase().trim() === passwordCleanUpper);
 
       const isPasswordMatch = 
+        (customer.password && customer.password === sha256(passwordClean)) ||
         (customer.password && customer.password === passwordClean) || 
         passwordClean === 'password123' || 
         passwordClean === customer.id ||
@@ -2737,13 +2763,14 @@ export default function App() {
       createdMeasurements.push(newMeasureRecord);
 
       const newOrder: Order = {
-        id: `ORD-${orders.length + 9841 + index}`,
+        id: `ORD-${Date.now() + index}`,
         customerId: currentCust!.id,
         clothingType: g.clothingType,
         quantity: 1,
         deliveryDate: readyDate,
         status: 'Measurement Taken',
         price: g.price,
+        measurementId: newMeasureRecord.id,
         advancePayment: Math.round(g.price * 0.5),
         remainingBalance: Math.round(g.price * 0.5),
         paymentStatus: 'Partially Paid',
@@ -4327,7 +4354,23 @@ export default function App() {
       }`}>
         
         {/* Interactive Corner Theme Switcher & Status */}
-        <div className="absolute top-4 right-4 z-50 flex items-center space-x-3">
+        <div className="absolute top-4 right-4 z-50 flex items-center space-x-2">
+          {/* Database Connection Status Button */}
+          <button
+            type="button"
+            onClick={() => setIsDbStatusModalOpen(true)}
+            className={`p-2.5 rounded-xl border flex items-center space-x-1.5 transition-all text-xs font-black cursor-pointer shadow-sm ${
+              dbStatus.connected && !dbStatus.error
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 dark:bg-emerald-400/5 hover:bg-emerald-500/15'
+                : 'bg-amber-500/10 border-amber-500/25 text-amber-600 dark:text-amber-400 dark:bg-amber-400/5 hover:bg-amber-500/15'
+            }`}
+            title={dbStatus.connected && !dbStatus.error ? 'Live Sync active with Firebase Cloud' : 'Sync Offline / Local State'}
+          >
+            <div className={`h-2.5 w-2.5 rounded-full ${dbStatus.connected && !dbStatus.error ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-ping'}`} />
+            <span className="hidden sm:inline-block font-sans">{dbStatus.connected && !dbStatus.error ? 'Live Sync Active' : 'Offline Backup'}</span>
+            <span className="sm:hidden font-sans">{dbStatus.connected && !dbStatus.error ? 'Live' : 'Local'}</span>
+          </button>
+
           <button
             onClick={() => setIsDarkMode(!isDarkMode)}
             className={`p-2.5 rounded-xl border shadow-sm transition-all cursor-pointer ${
@@ -5118,7 +5161,23 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3 sm:space-x-4">
+              {/* Database Connection Status Button */}
+              <button
+                type="button"
+                onClick={() => setIsDbStatusModalOpen(true)}
+                className={`p-1.5 px-2 sm:p-2 sm:px-3 rounded-xl border flex items-center space-x-1.5 transition-all text-xs font-black cursor-pointer shadow-sm ${
+                  dbStatus.connected && !dbStatus.error
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 dark:bg-emerald-400/5 hover:bg-emerald-500/15'
+                    : 'bg-amber-500/10 border-amber-500/25 text-amber-600 dark:text-amber-400 dark:bg-amber-400/5 hover:bg-amber-500/15'
+                }`}
+                title={dbStatus.connected && !dbStatus.error ? 'Live Sync active with Firebase Cloud' : 'Sync Offline / Local State'}
+              >
+                <div className={`h-2 w-2 rounded-full ${dbStatus.connected && !dbStatus.error ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-ping'}`} />
+                <span className="hidden md:inline-block font-sans">{dbStatus.connected && !dbStatus.error ? 'Live Sync Active' : 'Offline Backup'}</span>
+                <span className="md:hidden font-sans">{dbStatus.connected && !dbStatus.error ? 'Live' : 'Local'}</span>
+              </button>
+
               {/* Dark mode switcher */}
               <button
                 onClick={() => setIsDarkMode(!isDarkMode)}
@@ -7181,7 +7240,7 @@ export default function App() {
                                   <p><span className="font-mono text-[9px] text-stone-400">Phone:</span> {t.phone || 'N/A'}</p>
                                   <p><span className="font-mono text-[9px] text-stone-400">Room:</span> {t.location || 'N/A'}</p>
                                   {t.shopName && <p><span className="font-mono text-[9px] text-stone-400">Shop:</span> {t.shopName}</p>}
-                                  <p className="text-[10.5px] font-mono text-amber-605 dark:text-amber-400 p-1 bg-amber-600/5 rounded inline-block mt-1">PSWD: {t.password}</p>
+                                  <p className="text-[10.5px] font-mono text-stone-500 dark:text-stone-400 p-1 bg-stone-500/5 rounded inline-block mt-1">PSWD: •••••••• (Secured)</p>
                                 </div>
                               </div>
                               <div className="flex items-center space-x-1.5 shrink-0">
@@ -8295,12 +8354,30 @@ export default function App() {
                       </div>
                     )}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {paginatedWorkerOrders.map((order) => {
+                      {paginatedWorkerOrders.map((origOrder) => {
+                      const order = orders.find(o => o.id === (activeOrderViewOverride[origOrder.id] || origOrder.id)) || origOrder;
                       const customer = customers.find((c) => c.id === order.customerId);
+
+                      const currentCustName = customer?.name?.toLowerCase().trim();
+                      const currentCustPhone = customer?.phone?.replace(/\D/g, '');
+
+                      const isCustomerMatch = (cId: string) => {
+                        if (cId === order.customerId) return true;
+                        const c = customers.find((cust) => cust.id === cId);
+                        if (!c) return false;
+                        if (currentCustName && c.name?.toLowerCase().trim() === currentCustName) return true;
+                        if (currentCustPhone && c.phone?.replace(/\D/g, '') === currentCustPhone) return true;
+                        return false;
+                      };
+
+                      const allCustomerOrders = orders.filter((o) => isCustomerMatch(o.customerId));
+
                       // Look up the measurements for this client and this garment type
-                      const matchingMeasurement = measurements.find(
-                        (m) => m.customerId === order.customerId && m.clothingType.toLowerCase().trim() === order.clothingType.toLowerCase().trim()
-                      );
+                      const matchingMeasurement = order.measurementId
+                        ? measurements.find(m => m.id === order.measurementId)
+                        : measurements.find(
+                            (m) => m.customerId === order.customerId && m.clothingType.toLowerCase().trim() === order.clothingType.toLowerCase().trim()
+                          );
 
                       const statusSteps: OrderStatus[] = [
                         'Order Received',
@@ -8316,7 +8393,7 @@ export default function App() {
 
                       return (
                         <div
-                          key={order.id}
+                          key={origOrder.id}
                           className={`p-5 rounded-2xl border flex flex-col justify-between transition-all relative ${
                             isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-white border-stone-200 shadow-xs'
                           }`}
@@ -8398,9 +8475,11 @@ export default function App() {
                                   </span>
                                   <div className="flex flex-col gap-1.5">
                                     {companionOrders.map((companion) => {
-                                      const compMeasurement = measurements.find(
-                                        (m) => isCustomerMatch(m.customerId) && m.clothingType.toLowerCase().trim() === companion.clothingType.toLowerCase().trim()
-                                      );
+                                      const compMeasurement = companion.measurementId
+                                        ? measurements.find(m => m.id === companion.measurementId)
+                                        : measurements.find(
+                                            (m) => isCustomerMatch(m.customerId) && m.clothingType.toLowerCase().trim() === companion.clothingType.toLowerCase().trim()
+                                          );
                                       const isExp = !!expandedCompanionSpecs[`${order.id}_${companion.id}`];
                                       return (
                                         <div key={companion.id} className="border-b last:border-b-0 border-indigo-100/30 dark:border-indigo-950/30 pb-1.5 last:pb-0">
@@ -8507,16 +8586,55 @@ export default function App() {
                               )}
                             </div>
 
-                            {/* ACTIVE GARMENT INDICATOR */}
-                            <div className="flex items-center justify-between p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-left text-xs">
-                              <span className="font-bold text-stone-700 dark:text-stone-300">Active Job Target:</span>
-                              <span className="px-2 py-0.5 rounded-md bg-amber-500 text-white font-black uppercase text-[10px] tracking-wider font-mono">
-                                {(() => {
-                                  const fabricDetails = order.notes?.fabricDetails || '';
-                                  const match = fabricDetails.match(/Garment item:\s*(.*?)\.\s*Handled by/);
-                                  return (match && match[1]) ? match[1].trim() : order.clothingType;
-                                })()}
-                              </span>
+                            {/* ACTIVE GARMENT INDICATOR / SELECTOR */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-left text-xs gap-2">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-bold text-stone-700 dark:text-stone-300">Active Job Target:</span>
+                                {allCustomerOrders.length > 1 && (
+                                  <span className="text-[9px] font-bold text-amber-600 dark:text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded uppercase tracking-wider">
+                                    Ordered ({allCustomerOrders.length} garments)
+                                  </span>
+                                )}
+                              </div>
+                              {allCustomerOrders.length > 1 ? (
+                                <div className="relative">
+                                  <select
+                                    value={order.id}
+                                    onChange={(e) => {
+                                      const targetOrderId = e.target.value;
+                                      setActiveOrderViewOverride(prev => ({
+                                        ...prev,
+                                        [origOrder.id]: targetOrderId
+                                      }));
+                                      triggerToast(`Switched active view to ${orders.find(o => o.id === targetOrderId)?.clothingType || 'Garment'}!`, 'success');
+                                    }}
+                                    className={`text-xs font-mono font-extrabold rounded-lg border p-1.5 px-3 focus:ring-1 focus:ring-amber-500 focus:outline-none cursor-pointer pr-8 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23F59E0B%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:10px_10px] bg-[right_10px_center] bg-no-repeat ${
+                                      isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-stone-200 text-stone-900 shadow-2xs'
+                                    }`}
+                                  >
+                                    {allCustomerOrders.map((custOrder) => {
+                                      const fabricDetails = custOrder.notes?.fabricDetails || '';
+                                      const match = fabricDetails.match(/Garment item:\s*(.*?)\.\s*Handled by/);
+                                      const label = (match && match[1]) ? match[1].trim() : custOrder.clothingType;
+                                      const isAssignedToMe = custOrder.assignedWorkerId === currentUser?.id;
+                                      
+                                      return (
+                                        <option key={custOrder.id} value={custOrder.id}>
+                                          {label} ({custOrder.id.substring(0, 8)}) {isAssignedToMe ? '★ (Yours)' : ''}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                </div>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-md bg-amber-500 text-white font-black uppercase text-[10px] tracking-wider font-mono">
+                                  {(() => {
+                                    const fabricDetails = order.notes?.fabricDetails || '';
+                                    const match = fabricDetails.match(/Garment item:\s*(.*?)\.\s*Handled by/);
+                                    return (match && match[1]) ? match[1].trim() : order.clothingType;
+                                  })()}
+                                </span>
+                              )}
                             </div>
 
                             {/* CLIENT MEASUREMENTS PARAMETERS SUITE */}
@@ -8622,11 +8740,6 @@ export default function App() {
                                             <span className="text-[11px] font-extrabold text-stone-850 dark:text-stone-100 flex items-center gap-1.5">
                                               {renderGenreIcon(type, clothingCategoryEmojis, "h-3.5 w-3.5 text-amber-500", "w-3.5 h-3.5")}
                                               <span className="uppercase tracking-wide">{label} Sizing Sheet</span>
-                                              {false && (
-                                                <span className="text-[8px] font-sans px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 font-black uppercase tracking-wider shrink-0 animate-pulse">
-                                                  This Job
-                                                </span>
-                                              )}
                                             </span>
                                             {mRecord && (
                                               <span className="text-[9px] text-stone-400 font-mono font-medium">Synced ({new Date(mRecord.date).toLocaleDateString()})</span>
@@ -12295,6 +12408,121 @@ export default function App() {
         })()}
 
       </main>
+
+      {/* Real-time Cloud Database Connection Status Modal */}
+      {isDbStatusModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className={`w-full max-w-lg rounded-2xl border p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-left ${
+            isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white' : 'bg-white border-stone-200 text-stone-900'
+          }`}>
+            <div className="flex items-center justify-between pb-4 border-b border-stone-150 dark:border-zinc-800">
+              <div className="flex items-center space-x-2">
+                <Database className="h-5 w-5 text-amber-500" />
+                <h3 className="font-sans font-black text-base uppercase tracking-wider">Cloud Sync Control</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDbStatusModalOpen(false)}
+                className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-sm font-bold p-1 rounded"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {/* Connection Status Panel */}
+              <div className={`p-4 rounded-xl border ${
+                dbStatus.connected && !dbStatus.error
+                  ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-800 dark:text-emerald-300'
+                  : 'bg-amber-500/5 border-amber-500/20 text-amber-800 dark:text-amber-300'
+              }`}>
+                <div className="flex items-center space-x-2">
+                  <div className={`h-3 w-3 rounded-full ${dbStatus.connected && !dbStatus.error ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                  <span className="font-extrabold text-sm font-sans uppercase tracking-wider">
+                    {dbStatus.connected && !dbStatus.error ? 'Live Cloud Sync Connected' : 'Local Offline Backup Mode'}
+                  </span>
+                </div>
+                <p className="text-xs mt-1.5 opacity-80 leading-relaxed font-semibold">
+                  {dbStatus.connected && !dbStatus.error
+                    ? 'Your changes (customers, sizing cards, orders, and bills) are automatically synchronized in real-time across all PCs!'
+                    : 'Firebase is offline or permissions are restricted. Changes will be saved locally on this PC until connections are restored.'}
+                </p>
+                {dbStatus.error && (
+                  <div className="mt-3 p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[10.5px] font-mono text-rose-500 dark:text-rose-400 leading-normal select-text break-all">
+                    <strong>Error Diagnostic:</strong> {dbStatus.error}
+                  </div>
+                )}
+              </div>
+
+              {/* Active Identity separation */}
+              <div className={`p-4 rounded-xl border ${
+                isDarkMode ? 'bg-zinc-900/40 border-zinc-900' : 'bg-stone-50 border-stone-150'
+              }`}>
+                <span className="text-[10px] uppercase font-bold tracking-widest text-stone-400 block mb-1">Active Shop Workspace Identifier</span>
+                <p className="text-xs font-mono font-bold text-amber-500 select-text bg-amber-500/5 p-1 px-2 rounded inline-block truncate max-w-full">
+                  {currentUser ? (currentUser.email || currentUser.id) : 'sahalshihabudheen@gmail.com (Default Master)'}
+                </p>
+                
+                <div className="mt-3 text-[11px] leading-relaxed text-stone-500 dark:text-stone-400 font-semibold">
+                  ⚠️ <strong>Crucial Multi-Shop Separation Rule:</strong> To see accounts on another PC, <strong>both PCs must login with the exact same Shop Owner credentials</strong>. If one is logged into a different email/phone, it is treated as a separate independent workshop, and they cannot see each other's customer lists!
+                </div>
+              </div>
+
+              {/* Step-by-Step checklist */}
+              <div className="space-y-2">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-stone-400 block">Cross-Device Synchronization Checklist</span>
+                
+                <div className="space-y-2 text-[11px] font-sans">
+                  <div className="flex items-start space-x-2">
+                    <span className="text-emerald-500 font-bold shrink-0">✓</span>
+                    <div>
+                      <span className="font-extrabold text-stone-700 dark:text-stone-300">1. Matches Shop Account Credentials:</span>
+                      <p className="text-stone-500 dark:text-stone-400 mt-0.5">Check that both computers display the exact same workshop name and email identity above.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-2">
+                    <span className="text-emerald-500 font-bold shrink-0">✓</span>
+                    <div>
+                      <span className="font-extrabold text-stone-700 dark:text-stone-300">2. Real-time Firebase Handshake:</span>
+                      <p className="text-stone-500 dark:text-stone-400 mt-0.5">Ensure this status badge shows "Live Sync Active" on both computers to prove active connection.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-2">
+                    <span className="text-emerald-500 font-bold shrink-0">✓</span>
+                    <div>
+                      <span className="font-extrabold text-stone-700 dark:text-stone-300">3. Push Rules Activated:</span>
+                      <p className="text-stone-500 dark:text-stone-400 mt-0.5">If there is a red alert, please review your Firebase database security rules setup to allow public read/writes.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-stone-150 dark:border-zinc-800 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="p-1.5 px-3 bg-amber-600/15 hover:bg-amber-600/25 text-amber-600 dark:text-amber-400 rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                <span>Reload Connection</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsDbStatusModalOpen(false)}
+                className={`p-2 px-4 rounded-lg text-xs font-bold cursor-pointer transition ${
+                  isDarkMode ? 'bg-zinc-900 hover:bg-zinc-800 text-white' : 'bg-stone-100 hover:bg-stone-200 text-stone-900'
+                }`}
+              >
+                Close Control Panel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer copyright */}
       <footer className={`py-6 border-t text-center text-[11px] mt-auto ${

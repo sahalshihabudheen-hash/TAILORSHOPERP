@@ -16,6 +16,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { Customer, Order, MeasurementRecord, OrderStatus } from '../types';
+import { sha256 } from '../utils/storage';
 
 interface CustomerPortalProps {
   customers: Customer[];
@@ -68,9 +69,13 @@ export default function CustomerPortalView({
     }
 
     // Use default first login pass as customer Unique ID if not changed
-    const effectivePass = match.password || match.id;
-    if (passwordInput !== effectivePass) {
-      alert(`Wrong password. Try entering ${effectivePass} to access.`);
+    const isMatched = 
+      (match.password && match.password === passwordInput) || 
+      (match.password && match.password === sha256(passwordInput)) ||
+      (!match.password && match.id === passwordInput);
+
+    if (!isMatched) {
+      alert(`Wrong password. Try entering ${match.password ? 'your password' : match.id} to access.`);
       return;
     }
 
