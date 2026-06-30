@@ -158,35 +158,16 @@ const setupSync = <T extends { id: string }>(
     const items: T[] = [];
     snapshot.forEach((docSnap) => {
       const data = docSnap.data() as T;
-      const custId = data.id;
-      const customerId = (data as any).customerId;
-      const email = (data as any).email;
-      const customerEmail = (data as any).customerEmail;
-
-      const isFake = 
-        (firestoreCollectionName === 'customers' || firestoreCollectionName === 'workers' || firestoreCollectionName === 'measurements' || firestoreCollectionName === 'orders') && (
-          ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(custId) ||
-          ['CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'].includes(customerId) ||
-          (typeof email === 'string' && (email.toLowerCase().includes('@example.com') || email.toLowerCase().includes('@tailorshop.com'))) ||
-          (typeof customerEmail === 'string' && (customerEmail.toLowerCase().includes('@example.com') || customerEmail.toLowerCase().includes('@tailorshop.com')))
-        );
-
-      if (isFake) {
-        deleteDoc(doc(db, firestoreCollectionName, docSnap.id)).catch((err) => {
-          handleFirestoreError(err, OperationType.DELETE, `${firestoreCollectionName}/${docSnap.id}`);
-        });
-      } else {
-        if (isRegisteredTailors) {
-          if ((data as any).isRegisteredTailor === true) {
-            items.push(data);
-          }
-        } else if (firestoreCollectionName === 'workers') {
-          if ((data as any).isRegisteredTailor !== true) {
-            items.push(data);
-          }
-        } else {
+      if (isRegisteredTailors) {
+        if ((data as any).isRegisteredTailor === true) {
           items.push(data);
         }
+      } else if (firestoreCollectionName === 'workers') {
+        if ((data as any).isRegisteredTailor !== true) {
+          items.push(data);
+        }
+      } else {
+        items.push(data);
       }
     });
 
@@ -306,14 +287,24 @@ const cleanUndefined = (obj: any): any => {
 // Helper to update elements in Firestore and clean up any deleted items safely
 const syncListToFirestore = async <T extends { id: string }>(
   collectionName: string,
-  items: T[]
+  items: T[],
+  previousItems?: T[]
 ) => {
   const isRegisteredTailors = (collectionName === 'registered_tailors');
   const firestoreCollectionName = isRegisteredTailors ? 'workers' : collectionName;
   const ids = new Set(items.map(item => item.id));
 
-  // Write new or updated docs
-  for (const item of items) {
+  // Find which items actually changed or are new to prevent huge bulk O(N) writes on every change!
+  const changedItems = previousItems
+    ? items.filter(item => {
+        const prevItem = previousItems.find(x => x.id === item.id);
+        if (!prevItem) return true;
+        return JSON.stringify(cleanUndefined(item)) !== JSON.stringify(cleanUndefined(prevItem));
+      })
+    : items;
+
+  // Write only the new or updated docs
+  for (const item of changedItems) {
     try {
       let cleaned = cleanUndefined(item);
       if (isRegisteredTailors) {
@@ -325,57 +316,37 @@ const syncListToFirestore = async <T extends { id: string }>(
     }
   }
 
-  // Guard: If we haven't loaded the real snapshot from Firestore yet, do NOT attempt background deletions.
-  if (!isCollectionLoadedFromFirestore[collectionName]) {
-    console.log(`Skipping sync-deletion for ${collectionName} since Firestore snapshot has not loaded yet.`);
-    return;
-  }
+  // Handle deletions in background based on diff to avoid slow background getDocs query
+  if (previousItems && collectionName !== 'activities' && collectionName !== 'notifications') {
+    const deletedItems = previousItems.filter(prevItem => !ids.has(prevItem.id));
+    const activeOwner = getActiveShopOwnerEmail().toLowerCase().trim();
+    const isMasterAdmin = (activeOwner === 'owner@gmail.com' || activeOwner === 'sahalshihabudheen@gmail.com');
 
-  // Query database in background to clean up deleted records (skip append-only logs)
-  if (collectionName !== 'activities' && collectionName !== 'notifications') {
-    try {
-      const colRef = collection(db, firestoreCollectionName);
-      const snapshot = await getDocs(colRef);
-      const activeOwner = getActiveShopOwnerEmail().toLowerCase().trim();
-      const isMasterAdmin = (activeOwner === 'owner@gmail.com' || activeOwner === 'sahalshihabudheen@gmail.com');
+    for (const item of deletedItems) {
+      const itemOwner = ((item as any).shopOwnerEmail || 'sahalshihabudheen@gmail.com').toLowerCase().trim();
+      let shouldDelete = false;
 
-      for (const docSnap of snapshot.docs) {
-        const data = docSnap.data();
-        
-        if (isRegisteredTailors) {
-          // Only master admin is permitted to delete tailor profiles
-          if (isMasterAdmin && data.isRegisteredTailor === true && !ids.has(docSnap.id)) {
-            try {
-              await deleteDoc(docSnap.ref);
-            } catch (err) {
-              handleFirestoreError(err, OperationType.DELETE, `${firestoreCollectionName}/${docSnap.id}`);
-            }
-          }
-        } else if (firestoreCollectionName === 'workers') {
-          // Normal workers have shopOwnerEmail; only delete if owned by active shop
-          const itemOwner = (data.shopOwnerEmail || 'sahalshihabudheen@gmail.com').toLowerCase().trim();
-          if (itemOwner === activeOwner && data.isRegisteredTailor !== true && !ids.has(docSnap.id)) {
-            try {
-              await deleteDoc(docSnap.ref);
-            } catch (err) {
-              handleFirestoreError(err, OperationType.DELETE, `${firestoreCollectionName}/${docSnap.id}`);
-            }
-          }
-        } else {
-          // Other collections like customers, measurements, orders, etc.
-          // Only delete if owned by the active shop owner to prevent cross-shop wipes
-          const itemOwner = (data.shopOwnerEmail || 'sahalshihabudheen@gmail.com').toLowerCase().trim();
-          if (itemOwner === activeOwner && !ids.has(docSnap.id)) {
-            try {
-              await deleteDoc(docSnap.ref);
-            } catch (err) {
-              handleFirestoreError(err, OperationType.DELETE, `${firestoreCollectionName}/${docSnap.id}`);
-            }
-          }
+      if (isRegisteredTailors) {
+        if (isMasterAdmin && (item as any).isRegisteredTailor === true) {
+          shouldDelete = true;
+        }
+      } else if (firestoreCollectionName === 'workers') {
+        if (itemOwner === activeOwner && (item as any).isRegisteredTailor !== true) {
+          shouldDelete = true;
+        }
+      } else {
+        if (itemOwner === activeOwner) {
+          shouldDelete = true;
         }
       }
-    } catch (err) {
-      handleFirestoreError(err, OperationType.LIST, firestoreCollectionName);
+
+      if (shouldDelete) {
+        try {
+          await deleteDoc(doc(db, firestoreCollectionName, item.id));
+        } catch (err) {
+          handleFirestoreError(err, OperationType.DELETE, `${firestoreCollectionName}/${item.id}`);
+        }
+      }
     }
   }
 };
@@ -496,7 +467,7 @@ const saveFilteredCollection = <T extends { id: string }>(
   const mergedList = [...otherShopsItems, ...cleanedActiveShopItems];
 
   localStorage.setItem(localStorageKey, JSON.stringify(mergedList));
-  syncListToFirestore(collectionName, mergedList);
+  syncListToFirestore(collectionName, mergedList, fullList);
 };
 
 export const getCustomers = (): Customer[] => {
@@ -633,6 +604,8 @@ export const getRegisteredTailors = (): any[] => {
 };
 
 export const saveRegisteredTailors = (list: any[]) => {
+  const data = localStorage.getItem(KEYS.REGISTERED_TAILORS);
+  const previousList = data ? JSON.parse(data) : [];
   const hashedList = list.map((t: any) => {
     if (t && t.password) {
       return { ...t, password: hashPassword(t.password) };
@@ -640,7 +613,7 @@ export const saveRegisteredTailors = (list: any[]) => {
     return t;
   });
   localStorage.setItem(KEYS.REGISTERED_TAILORS, JSON.stringify(hashedList));
-  syncListToFirestore('registered_tailors', hashedList);
+  syncListToFirestore('registered_tailors', hashedList, previousList);
 };
 
 export const getWorkers = (): Worker[] => {

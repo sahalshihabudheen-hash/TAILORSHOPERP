@@ -4355,22 +4355,6 @@ export default function App() {
         
         {/* Interactive Corner Theme Switcher & Status */}
         <div className="absolute top-4 right-4 z-50 flex items-center space-x-2">
-          {/* Database Connection Status Button */}
-          <button
-            type="button"
-            onClick={() => setIsDbStatusModalOpen(true)}
-            className={`p-2.5 rounded-xl border flex items-center space-x-1.5 transition-all text-xs font-black cursor-pointer shadow-sm ${
-              dbStatus.connected && !dbStatus.error
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 dark:bg-emerald-400/5 hover:bg-emerald-500/15'
-                : 'bg-amber-500/10 border-amber-500/25 text-amber-600 dark:text-amber-400 dark:bg-amber-400/5 hover:bg-amber-500/15'
-            }`}
-            title={dbStatus.connected && !dbStatus.error ? 'Live Sync active with Firebase Cloud' : 'Sync Offline / Local State'}
-          >
-            <div className={`h-2.5 w-2.5 rounded-full ${dbStatus.connected && !dbStatus.error ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-ping'}`} />
-            <span className="hidden sm:inline-block font-sans">{dbStatus.connected && !dbStatus.error ? 'Live Sync Active' : 'Offline Backup'}</span>
-            <span className="sm:hidden font-sans">{dbStatus.connected && !dbStatus.error ? 'Live' : 'Local'}</span>
-          </button>
-
           <button
             onClick={() => setIsDarkMode(!isDarkMode)}
             className={`p-2.5 rounded-xl border shadow-sm transition-all cursor-pointer ${
@@ -5162,22 +5146,6 @@ export default function App() {
             </div>
 
             <div className="flex items-center space-x-3 sm:space-x-4">
-              {/* Database Connection Status Button */}
-              <button
-                type="button"
-                onClick={() => setIsDbStatusModalOpen(true)}
-                className={`p-1.5 px-2 sm:p-2 sm:px-3 rounded-xl border flex items-center space-x-1.5 transition-all text-xs font-black cursor-pointer shadow-sm ${
-                  dbStatus.connected && !dbStatus.error
-                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 dark:bg-emerald-400/5 hover:bg-emerald-500/15'
-                    : 'bg-amber-500/10 border-amber-500/25 text-amber-600 dark:text-amber-400 dark:bg-amber-400/5 hover:bg-amber-500/15'
-                }`}
-                title={dbStatus.connected && !dbStatus.error ? 'Live Sync active with Firebase Cloud' : 'Sync Offline / Local State'}
-              >
-                <div className={`h-2 w-2 rounded-full ${dbStatus.connected && !dbStatus.error ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-ping'}`} />
-                <span className="hidden md:inline-block font-sans">{dbStatus.connected && !dbStatus.error ? 'Live Sync Active' : 'Offline Backup'}</span>
-                <span className="md:hidden font-sans">{dbStatus.connected && !dbStatus.error ? 'Live' : 'Local'}</span>
-              </button>
-
               {/* Dark mode switcher */}
               <button
                 onClick={() => setIsDarkMode(!isDarkMode)}
