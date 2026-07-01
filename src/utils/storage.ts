@@ -222,6 +222,46 @@ const setupSync = <T extends { id: string }>(
         }
         deduplicated.push(item);
       }
+
+      // Ensure Sahal and Master Admin are always in the deduplicated list, and sync back if missing from Firestore
+      const hasSahal = deduplicated.some((t: any) => t && t.email && t.email.toLowerCase().trim() === 'sahalshihabudheen@gmail.com');
+      if (!hasSahal) {
+        const sahalTailor = {
+          id: 'TLR-SAHAL',
+          name: 'Sahal Shihabudheen',
+          email: 'sahalshihabudheen@gmail.com',
+          phone: '+91 94460 12345',
+          location: 'Kerala, India',
+          password: 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', // password123 hashed
+          hasRegisteredShop: true,
+          shopName: 'TAILORSHOP ERP',
+          logoUrl: 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=200&auto=format&fit=crop',
+          isRegisteredTailor: true,
+          role: 'Tailor',
+          createdAt: new Date().toISOString()
+        };
+        deduplicated.push(sahalTailor as any);
+        setDoc(doc(db, 'workers', 'TLR-SAHAL'), sahalTailor).catch(() => {});
+      }
+
+      const hasOwner = deduplicated.some((t: any) => t && t.email && t.email.toLowerCase().trim() === 'owner@gmail.com');
+      if (!hasOwner) {
+        const ownerTailor = {
+          id: 'TAILOR-OWNER-MASTER',
+          name: 'Sartorial Design ERP (Master Admin)',
+          email: 'owner@gmail.com',
+          phone: '+91 99999 99999',
+          location: 'Kerala, India',
+          password: 'd3b6fcf0b3589137824869e7108f66422f0d1da3a481fd2a746dfdb971f098ae', // TAILORSHOP_ERPOwner2026! hashed
+          hasRegisteredShop: false,
+          isRegisteredTailor: true,
+          role: 'Tailor',
+          createdAt: new Date().toISOString()
+        };
+        deduplicated.push(ownerTailor as any);
+        setDoc(doc(db, 'workers', 'TAILOR-OWNER-MASTER'), ownerTailor).catch(() => {});
+      }
+
       items.length = 0;
       items.push(...deduplicated);
     }
@@ -540,7 +580,7 @@ export const getRegisteredTailors = (): any[] => {
   }
   
   const hasSahal = list.some((t: any) => t && t.email && t.email.toLowerCase().trim() === 'sahalshihabudheen@gmail.com');
-  if (!hasSahal && isFirstTime) {
+  if (!hasSahal) {
     const sahalTailor = {
       id: 'TLR-SAHAL',
       name: 'Sahal Shihabudheen',
