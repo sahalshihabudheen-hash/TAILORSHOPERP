@@ -20,6 +20,21 @@ const KEYS = {
   REGISTERED_TAILORS: 'registered_tailors',
 };
 
+// --- Memory storage backend (zero local storage persistence for all keys) ---
+const memoryStorage: Record<string, string> = {};
+
+export const storageGet = (key: string): string | null => {
+  return memoryStorage[key] !== undefined ? memoryStorage[key] : null;
+};
+
+export const storageSet = (key: string, value: string) => {
+  memoryStorage[key] = String(value);
+};
+
+export const storageRemove = (key: string) => {
+  delete memoryStorage[key];
+};
+
 // Pure TS SHA-256 implementation for secure password hashing
 export function sha256(ascii: string): string {
   function rightRotate(value: number, amount: number) {
@@ -212,7 +227,7 @@ const setupSync = <T extends { id: string }>(
     }
 
     if (items.length === 0) {
-      const localDataStr = localStorage.getItem(localStorageKey);
+      const localDataStr = storageGet(localStorageKey);
       let localData: T[] = [];
       if (localDataStr) {
         try {
@@ -223,7 +238,7 @@ const setupSync = <T extends { id: string }>(
       }
 
       const dataToSeed = (Array.isArray(localData) && localData.length > 0) ? localData : initialData;
-      console.log(`Seeding empty ${collectionName} in Firestore (mapped to ${firestoreCollectionName}) using data from ${dataToSeed === localData ? 'localStorage' : 'initialData'}...`);
+      console.log(`Seeding empty ${collectionName} in Firestore (mapped to ${firestoreCollectionName}) using data from ${dataToSeed === localData ? 'memory' : 'initialData'}...`);
       
       const batch = writeBatch(db);
       dataToSeed.forEach((item) => {
@@ -237,10 +252,10 @@ const setupSync = <T extends { id: string }>(
       });
     }
 
-    const prev = localStorage.getItem(localStorageKey);
+    const prev = storageGet(localStorageKey);
     const str = JSON.stringify(items);
     if (prev !== str) {
-      localStorage.setItem(localStorageKey, str);
+      storageSet(localStorageKey, str);
       window.dispatchEvent(new CustomEvent('db-sync-update'));
     }
   }, (err) => {
@@ -366,7 +381,7 @@ const isPhoneMatchLocal = (phone1: string, phone2: string): boolean => {
 
 export const getActiveShopOwnerEmail = (): string => {
   if (typeof window === 'undefined') return 'sahalshihabudheen@gmail.com';
-  const saved = localStorage.getItem('tailor_logged_in_user');
+  const saved = storageGet('tailor_logged_in_user');
   if (!saved) return 'sahalshihabudheen@gmail.com';
   try {
     const u = JSON.parse(saved);
@@ -377,7 +392,7 @@ export const getActiveShopOwnerEmail = (): string => {
     const userName = (u.name || '').toLowerCase().trim();
 
     if (u.role !== 'Owner' && u.role !== 'Manager') {
-      const workersData = localStorage.getItem(KEYS.WORKERS);
+      const workersData = storageGet(KEYS.WORKERS);
       const workersList = workersData ? JSON.parse(workersData) : [];
       if (Array.isArray(workersList)) {
         const match = workersList.find((w: any) => {
@@ -407,7 +422,7 @@ export const getActiveShopOwnerEmail = (): string => {
 };
 
 const getFilteredCollection = <T>(localStorageKey: string, initialData: T[]): T[] => {
-  const data = localStorage.getItem(localStorageKey);
+  const data = storageGet(localStorageKey);
   const list: T[] = data ? JSON.parse(data) : initialData;
   const ownerEmail = getActiveShopOwnerEmail();
   
@@ -443,7 +458,7 @@ const saveFilteredCollection = <T extends { id: string }>(
     });
   }
 
-  const rawData = localStorage.getItem(localStorageKey);
+  const rawData = storageGet(localStorageKey);
   const fullList: any[] = rawData ? JSON.parse(rawData) : initialData;
 
   let otherShopsItems = fullList.filter(item => {
@@ -466,7 +481,7 @@ const saveFilteredCollection = <T extends { id: string }>(
 
   const mergedList = [...otherShopsItems, ...cleanedActiveShopItems];
 
-  localStorage.setItem(localStorageKey, JSON.stringify(mergedList));
+  storageSet(localStorageKey, JSON.stringify(mergedList));
   syncListToFirestore(collectionName, mergedList, fullList);
 };
 
@@ -479,7 +494,7 @@ export const saveCustomers = (customers: Customer[]) => {
 };
 
 export const getRegisteredTailors = (): any[] => {
-  const data = localStorage.getItem(KEYS.REGISTERED_TAILORS);
+  const data = storageGet(KEYS.REGISTERED_TAILORS);
   const isFirstTime = data === null;
   let list = data ? JSON.parse(data) : [];
   if (!Array.isArray(list)) {
@@ -593,7 +608,7 @@ export const getRegisteredTailors = (): any[] => {
   });
 
   if (changed) {
-    localStorage.setItem(KEYS.REGISTERED_TAILORS, JSON.stringify(list));
+    storageSet(KEYS.REGISTERED_TAILORS, JSON.stringify(list));
     // To prevent async lag from a blank PC B blanking out the database:
     // Only write sync if this is NOT a completely new, uninitialized local storage instance!
     if (!isFirstTime) {
@@ -604,7 +619,7 @@ export const getRegisteredTailors = (): any[] => {
 };
 
 export const saveRegisteredTailors = (list: any[]) => {
-  const data = localStorage.getItem(KEYS.REGISTERED_TAILORS);
+  const data = storageGet(KEYS.REGISTERED_TAILORS);
   const previousList = data ? JSON.parse(data) : [];
   const hashedList = list.map((t: any) => {
     if (t && t.password) {
@@ -612,7 +627,7 @@ export const saveRegisteredTailors = (list: any[]) => {
     }
     return t;
   });
-  localStorage.setItem(KEYS.REGISTERED_TAILORS, JSON.stringify(hashedList));
+  storageSet(KEYS.REGISTERED_TAILORS, JSON.stringify(hashedList));
   syncListToFirestore('registered_tailors', hashedList, previousList);
 };
 
@@ -706,7 +721,7 @@ export const purgeAllDatabaseRecords = async () => {
 
   // Clear local storage keys
   Object.values(KEYS).forEach((k) => {
-    localStorage.removeItem(k);
+    storageRemove(k);
   });
 
   // Also remove custom user/branding preferences so everything starts completely fresh
@@ -727,7 +742,7 @@ export const purgeAllDatabaseRecords = async () => {
     'voucher_main_title'
   ];
   extraKeys.forEach((k) => {
-    localStorage.removeItem(k);
+    storageRemove(k);
   });
 
   // Dispatch custom update

@@ -15,6 +15,7 @@ import {
   Scissors
 } from 'lucide-react';
 import { Customer, MeasurementRecord } from '../types';
+import { storageGet } from '../utils/storage';
 
 // Custom elegant vector icon components for clothing categories
 export const PantIcon = ({ className = "h-3.5 w-3.5" }: { className?: string }) => (
@@ -117,7 +118,7 @@ export default function MeasurementView({
 
   const [clothingCategoryEmojis] = useState<Record<string, string>>(() => {
     try {
-      const saved = localStorage.getItem('custom_clothing_emojis');
+      const saved = storageGet('custom_clothing_emojis');
       const parsed = saved ? JSON.parse(saved) : {};
       const defaults = ['Shirt', 'Pant', 'Suit', 'Kurta', 'Custom'];
       const cleaned: Record<string, string> = { ...parsed };

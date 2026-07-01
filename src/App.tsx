@@ -64,7 +64,10 @@ import {
   sha256,
   getDbStatus,
   subscribeDbStatus,
-  DbStatus
+  DbStatus,
+  storageGet,
+  storageSet,
+  storageRemove
 } from './utils/storage';
 import { Customer, MeasurementRecord, Order, OrderStatus, Worker } from './types';
 import WorkerManagementView from './components/WorkerManagementView';
@@ -418,7 +421,7 @@ export default function App() {
     
     if (resetDbNow === 'true') {
       triggerToast("Resetting database, cleaning collections and purging accounts...", "info");
-      localStorage.removeItem('sahal_data_seeded');
+      storageRemove('sahal_data_seeded');
       purgeAllDatabaseRecords().then(() => {
         setCustomers([]);
         setMeasurements([]);
@@ -605,7 +608,7 @@ export default function App() {
   const [newCustEmailAdmin, setNewCustEmailAdmin] = useState('');
   const [newCustAddressAdmin, setNewCustAddressAdmin] = useState('');
   
-  const [welcomeBannerTitle, setWelcomeBannerTitle] = useState(() => localStorage.getItem('welcome_banner_title') || 'Owner Dashboard Overview');
+  const [welcomeBannerTitle, setWelcomeBannerTitle] = useState(() => storageGet('welcome_banner_title') || 'Owner Dashboard Overview');
 
   // First-time tailor shop setup states
   const [setupShopName, setSetupShopName] = useState('');
@@ -884,53 +887,53 @@ export default function App() {
       { enableHighAccuracy: true, timeout: 6000 }
     );
   };
-  const [welcomeBannerDesc, setWelcomeBannerDesc] = useState(() => localStorage.getItem('welcome_banner_desc') || 'Manage your fine tailoring workshops, track measurements, and generate bespoke delivery packages cleanly.');
+  const [welcomeBannerDesc, setWelcomeBannerDesc] = useState(() => storageGet('welcome_banner_desc') || 'Manage your fine tailoring workshops, track measurements, and generate bespoke delivery packages cleanly.');
 
   const [voucherMainTitle, setVoucherMainTitle] = useState(() => {
-    const saved = localStorage.getItem('voucher_main_title');
+    const saved = storageGet('voucher_main_title');
     return (!saved || saved === 'Sartorial Atelier' || saved === 'tailorSHOP ERP') ? 'TAILORSHOP ERP' : saved;
   });
-  const [voucherSubtitle, setVoucherSubtitle] = useState(() => localStorage.getItem('voucher_subtitle') || 'Bespoke Fitting Voucher');
-  const [voucherFooterNotes, setVoucherFooterNotes] = useState(() => localStorage.getItem('voucher_footer_notes') || 'Thank you for trusting TAILORSHOP ERP. All sizing blueprints are saved securely in our central index database.');
-  const [voucherBgColor, setVoucherBgColor] = useState(() => localStorage.getItem('voucher_bg_color') || '#ffffff');
-  const [voucherTextColor, setVoucherTextColor] = useState(() => localStorage.getItem('voucher_text_color') || '#1c1917');
-  const [voucherAccentColor, setVoucherAccentColor] = useState(() => localStorage.getItem('voucher_accent_color') || '#d97706');
-  const [voucherFont, setVoucherFont] = useState(() => localStorage.getItem('voucher_font') || 'Plus Jakarta Sans');
-  const [voucherBorderStyle, setVoucherBorderStyle] = useState(() => localStorage.getItem('voucher_border_style') || 'dashed');
-  const [voucherLogoAlignment, setVoucherLogoAlignment] = useState(() => localStorage.getItem('voucher_logo_alignment') || 'center');
+  const [voucherSubtitle, setVoucherSubtitle] = useState(() => storageGet('voucher_subtitle') || 'Bespoke Fitting Voucher');
+  const [voucherFooterNotes, setVoucherFooterNotes] = useState(() => storageGet('voucher_footer_notes') || 'Thank you for trusting TAILORSHOP ERP. All sizing blueprints are saved securely in our central index database.');
+  const [voucherBgColor, setVoucherBgColor] = useState(() => storageGet('voucher_bg_color') || '#ffffff');
+  const [voucherTextColor, setVoucherTextColor] = useState(() => storageGet('voucher_text_color') || '#1c1917');
+  const [voucherAccentColor, setVoucherAccentColor] = useState(() => storageGet('voucher_accent_color') || '#d97706');
+  const [voucherFont, setVoucherFont] = useState(() => storageGet('voucher_font') || 'Plus Jakarta Sans');
+  const [voucherBorderStyle, setVoucherBorderStyle] = useState(() => storageGet('voucher_border_style') || 'dashed');
+  const [voucherLogoAlignment, setVoucherLogoAlignment] = useState(() => storageGet('voucher_logo_alignment') || 'center');
 
   useEffect(() => {
-    localStorage.setItem('welcome_banner_title', welcomeBannerTitle);
+    storageSet('welcome_banner_title', welcomeBannerTitle);
   }, [welcomeBannerTitle]);
   useEffect(() => {
-    localStorage.setItem('welcome_banner_desc', welcomeBannerDesc);
+    storageSet('welcome_banner_desc', welcomeBannerDesc);
   }, [welcomeBannerDesc]);
   useEffect(() => {
-    localStorage.setItem('voucher_main_title', voucherMainTitle);
+    storageSet('voucher_main_title', voucherMainTitle);
   }, [voucherMainTitle]);
   useEffect(() => {
-    localStorage.setItem('voucher_subtitle', voucherSubtitle);
+    storageSet('voucher_subtitle', voucherSubtitle);
   }, [voucherSubtitle]);
   useEffect(() => {
-    localStorage.setItem('voucher_footer_notes', voucherFooterNotes);
+    storageSet('voucher_footer_notes', voucherFooterNotes);
   }, [voucherFooterNotes]);
   useEffect(() => {
-    localStorage.setItem('voucher_bg_color', voucherBgColor);
+    storageSet('voucher_bg_color', voucherBgColor);
   }, [voucherBgColor]);
   useEffect(() => {
-    localStorage.setItem('voucher_text_color', voucherTextColor);
+    storageSet('voucher_text_color', voucherTextColor);
   }, [voucherTextColor]);
   useEffect(() => {
-    localStorage.setItem('voucher_accent_color', voucherAccentColor);
+    storageSet('voucher_accent_color', voucherAccentColor);
   }, [voucherAccentColor]);
   useEffect(() => {
-    localStorage.setItem('voucher_font', voucherFont);
+    storageSet('voucher_font', voucherFont);
   }, [voucherFont]);
   useEffect(() => {
-    localStorage.setItem('voucher_border_style', voucherBorderStyle);
+    storageSet('voucher_border_style', voucherBorderStyle);
   }, [voucherBorderStyle]);
   useEffect(() => {
-    localStorage.setItem('voucher_logo_alignment', voucherLogoAlignment);
+    storageSet('voucher_logo_alignment', voucherLogoAlignment);
   }, [voucherLogoAlignment]);
   const [selectedDetOrder, setSelectedDetOrder] = useState<Order | null>(null);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -967,12 +970,12 @@ export default function App() {
   const [customerEmail, setCustomerEmail] = useState('');
   const [clothingType, setClothingType] = useState<string>('Shirt');
   const [clothingCategories, setClothingCategories] = useState<string[]>(() => {
-    const saved = localStorage.getItem('custom_clothing_categories');
+    const saved = storageGet('custom_clothing_categories');
     const parsed = saved ? JSON.parse(saved) : ['Shirt', 'Pant', 'Suit', 'Kurta'];
     return parsed.filter((cat: string) => cat !== 'Custom');
   });
   const [clothingTemplates, setClothingTemplates] = useState<Record<string, Record<string, string>>>(() => {
-    const saved = localStorage.getItem('custom_clothing_templates');
+    const saved = storageGet('custom_clothing_templates');
     return saved ? JSON.parse(saved) : {
       Shirt: { Collar: '15.5', Chest: '40', Waist: '36', Sleeve: '33', Shoulder: '18', Length: '30', Cuff: '9.5' },
       Pant: { Waist: '34', Hips: '42', Inseam: '32', Length: '40', Thigh: '24', Crotch: '11', Ankle: '8' },
@@ -987,11 +990,11 @@ export default function App() {
   const [newCategoryBase, setNewCategoryBase] = useState('Custom');
 
   useEffect(() => {
-    localStorage.setItem('custom_clothing_categories', JSON.stringify(clothingCategories));
+    storageSet('custom_clothing_categories', JSON.stringify(clothingCategories));
   }, [clothingCategories]);
 
   useEffect(() => {
-    localStorage.setItem('custom_clothing_templates', JSON.stringify(clothingTemplates));
+    storageSet('custom_clothing_templates', JSON.stringify(clothingTemplates));
   }, [clothingTemplates]);
 
   const [sizingFields, setSizingFields] = useState<Record<string, string>>({
@@ -1011,7 +1014,7 @@ export default function App() {
 
   // Custom sizing parameter addition
   const [customFieldName, setCustomFieldName] = useState('');
-  const [notes, setNotes] = useState(() => localStorage.getItem('tailorshop_draft_notes') || '');
+  const [notes, setNotes] = useState(() => storageGet('tailorshop_draft_notes') || '');
   const [price, setPrice] = useState<number>(350);
 
   // Ready schedule - Defaulting to exactly 10 days from today formatted as YYYY-MM-DD
@@ -1209,11 +1212,11 @@ export default function App() {
       hasRegisteredShop: true
     };
     setCurrentUser(updatedUser);
-    localStorage.setItem('tailor_logged_in_user', JSON.stringify(updatedUser));
+    storageSet('tailor_logged_in_user', JSON.stringify(updatedUser));
     setTailorshopName(newShopName);
-    localStorage.setItem('tailorshop_name', newShopName);
+    storageSet('tailorshop_name', newShopName);
     setCustomLogoUrl(newLogoUrl);
-    localStorage.setItem('logo_url', newLogoUrl);
+    storageSet('logo_url', newLogoUrl);
 
     const tailors = getRegisteredTailors();
     const updatedTailors = tailors.map((t: any) => {
@@ -1279,7 +1282,7 @@ export default function App() {
   };
 
   // Groundbreaking Admin Landing & Brand Customization states (persistent in LocalStorage)
-  const [customLogoUrl, setCustomLogoUrl] = useState(() => localStorage.getItem('logo_url') || '');
+  const [customLogoUrl, setCustomLogoUrl] = useState(() => storageGet('logo_url') || '');
   const [logoLoadError, setLogoLoadError] = useState(false);
   
   useEffect(() => {
@@ -1287,45 +1290,45 @@ export default function App() {
   }, [customLogoUrl]);
 
   const [customLandingTitle, setCustomLandingTitle] = useState(() => {
-    const saved = localStorage.getItem('landing_title');
+    const saved = storageGet('landing_title');
     return (!saved || saved === 'Welcome to Sartorial Atelier' || saved === 'Welcome to tailorSHOP ERP') ? 'Welcome to TAILORSHOP ERP' : saved;
   });
-  const [customLandingDescription, setCustomLandingDescription] = useState(() => localStorage.getItem('landing_description') || 'The ultimate bespoke artisan suite. Seamlessly track customer measurement blueprints, pattern designs, active stitching timelines, and automated billing ledgers.');
+  const [customLandingDescription, setCustomLandingDescription] = useState(() => storageGet('landing_description') || 'The ultimate bespoke artisan suite. Seamlessly track customer measurement blueprints, pattern designs, active stitching timelines, and automated billing ledgers.');
   
-  const [customTailorTitle, setCustomTailorTitle] = useState(() => localStorage.getItem('tailor_title') || 'Tailor Workplace');
-  const [customTailorDescription, setCustomTailorDescription] = useState(() => localStorage.getItem('tailor_description') || 'Manage measurement patterns, log customized customer fields, coordinate stitching/pickup timetables, and issue beautiful vouchers.');
-  const [customTailorImage, setCustomTailorImage] = useState(() => localStorage.getItem('tailor_image') || 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=600');
+  const [customTailorTitle, setCustomTailorTitle] = useState(() => storageGet('tailor_title') || 'Tailor Workplace');
+  const [customTailorDescription, setCustomTailorDescription] = useState(() => storageGet('tailor_description') || 'Manage measurement patterns, log customized customer fields, coordinate stitching/pickup timetables, and issue beautiful vouchers.');
+  const [customTailorImage, setCustomTailorImage] = useState(() => storageGet('tailor_image') || 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=600');
   
-  const [customCustomerTitle, setCustomCustomerTitle] = useState(() => localStorage.getItem('customer_title') || 'Customer Portal');
-  const [customCustomerDescription, setCustomCustomerDescription] = useState(() => localStorage.getItem('customer_description') || 'Lookup personalized body dimensions, confirm current clothing milestones, print measurement vouchers, and review physical fitting alerts.');
-  const [customCustomerImage, setCustomCustomerImage] = useState(() => localStorage.getItem('customer_image') || 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=600');
+  const [customCustomerTitle, setCustomCustomerTitle] = useState(() => storageGet('customer_title') || 'Customer Portal');
+  const [customCustomerDescription, setCustomCustomerDescription] = useState(() => storageGet('customer_description') || 'Lookup personalized body dimensions, confirm current clothing milestones, print measurement vouchers, and review physical fitting alerts.');
+  const [customCustomerImage, setCustomCustomerImage] = useState(() => storageGet('customer_image') || 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=600');
 
   useEffect(() => {
-    localStorage.setItem('logo_url', customLogoUrl);
+    storageSet('logo_url', customLogoUrl);
   }, [customLogoUrl]);
   useEffect(() => {
-    localStorage.setItem('landing_title', customLandingTitle);
+    storageSet('landing_title', customLandingTitle);
   }, [customLandingTitle]);
   useEffect(() => {
-    localStorage.setItem('landing_description', customLandingDescription);
+    storageSet('landing_description', customLandingDescription);
   }, [customLandingDescription]);
   useEffect(() => {
-    localStorage.setItem('tailor_title', customTailorTitle);
+    storageSet('tailor_title', customTailorTitle);
   }, [customTailorTitle]);
   useEffect(() => {
-    localStorage.setItem('tailor_description', customTailorDescription);
+    storageSet('tailor_description', customTailorDescription);
   }, [customTailorDescription]);
   useEffect(() => {
-    localStorage.setItem('tailor_image', customTailorImage);
+    storageSet('tailor_image', customTailorImage);
   }, [customTailorImage]);
   useEffect(() => {
-    localStorage.setItem('customer_title', customCustomerTitle);
+    storageSet('customer_title', customCustomerTitle);
   }, [customCustomerTitle]);
   useEffect(() => {
-    localStorage.setItem('customer_description', customCustomerDescription);
+    storageSet('customer_description', customCustomerDescription);
   }, [customCustomerDescription]);
   useEffect(() => {
-    localStorage.setItem('customer_image', customCustomerImage);
+    storageSet('customer_image', customCustomerImage);
   }, [customCustomerImage]);
 
   useEffect(() => {
@@ -1339,7 +1342,7 @@ export default function App() {
   }, [currentUser]);
 
   const [clothingCategoryEmojis, setClothingCategoryEmojis] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem('custom_clothing_emojis');
+    const saved = storageGet('custom_clothing_emojis');
     const defaults: Record<string, string> = {
       Shirt: '',
       Pant: '',
@@ -1370,7 +1373,7 @@ export default function App() {
   });
 
   const [clothingPrices, setClothingPrices] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem('custom_clothing_prices');
+    const saved = storageGet('custom_clothing_prices');
     return saved ? JSON.parse(saved) : {
       Shirt: 180,
       Pant: 150,
@@ -1381,20 +1384,20 @@ export default function App() {
   });
 
   const [tailorshopName, setTailorshopName] = useState(() => {
-    const saved = localStorage.getItem('tailorshop_name');
+    const saved = storageGet('tailorshop_name');
     return (!saved || saved === 'Sartorial Atelier' || saved === 'tailorSHOP ERP') ? 'TAILORSHOP ERP' : saved;
   });
 
   useEffect(() => {
-    localStorage.setItem('custom_clothing_emojis', JSON.stringify(clothingCategoryEmojis));
+    storageSet('custom_clothing_emojis', JSON.stringify(clothingCategoryEmojis));
   }, [clothingCategoryEmojis]);
 
   useEffect(() => {
-    localStorage.setItem('custom_clothing_prices', JSON.stringify(clothingPrices));
+    storageSet('custom_clothing_prices', JSON.stringify(clothingPrices));
   }, [clothingPrices]);
 
   useEffect(() => {
-    localStorage.setItem('tailorshop_name', tailorshopName);
+    storageSet('tailorshop_name', tailorshopName);
   }, [tailorshopName]);
 
   // Search and filter states for Master Orders Book
@@ -1436,18 +1439,18 @@ export default function App() {
     setRegisteredTailors(getRegisteredTailors());
     setWorkers(getWorkers());
 
-    const savedUser = localStorage.getItem('tailor_logged_in_user');
+    const savedUser = storageGet('tailor_logged_in_user');
     if (savedUser) {
       try {
         let u = JSON.parse(savedUser);
         if (u && (u.isWorker || u.id.startsWith('WRK-')) && u.role === 'Owner') {
           u.role = 'Tailor';
-          localStorage.setItem('tailor_logged_in_user', JSON.stringify(u));
+          storageSet('tailor_logged_in_user', JSON.stringify(u));
         }
         if (u && u.email && u.email.toLowerCase().trim() === 'owner@gmail.com' && u.id !== 'TAILOR-OWNER-MASTER') {
           u.id = 'TAILOR-OWNER-MASTER';
           u.name = 'Sartorial Design ERP (Master Admin)';
-          localStorage.setItem('tailor_logged_in_user', JSON.stringify(u));
+          storageSet('tailor_logged_in_user', JSON.stringify(u));
         }
         setCurrentUser(u);
         if (u && u.role !== 'Owner' && u.role !== 'Manager') {
@@ -1525,7 +1528,7 @@ export default function App() {
           hasRegisteredShop: !!freshTailor.hasRegisteredShop
         };
         setCurrentUser(updatedUser);
-        localStorage.setItem('tailor_logged_in_user', JSON.stringify(updatedUser));
+        storageSet('tailor_logged_in_user', JSON.stringify(updatedUser));
       }
     }
   }, [registeredTailors, currentUser]);
@@ -1542,7 +1545,7 @@ export default function App() {
   // Automatically seed Sahal's 400 customers and 400 orders on log in if they are not yet populated
   useEffect(() => {
     if (currentUser && currentUser.email && (currentUser.email.toLowerCase().trim() === 'sahalshihabudheen@gmail.com' || currentUser.email.toLowerCase().trim() === 'owner@gmail.com')) {
-      const isSeeded400 = localStorage.getItem('sahal_data_seeded_400');
+      const isSeeded400 = storageGet('sahal_data_seeded_400');
       if (isSeeded400 !== 'true' || orders.length < 350) {
         // Seed Sahal's lists
         setCustomers(INITIAL_CUSTOMERS);
@@ -1557,8 +1560,8 @@ export default function App() {
         setOrders(INITIAL_ORDERS);
         saveOrders(INITIAL_ORDERS);
 
-        localStorage.setItem('sahal_data_seeded_400', 'true');
-        localStorage.setItem('sahal_data_seeded', 'true');
+        storageSet('sahal_data_seeded_400', 'true');
+        storageSet('sahal_data_seeded', 'true');
         triggerToast("Loaded 400 customers and 400 orders for Sahal's Bespoke Atelier!", "success");
       }
     }
@@ -1577,13 +1580,13 @@ export default function App() {
     if (shopInfo && shopInfo.shopName) {
       if (tailorshopName !== shopInfo.shopName) {
         setTailorshopName(shopInfo.shopName);
-        localStorage.setItem('tailorshop_name', shopInfo.shopName);
+        storageSet('tailorshop_name', shopInfo.shopName);
         setVoucherMainTitle(shopInfo.shopName);
-        localStorage.setItem('voucher_main_title', shopInfo.shopName);
+        storageSet('voucher_main_title', shopInfo.shopName);
       }
       if (shopInfo.logoUrl && customLogoUrl !== shopInfo.logoUrl) {
         setCustomLogoUrl(shopInfo.logoUrl);
-        localStorage.setItem('logo_url', shopInfo.logoUrl);
+        storageSet('logo_url', shopInfo.logoUrl);
       }
     }
   }, [currentUser, registeredTailors, workers]);
@@ -1600,49 +1603,49 @@ export default function App() {
     const shopBrandingKey = getShopBrandingKey();
     const brandingRecord = workers.find(w => w.id === shopBrandingKey) || workers.find(w => w.id === 'branding');
     if (brandingRecord) {
-      if (brandingRecord.shopName && brandingRecord.shopName !== localStorage.getItem('tailorshop_name')) {
+      if (brandingRecord.shopName && brandingRecord.shopName !== storageGet('tailorshop_name')) {
         setTailorshopName(brandingRecord.shopName);
-        localStorage.setItem('tailorshop_name', brandingRecord.shopName);
+        storageSet('tailorshop_name', brandingRecord.shopName);
       }
-      if (brandingRecord.logoUrl !== undefined && brandingRecord.logoUrl !== localStorage.getItem('logo_url')) {
+      if (brandingRecord.logoUrl !== undefined && brandingRecord.logoUrl !== storageGet('logo_url')) {
         setCustomLogoUrl(brandingRecord.logoUrl || '');
-        localStorage.setItem('logo_url', brandingRecord.logoUrl || '');
+        storageSet('logo_url', brandingRecord.logoUrl || '');
       }
-      if (brandingRecord.voucherMainTitle && brandingRecord.voucherMainTitle !== localStorage.getItem('voucher_main_title')) {
+      if (brandingRecord.voucherMainTitle && brandingRecord.voucherMainTitle !== storageGet('voucher_main_title')) {
         setVoucherMainTitle(brandingRecord.voucherMainTitle);
-        localStorage.setItem('voucher_main_title', brandingRecord.voucherMainTitle);
+        storageSet('voucher_main_title', brandingRecord.voucherMainTitle);
       }
-      if (brandingRecord.voucherSubtitle && brandingRecord.voucherSubtitle !== localStorage.getItem('voucher_subtitle')) {
+      if (brandingRecord.voucherSubtitle && brandingRecord.voucherSubtitle !== storageGet('voucher_subtitle')) {
         setVoucherSubtitle(brandingRecord.voucherSubtitle);
-        localStorage.setItem('voucher_subtitle', brandingRecord.voucherSubtitle);
+        storageSet('voucher_subtitle', brandingRecord.voucherSubtitle);
       }
-      if (brandingRecord.voucherFooterNotes && brandingRecord.voucherFooterNotes !== localStorage.getItem('voucher_footer_notes')) {
+      if (brandingRecord.voucherFooterNotes && brandingRecord.voucherFooterNotes !== storageGet('voucher_footer_notes')) {
         setVoucherFooterNotes(brandingRecord.voucherFooterNotes);
-        localStorage.setItem('voucher_footer_notes', brandingRecord.voucherFooterNotes);
+        storageSet('voucher_footer_notes', brandingRecord.voucherFooterNotes);
       }
-      if (brandingRecord.voucherBgColor && brandingRecord.voucherBgColor !== localStorage.getItem('voucher_bg_color')) {
+      if (brandingRecord.voucherBgColor && brandingRecord.voucherBgColor !== storageGet('voucher_bg_color')) {
         setVoucherBgColor(brandingRecord.voucherBgColor);
-        localStorage.setItem('voucher_bg_color', brandingRecord.voucherBgColor);
+        storageSet('voucher_bg_color', brandingRecord.voucherBgColor);
       }
-      if (brandingRecord.voucherTextColor && brandingRecord.voucherTextColor !== localStorage.getItem('voucher_text_color')) {
+      if (brandingRecord.voucherTextColor && brandingRecord.voucherTextColor !== storageGet('voucher_text_color')) {
         setVoucherTextColor(brandingRecord.voucherTextColor);
-        localStorage.setItem('voucher_text_color', brandingRecord.voucherTextColor);
+        storageSet('voucher_text_color', brandingRecord.voucherTextColor);
       }
-      if (brandingRecord.voucherAccentColor && brandingRecord.voucherAccentColor !== localStorage.getItem('voucher_accent_color')) {
+      if (brandingRecord.voucherAccentColor && brandingRecord.voucherAccentColor !== storageGet('voucher_accent_color')) {
         setVoucherAccentColor(brandingRecord.voucherAccentColor);
-        localStorage.setItem('voucher_accent_color', brandingRecord.voucherAccentColor);
+        storageSet('voucher_accent_color', brandingRecord.voucherAccentColor);
       }
-      if (brandingRecord.voucherFont && brandingRecord.voucherFont !== localStorage.getItem('voucher_font')) {
+      if (brandingRecord.voucherFont && brandingRecord.voucherFont !== storageGet('voucher_font')) {
         setVoucherFont(brandingRecord.voucherFont);
-        localStorage.setItem('voucher_font', brandingRecord.voucherFont);
+        storageSet('voucher_font', brandingRecord.voucherFont);
       }
-      if (brandingRecord.voucherBorderStyle && brandingRecord.voucherBorderStyle !== localStorage.getItem('voucher_border_style')) {
+      if (brandingRecord.voucherBorderStyle && brandingRecord.voucherBorderStyle !== storageGet('voucher_border_style')) {
         setVoucherBorderStyle(brandingRecord.voucherBorderStyle);
-        localStorage.setItem('voucher_border_style', brandingRecord.voucherBorderStyle);
+        storageSet('voucher_border_style', brandingRecord.voucherBorderStyle);
       }
-      if (brandingRecord.voucherLogoAlignment && brandingRecord.voucherLogoAlignment !== localStorage.getItem('voucher_logo_alignment')) {
+      if (brandingRecord.voucherLogoAlignment && brandingRecord.voucherLogoAlignment !== storageGet('voucher_logo_alignment')) {
         setVoucherLogoAlignment(brandingRecord.voucherLogoAlignment);
-        localStorage.setItem('voucher_logo_alignment', brandingRecord.voucherLogoAlignment);
+        storageSet('voucher_logo_alignment', brandingRecord.voucherLogoAlignment);
       }
     }
   }, [workers, currentUser]);
@@ -1668,17 +1671,17 @@ export default function App() {
       id: shopBrandingKey,
       name: shopBrandingKey === 'branding' ? 'Shop Branding Settings' : `Branding Settings for ${shopBrandingKey.slice(9)}`,
       role: 'GlobalSettings',
-      shopName: updatedShopName !== undefined ? updatedShopName : (localStorage.getItem('tailorshop_name') || 'STYLUS'),
-      logoUrl: updatedLogoUrl !== undefined ? updatedLogoUrl : (localStorage.getItem('logo_url') || ''),
-      voucherMainTitle: vMainTitle !== undefined ? vMainTitle : (localStorage.getItem('voucher_main_title') || 'TAILORSHOP ERP'),
-      voucherSubtitle: vSubtitle !== undefined ? vSubtitle : (localStorage.getItem('voucher_subtitle') || 'BESPOKE FITTING VOUCHER'),
-      voucherFooterNotes: vFooterNotes !== undefined ? vFooterNotes : (localStorage.getItem('voucher_footer_notes') || 'Thank you for trusting Sartorial Luxury Tailors. All sizing blueprints are saved securely in our central index database.'),
-      voucherBgColor: vBgColor !== undefined ? vBgColor : (localStorage.getItem('voucher_bg_color') || '#ffffff'),
-      voucherTextColor: vTextColor !== undefined ? vTextColor : (localStorage.getItem('voucher_text_color') || '#1c1917'),
-      voucherAccentColor: vAccentColor !== undefined ? vAccentColor : (localStorage.getItem('voucher_accent_color') || '#d97706'),
-      voucherFont: vFont !== undefined ? vFont : (localStorage.getItem('voucher_font') || 'Cinzel'),
-      voucherBorderStyle: vBorderStyle !== undefined ? vBorderStyle : (localStorage.getItem('voucher_border_style') || 'dashed'),
-      voucherLogoAlignment: vLogoAlignment !== undefined ? vLogoAlignment : (localStorage.getItem('voucher_logo_alignment') || 'center'),
+      shopName: updatedShopName !== undefined ? updatedShopName : (storageGet('tailorshop_name') || 'STYLUS'),
+      logoUrl: updatedLogoUrl !== undefined ? updatedLogoUrl : (storageGet('logo_url') || ''),
+      voucherMainTitle: vMainTitle !== undefined ? vMainTitle : (storageGet('voucher_main_title') || 'TAILORSHOP ERP'),
+      voucherSubtitle: vSubtitle !== undefined ? vSubtitle : (storageGet('voucher_subtitle') || 'BESPOKE FITTING VOUCHER'),
+      voucherFooterNotes: vFooterNotes !== undefined ? vFooterNotes : (storageGet('voucher_footer_notes') || 'Thank you for trusting Sartorial Luxury Tailors. All sizing blueprints are saved securely in our central index database.'),
+      voucherBgColor: vBgColor !== undefined ? vBgColor : (storageGet('voucher_bg_color') || '#ffffff'),
+      voucherTextColor: vTextColor !== undefined ? vTextColor : (storageGet('voucher_text_color') || '#1c1917'),
+      voucherAccentColor: vAccentColor !== undefined ? vAccentColor : (storageGet('voucher_accent_color') || '#d97706'),
+      voucherFont: vFont !== undefined ? vFont : (storageGet('voucher_font') || 'Cinzel'),
+      voucherBorderStyle: vBorderStyle !== undefined ? vBorderStyle : (storageGet('voucher_border_style') || 'dashed'),
+      voucherLogoAlignment: vLogoAlignment !== undefined ? vLogoAlignment : (storageGet('voucher_logo_alignment') || 'center'),
     } as any;
 
     let nextWorkers = [...activeWorkers];
@@ -1732,7 +1735,7 @@ export default function App() {
           hasRegisteredShop: true
         };
         setCurrentUser(updatedCurrentUser);
-        localStorage.setItem('tailor_logged_in_user', JSON.stringify(updatedCurrentUser));
+        storageSet('tailor_logged_in_user', JSON.stringify(updatedCurrentUser));
       }
     }
   };
@@ -2116,7 +2119,7 @@ export default function App() {
          };
          setCurrentUser(user);
          if (rememberMe) {
-           localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
+           storageSet('tailor_logged_in_user', JSON.stringify(user));
          }
          if (user.role === 'Owner' || user.role === 'Manager') {
            if (user.id === 'TAILOR-OWNER-MASTER') {
@@ -2196,7 +2199,7 @@ export default function App() {
          };
          setCurrentUser(user);
          if (rememberMe) {
-           localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
+           storageSet('tailor_logged_in_user', JSON.stringify(user));
          }
          addActivity('Sign In', `Customer logged in successfully (ID: ${customer.id})`, 'Customer', customer.name);
          triggerToast(`Welcome back, ${customer.name}!`, 'success');
@@ -2353,7 +2356,7 @@ export default function App() {
               role: 'Tailor' as const
             };
             setCurrentUser(user);
-            localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
+            storageSet('tailor_logged_in_user', JSON.stringify(user));
             setTailorPage('pending_tasks');
             addActivity('Account Created', `Created Tailor Studio Account: ${user.name}`, 'Owner', user.name);
             triggerToast(`Mobile number verified! Welcome, ${user.name}!`, 'success');
@@ -2387,7 +2390,7 @@ export default function App() {
               role: 'Customer' as const
             };
             setCurrentUser(user);
-            localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
+            storageSet('tailor_logged_in_user', JSON.stringify(user));
             addActivity('Account Created', `New Customer Account registered: ${user.name}`, 'Customer', user.name);
             triggerToast(`Mobile number verified! Welcome to the client lounge, ${user.name}!`, 'success');
           }
@@ -2439,7 +2442,7 @@ export default function App() {
               role: 'Tailor' as const
             };
             setCurrentUser(user);
-            localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
+            storageSet('tailor_logged_in_user', JSON.stringify(user));
             setTailorPage('pending_tasks');
             addActivity('Account Created', `Created Tailor Studio Account: ${user.name}`, 'Owner', user.name);
             triggerToast(`Mobile number verified! Welcome, ${user.name}!`, 'success');
@@ -2473,7 +2476,7 @@ export default function App() {
               role: 'Customer' as const
             };
             setCurrentUser(user);
-            localStorage.setItem('tailor_logged_in_user', JSON.stringify(user));
+            storageSet('tailor_logged_in_user', JSON.stringify(user));
             addActivity('Account Created', `New Customer Account registered: ${user.name}`, 'Customer', user.name);
             triggerToast(`Mobile number verified! Welcome to the client lounge, ${user.name}!`, 'success');
           }
@@ -2544,7 +2547,7 @@ export default function App() {
 
   const handleSignOut = () => {
     setCurrentUser(null);
-    localStorage.removeItem('tailor_logged_in_user');
+    storageRemove('tailor_logged_in_user');
     triggerToast('Sign Out complete. Safe journey!', 'info');
   };
 
@@ -3866,20 +3869,20 @@ export default function App() {
 
   // Factory reset everything
   const handleResetTailorshopConfig = () => {
-    localStorage.removeItem('custom_clothing_categories');
-    localStorage.removeItem('custom_clothing_templates');
-    localStorage.removeItem('custom_clothing_emojis');
-    localStorage.removeItem('custom_clothing_prices');
-    localStorage.removeItem('tailorshop_name');
-    localStorage.removeItem('logo_url');
-    localStorage.removeItem('landing_title');
-    localStorage.removeItem('landing_description');
-    localStorage.removeItem('tailor_title');
-    localStorage.removeItem('tailor_description');
-    localStorage.removeItem('tailor_image');
-    localStorage.removeItem('customer_title');
-    localStorage.removeItem('customer_description');
-    localStorage.removeItem('customer_image');
+    storageRemove('custom_clothing_categories');
+    storageRemove('custom_clothing_templates');
+    storageRemove('custom_clothing_emojis');
+    storageRemove('custom_clothing_prices');
+    storageRemove('tailorshop_name');
+    storageRemove('logo_url');
+    storageRemove('landing_title');
+    storageRemove('landing_description');
+    storageRemove('tailor_title');
+    storageRemove('tailor_description');
+    storageRemove('tailor_image');
+    storageRemove('customer_title');
+    storageRemove('customer_description');
+    storageRemove('customer_image');
 
     setClothingCategories(['Shirt', 'Pant', 'Suit', 'Kurta']);
     setClothingTemplates({
@@ -5630,13 +5633,13 @@ export default function App() {
               coordinateLongitude: lonClean
             };
             setCurrentUser(updatedUser);
-            localStorage.setItem('tailor_logged_in_user', JSON.stringify(updatedUser));
+            storageSet('tailor_logged_in_user', JSON.stringify(updatedUser));
 
             // Set local branding states
             setTailorshopName(nameClean);
-            localStorage.setItem('tailorshop_name', nameClean);
+            storageSet('tailorshop_name', nameClean);
             setCustomLogoUrl(logoClean);
-            localStorage.setItem('logo_url', logoClean);
+            storageSet('logo_url', logoClean);
 
             // 2. Update registered_tailors list to persist this registration
             const tailors = getRegisteredTailors();
@@ -6381,8 +6384,8 @@ export default function App() {
                             onClick={() => {
                               setTailorshopName('TAILORSHOP ERP');
                               setCustomLogoUrl('');
-                              localStorage.setItem('tailorshop_name', 'TAILORSHOP ERP');
-                              localStorage.setItem('logo_url', '');
+                              storageSet('tailorshop_name', 'TAILORSHOP ERP');
+                              storageSet('logo_url', '');
                               saveBrandingToDatabase('TAILORSHOP ERP', '');
                               triggerToast("Branding configuration reset to system default!", "success");
                             }}
@@ -6394,8 +6397,8 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => {
-                              localStorage.setItem('logo_url', customLogoUrl);
-                              localStorage.setItem('tailorshop_name', tailorshopName);
+                              storageSet('logo_url', customLogoUrl);
+                              storageSet('tailorshop_name', tailorshopName);
                               saveBrandingToDatabase(tailorshopName, customLogoUrl);
                               triggerToast("Brand configuration applied & saved successfully!", "success");
                             }}
@@ -6638,14 +6641,14 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => {
-                              localStorage.setItem('landing_title', customLandingTitle);
-                              localStorage.setItem('landing_description', customLandingDescription);
-                              localStorage.setItem('tailor_title', customTailorTitle);
-                              localStorage.setItem('tailor_description', customTailorDescription);
-                              localStorage.setItem('tailor_image', customTailorImage);
-                              localStorage.setItem('customer_title', customCustomerTitle);
-                              localStorage.setItem('customer_description', customCustomerDescription);
-                              localStorage.setItem('customer_image', customCustomerImage);
+                              storageSet('landing_title', customLandingTitle);
+                              storageSet('landing_description', customLandingDescription);
+                              storageSet('tailor_title', customTailorTitle);
+                              storageSet('tailor_description', customTailorDescription);
+                              storageSet('tailor_image', customTailorImage);
+                              storageSet('customer_title', customCustomerTitle);
+                              storageSet('customer_description', customCustomerDescription);
+                              storageSet('customer_image', customCustomerImage);
                               triggerToast("Welcome Page & Card layouts locked successfully!", "success");
                             }}
                             className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center space-x-1.5 shadow-sm cursor-pointer whitespace-nowrap"
@@ -6984,15 +6987,15 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => {
-                            localStorage.setItem('voucher_main_title', voucherMainTitle);
-                            localStorage.setItem('voucher_subtitle', voucherSubtitle);
-                            localStorage.setItem('voucher_footer_notes', voucherFooterNotes);
-                            localStorage.setItem('voucher_bg_color', voucherBgColor);
-                            localStorage.setItem('voucher_text_color', voucherTextColor);
-                            localStorage.setItem('voucher_accent_color', voucherAccentColor);
-                            localStorage.setItem('voucher_font', voucherFont);
-                            localStorage.setItem('voucher_border_style', voucherBorderStyle);
-                            localStorage.setItem('voucher_logo_alignment', voucherLogoAlignment);
+                            storageSet('voucher_main_title', voucherMainTitle);
+                            storageSet('voucher_subtitle', voucherSubtitle);
+                            storageSet('voucher_footer_notes', voucherFooterNotes);
+                            storageSet('voucher_bg_color', voucherBgColor);
+                            storageSet('voucher_text_color', voucherTextColor);
+                            storageSet('voucher_accent_color', voucherAccentColor);
+                            storageSet('voucher_font', voucherFont);
+                            storageSet('voucher_border_style', voucherBorderStyle);
+                            storageSet('voucher_logo_alignment', voucherLogoAlignment);
                             
                             saveBrandingToDatabase(
                               tailorshopName,
@@ -9302,7 +9305,7 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => {
-                            localStorage.setItem('tailorshop_draft_notes', notes);
+                            storageSet('tailorshop_draft_notes', notes);
                             triggerToast('Workshop fit instructions saved to drafting storage!', 'success');
                           }}
                           className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] rounded-lg transition-all cursor-pointer flex items-center space-x-1 shadow-sm active:scale-95"
